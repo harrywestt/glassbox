@@ -1,0 +1,473 @@
+<!-- =====================================================================
+     PR SHOWCASE DECK — fill-in template for /pr-showcase
+     ---------------------------------------------------------------------
+     This is the BODY of a self-contained deck, published as a Claude Artifact
+     (hosted on claude.ai) and shared as an org-visible link. There is NO
+     doctype / html / head / body wrapper here — the Artifact publisher adds
+     one. Write content directly: title, the pr-showcase metas, the style block,
+     the deck markup, then the script.
+
+     IMPORTANT: never write a literal comment-open or comment-close sequence
+     INSIDE this comment. HTML comments cannot nest, so an inner close marker
+     would terminate this comment early and dump the rest as visible page text.
+     Refer to the plate markers in prose (PLATE:UI START / PLATE:UI END), not
+     as literal comment syntax.
+
+     Self-contained by design — system fonts only, no external font/CDN/image
+     fetch (the Artifact CSP blocks all external hosts, so this MUST stay true).
+     Inline everything; embed any asset as a data: URI.
+
+     HOW TO FILL IT IN (the /pr-showcase skill does this):
+       1. Replace every {{TOKEN}} below.
+       2. The deck has three section types of "plate" (slide): UI, CODE,
+          DECISIONS. Each has a template block delimited by HTML comments
+          named PLATE:TYPE START and PLATE:TYPE END in the markup below.
+          Duplicate a block once per item; delete the unused example bodies.
+       3. Keep the rail tick-button list in sync with the plates
+          (one tick per plate, same data-target). The footer counter and
+          keyboard nav read the live plate list, so no other bookkeeping.
+       4. Reconstructed app UI goes inside div.app — that scope re-declares the
+          real app design tokens (globals.css), so component markup renders
+          faithfully. Build the markup from the actual component source +
+          Tailwind classes; use the .ui-* helper classes here as a faithful
+          approximation of the App* primitives (button, input, badge, card).
+
+     STALENESS + STABLE LINK (read by the skill on re-run, do not hand-edit):
+       The pr-showcase metas below record the HEAD SHA the deck was built
+       against, the source files each plate drew from, and the Artifact URL it
+       was published to. On re-invocation the skill diffs those files against
+       HEAD, rebuilds only the plates whose sources changed, and redeploys to
+       the SAME artifact-url so the shared link never changes.
+     ===================================================================== -->
+
+<title>{{TICKET}} PR Showcase</title>
+
+<meta name="pr-showcase:base-sha" content="{{HEAD_SHA}}" />
+<!-- sources holds JSON; the attribute MUST be single-quoted (JSON uses double-quotes). -->
+<meta name="pr-showcase:sources" content='{{SOURCES_JSON}}' />
+<!-- artifact-url: the published Artifact link. Empty on first build; the skill
+     writes it back after publishing, then passes it as url on every re-run so
+     the deck redeploys to the same link. Do not hand-edit. -->
+<meta name="pr-showcase:artifact-url" content="{{ARTIFACT_URL}}" />
+
+<!-- System fonts only — see the font stacks in :root (--sans / --mono). Geist is
+     used if installed locally (dev machines); otherwise it falls back cleanly.
+     No web-font link, by design — keeps the deck self-contained and CSP-clean. -->
+
+<style>
+  /* ── deck chrome tokens (neutral, lets the app panels carry the colour) ── */
+  :root {
+    --bg:        #f4f5f7;
+    --bg-grid:   #e9ebef;
+    --surface:   #ffffff;
+    --surface-2: #fbfbfd;
+    --ink:       #15181e;
+    --ink-2:     #5b6472;
+    --ink-3:     #8a93a3;
+    --hair:      #e3e6eb;
+    --hair-2:    #d4d8df;
+    --brand:     oklch(0.422 0.145 277.709);   /* app --primary (deep indigo) */
+    --brand-2:   oklch(0.55 0.16 277);
+    --before:    #94a3b8;   /* slate — the OLD state */
+    --after:     oklch(0.422 0.145 277.709);    /* brand — the NEW state */
+    --add:       #1a7f4b;   /* additions */
+    --del:       #c2410c;   /* removals / destructive */
+    --warn:      #b45309;
+    --shadow:    0 1px 2px rgba(16,24,40,.04), 0 8px 24px -12px rgba(16,24,40,.18);
+    --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }   /* root never scrolls; only a plate scrolls, and only on real overflow */
+  title { display: none; }   /* <title> sits in the body so the Artifact can name the deck; never render it */
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    overflow: hidden;
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 56px 56px, 56px 56px;
+  }
+  body::before { content: ""; position: fixed; inset: 0; background: var(--bg); opacity: .6; z-index: 0; }
+
+  .deck { position: relative; z-index: 1; height: 100%; width: 100%; }   /* 100% (not 100vh/100vw) — reliable inside the Artifact iframe, no scrollbar-gutter overflow */
+
+  /* ── left rail: section-grouped ticks ──────────────────────────────── */
+  .rail {
+    position: fixed; top: 0; bottom: 0; left: 0; width: 230px; z-index: 6;
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 22px 0 22px 26px; border-right: 1px solid var(--hair);
+    background: linear-gradient(90deg, var(--surface), rgba(255,255,255,0));
+    overflow-y: auto;
+  }
+  .rail .brand {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--brand); margin-bottom: 2px;
+  }
+  .rail .sub { font-size: .72rem; color: var(--ink-3); margin-bottom: 18px; }
+  .rail .grp {
+    font-family: var(--mono); font-size: .6rem; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink-3);
+    margin: 16px 0 6px; padding-left: 2px;
+  }
+  .tick {
+    display: flex; align-items: center; gap: 9px; cursor: pointer;
+    border: 0; background: none; text-align: left; width: 100%;
+    padding: 6px 10px 6px 2px; border-radius: 7px; color: var(--ink-2);
+    font-family: var(--sans); font-size: .8rem; transition: background .15s, color .15s;
+  }
+  .tick:hover { background: var(--surface-2); color: var(--ink); }
+  .tick .no { font-family: var(--mono); font-size: .64rem; color: var(--ink-3); width: 22px; flex: none; }
+  .tick .t  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tick.active { background: color-mix(in oklab, var(--brand) 8%, white); color: var(--brand); font-weight: 600; }
+  .tick.active .no { color: var(--brand); }
+
+  /* ── plates ────────────────────────────────────────────────────────── */
+  .stage { position: absolute; inset: 0 0 0 230px; }
+  /* plates show a scrollbar ONLY when content genuinely overflows (no reserved
+     gutter — a static page should look static). Still: prefer ONE code/UI item
+     per plate so it fits without scrolling (split rather than overflow). */
+  .plate {
+    position: absolute; inset: 0; display: none; flex-direction: column;
+    padding: 46px 56px 64px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--hair-2) transparent;
+  }
+  /* Keep every plate child at its natural height. The plate is a flex column, and
+     cards use overflow:hidden (for rounded corners) — which gives a flex item an
+     automatic min-size of 0, so without this the column would SHRINK a card and
+     overflow:hidden would clip its own body. flex-shrink:0 makes the plate scroll
+     instead of squashing cards. (.staleness keeps margin-top:auto for the overview.) */
+  .plate > * { flex-shrink: 0; }
+  .plate::-webkit-scrollbar { width: 12px; }
+  .plate::-webkit-scrollbar-track { background: transparent; }
+  .plate::-webkit-scrollbar-thumb { background: var(--hair-2); border-radius: 999px; border: 3px solid var(--bg); }
+  .plate::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+  .plate.active { display: flex; animation: rise .4s cubic-bezier(.2,.7,.2,1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  /* soft fade at the foot of the stage — a quiet "scroll for more" cue */
+  .stage::after { content: ""; position: absolute; left: 0; right: 12px; bottom: 0; height: 40px; background: linear-gradient(transparent, var(--bg)); pointer-events: none; z-index: 3; }
+
+  .titleblock { padding-bottom: 16px; margin-bottom: 26px; border-bottom: 1px solid var(--hair); }
+  .eyebrow { font-family: var(--mono); font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--brand); }
+  .plate h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -.01em; margin-top: 8px; }
+  .plate h1.big { font-size: 2.5rem; }
+  .lede { color: var(--ink-2); font-size: 1rem; max-width: 60ch; margin-top: 10px; line-height: 1.55; }
+
+  /* ── overview plate ──────────────────────────────────────────────── */
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 28px 0; max-width: 760px; }
+  .meta { background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .meta .k { font-family: var(--mono); font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+  .meta .v { font-size: 1.35rem; font-weight: 600; margin-top: 6px; }
+  .meta .v small { font-size: .8rem; color: var(--ink-2); font-weight: 400; }
+
+  .flags { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+  .flag { font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; padding: 5px 11px; border-radius: 999px; border: 1px solid; }
+  .flag.substantial { color: var(--brand);  border-color: color-mix(in oklab, var(--brand) 35%, white); background: color-mix(in oklab, var(--brand) 7%, white); }
+  .flag.destructive { color: var(--del);    border-color: #f3c4a8; background: #fdf1ea; }
+  .flag.notable     { color: var(--warn);   border-color: #f5d99a; background: #fdf6e7; }
+
+  .staleness {
+    margin-top: auto; font-family: var(--mono); font-size: .72rem; color: var(--ink-3);
+    border-top: 1px dashed var(--hair-2); padding-top: 14px;
+  }
+  .staleness b { color: var(--ink-2); }
+
+  /* ── UI before/after ─────────────────────────────────────────────── */
+  .ba {
+    display: grid; grid-template-columns: 1fr 56px 1fr; align-items: center;
+    gap: 4px; margin: 8px 0 22px;
+  }
+  @media (max-width: 1100px) { .ba { grid-template-columns: 1fr; } .ba .arrow { transform: rotate(90deg); margin: 6px auto; } }
+  .frame { border-radius: 14px; border: 1px solid var(--hair-2); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+  .frame.old { filter: saturate(.85); }
+  .frame-bar { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border-bottom: 1px solid var(--hair); background: var(--surface-2); }
+  .frame-bar .dot { width: 9px; height: 9px; border-radius: 50%; background: #d6dae1; }
+  .frame-bar .url { margin-left: 8px; font-family: var(--mono); font-size: .66rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frame-tag { font-family: var(--mono); font-size: .6rem; letter-spacing: .14em; padding: 2px 8px; border-radius: 5px; margin-left: auto; flex: none; }
+  .frame.old .frame-tag { color: var(--before); border: 1px solid currentColor; }
+  .frame.new .frame-tag { color: var(--after);  border: 1px solid currentColor; }
+  .frame-body { padding: 22px; min-height: 200px; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: var(--brand); }
+  .arrow svg { width: 30px; height: 30px; }
+  .change-notes { display: flex; flex-direction: column; gap: 8px; max-width: 80ch; }
+  .change { display: flex; gap: 10px; align-items: baseline; font-size: .92rem; color: var(--ink-2); }
+  .change .badge { font-family: var(--mono); font-size: .58rem; letter-spacing: .08em; padding: 2px 7px; border-radius: 5px; flex: none; }
+  .change .badge.add { color: var(--add); background: #e7f6ee; }
+  .change .badge.chg { color: var(--brand); background: color-mix(in oklab, var(--brand) 8%, white); }
+  .change .badge.rm  { color: var(--del); background: #fdeee5; }
+
+  /* ── code highlight ──────────────────────────────────────────────── */
+  .hl { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 18px; }
+  .hl-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--hair); }
+  .hl-head .path { font-family: var(--mono); font-size: .76rem; color: var(--ink-2); }
+  .hl-head .kind { font-family: var(--mono); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; background: color-mix(in oklab, var(--brand) 9%, white); color: var(--brand); flex: none; }
+  .why { padding: 14px 18px; color: var(--ink-2); font-size: .92rem; line-height: 1.55; border-bottom: 1px solid var(--hair); background: var(--surface-2); }
+  .why b { color: var(--ink); }
+  pre.code { margin: 0; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: .8rem; line-height: 1.6; color: #2b2f38; background: #fcfcfe; }
+  pre.code .c { color: #8a93a3; }            /* comment */
+  pre.code .k { color: oklch(0.45 0.16 277); }/* keyword */
+  pre.code .s { color: #1a7f4b; }            /* string  */
+  pre.code .add { display: block; background: #e7f6ee; }
+  pre.code .del { display: block; background: #fdeee5; }
+
+  /* ── decisions ───────────────────────────────────────────────────── */
+  .dec { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); margin-bottom: 16px; overflow: hidden; }
+  .dec-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--hair); }
+  .dec-head .q { font-weight: 600; font-size: .98rem; flex: 1; min-width: 0; }
+  .prov { font-family: var(--mono); font-size: .62rem; letter-spacing: .07em; padding: 4px 10px; border-radius: 999px; border: 1px solid; margin-left: auto; flex: none; white-space: nowrap; }
+  .prov.followed { color: var(--add);  border-color: #a6dcc0; background: #eef9f3; }
+  .prov.deviated { color: var(--warn); border-color: #f0d18a; background: #fdf6e7; }
+  .prov.rejected { color: var(--del);  border-color: #f1c0a4; background: #fdf1ea; }
+  .prov.owncall  { color: var(--brand);border-color: color-mix(in oklab, var(--brand) 30%, white); background: color-mix(in oklab, var(--brand) 7%, white); }
+  .prov.convo    { color: #6d28d9;     border-color: #d8c4fa; background: #f2ebfd; }
+  .dec-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  @media (max-width: 1000px) { .dec-body { grid-template-columns: 1fr; } }
+  .dec-col { padding: 14px 18px; min-width: 0; }
+  .dec-col + .dec-col { border-left: 1px solid var(--hair); }
+  .dec-col .lbl { font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+  .dec-col p { font-size: .9rem; color: var(--ink-2); line-height: 1.55; overflow-wrap: break-word; }
+  .dec-why { padding: 12px 18px; border-top: 1px solid var(--hair); background: var(--surface-2); font-size: .88rem; color: var(--ink-2); line-height: 1.5; overflow-wrap: break-word; }
+  .dec-why b { color: var(--ink); }
+
+  /* ── footer counter ──────────────────────────────────────────────── */
+  .counter { position: fixed; bottom: 18px; right: 24px; z-index: 7; font-family: var(--mono); font-size: .72rem; color: var(--ink-3); }
+  .counter b { color: var(--ink); }
+  .hint { position: fixed; bottom: 18px; left: 250px; z-index: 7; font-family: var(--mono); font-size: .68rem; color: var(--ink-3); }
+
+  /* PRINT — incidental nicety, NOT part of the skill flow (the deck is shared as
+     the .html itself, no PDF step). If a viewer hits Ctrl+P → Save as PDF, stack
+     every plate (one per page, landscape so side-by-side before/after keeps its
+     width), drop the nav chrome, and force background colours to print. */
+  @media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    html, body { height: auto; overflow: visible; background: #fff; }
+    body::before, .stage::after, .rail, .hint, .counter { display: none !important; }
+    .deck { height: auto; }
+    .stage { position: static; inset: auto; }
+    .plate { position: static !important; display: flex !important; inset: auto; height: auto; min-height: auto; overflow: visible; padding: 18px 22px; animation: none; page-break-after: always; break-after: page; }
+    .plate:last-child { page-break-after: auto; break-after: auto; }
+    .ba, .hl, .dec { page-break-inside: avoid; break-inside: avoid; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+
+  /* =====================================================================
+     .app — FAITHFUL APP SURFACE. Re-declares the real globals.css tokens so
+     reconstructed component markup renders like the live app. Build markup
+     from the actual component source; the .ui-* helpers approximate App*.
+     ===================================================================== */
+  .app {
+    --primary: oklch(0.422 0.145 277.709);
+    --primary-foreground: oklch(0.985 0 0);
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --accent: oklch(0.97 0 0);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.715 0 0);
+    --destructive: oklch(0.577 0.215 27.325);
+    --danger: oklch(57.71% 0.215 27.33);
+    --success: oklch(0.627 0.194 149.214);
+    --info: oklch(0.546 0.245 262.881);
+    --warn: oklch(0.681 0.162 95);
+    --assistant: #7c3aed;
+    --assistant-muted: #f2ebfd;
+    --assistant-border: #d8c4fa;
+    --radius-sm: .375rem; --radius-md: .5rem; --radius-lg: .625rem; --radius-xl: .875rem;
+    font-family: "Geist", var(--sans);
+    color: var(--foreground);
+    font-size: 14px; line-height: 1.5;
+  }
+  .app .ui-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 16px; }
+  .app .ui-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: var(--radius-md); font-weight: 500; font-size: .875rem; border: 1px solid transparent; cursor: default; }
+  .app .ui-btn.primary { background: var(--primary); color: var(--primary-foreground); }
+  .app .ui-btn.secondary { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--border); }
+  .app .ui-btn.ghost { background: transparent; color: var(--foreground); }
+  .app .ui-btn.destructive { background: var(--destructive); color: white; }
+  .app .ui-btn.assistant { background: var(--assistant); color: white; }
+  .app .ui-input { display: flex; align-items: center; height: 36px; padding: 0 12px; border: 1px solid var(--input); border-radius: var(--radius-md); background: var(--background); color: var(--muted-foreground); font-size: .875rem; }
+  .app .ui-badge { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: .72rem; font-weight: 500; background: var(--muted); color: var(--secondary-foreground); }
+  .app .ui-badge.assistant { background: var(--assistant-muted); color: var(--assistant); border: 1px solid var(--assistant-border); }
+  .app .ui-muted { color: var(--muted-foreground); }
+  .app .ui-h { font-weight: 600; font-size: 1rem; }
+  .app .ui-row { display: flex; align-items: center; gap: 10px; }
+</style>
+
+<div class="deck">
+
+  <!-- ── RAIL (keep one .tick per plate, in order) ───────────────────── -->
+  <nav class="rail">
+    <div class="brand">PR Showcase</div>
+    <div class="sub">{{TICKET}} · {{BRANCH}}</div>
+
+    <button class="tick active" data-target="p-overview"><span class="no">00</span><span class="t">Overview</span></button>
+
+    <div class="grp">UI / UX</div>
+    <!-- one tick per UI plate -->
+    <button class="tick" data-target="p-ui-1"><span class="no">U1</span><span class="t">{{UI_1_NAV}}</span></button>
+
+    <div class="grp">Code highlights</div>
+    <button class="tick" data-target="p-code-1"><span class="no">C1</span><span class="t">{{CODE_1_NAV}}</span></button>
+
+    <div class="grp">Decisions</div>
+    <button class="tick" data-target="p-decisions"><span class="no">D1</span><span class="t">PRD vs PR</span></button>
+  </nav>
+
+  <div class="stage">
+
+    <!-- ══ OVERVIEW ═══════════════════════════════════════════════════ -->
+    <section class="plate active" id="p-overview">
+      <div class="titleblock">
+        <div class="eyebrow">{{TICKET}} · {{BRANCH}}</div>
+        <h1 class="big">{{PR_TITLE}}</h1>
+      </div>
+
+      <div class="flags">
+        <!-- keep only the flags that apply -->
+        <span class="flag substantial">SUBSTANTIAL</span>
+        <span class="flag destructive">DESTRUCTIVE</span>
+        <span class="flag notable">NOTABLE FOR THE TEAM</span>
+      </div>
+
+      <p class="lede">{{PR_SUMMARY}}</p>
+
+      <div class="meta-grid">
+        <div class="meta"><div class="k">Files</div><div class="v">{{FILE_COUNT}}</div></div>
+        <div class="meta"><div class="k">Lines</div><div class="v" style="color:var(--add)">+{{ADDED}} <small style="color:var(--del)">−{{REMOVED}}</small></div></div>
+        <div class="meta"><div class="k">Commits</div><div class="v">{{COMMITS}}</div></div>
+        <div class="meta"><div class="k">Author</div><div class="v" style="font-size:1rem">{{AUTHOR}}</div></div>
+      </div>
+
+      <div class="staleness">
+        Built against <b>{{HEAD_SHA_SHORT}}</b> — “{{HEAD_SUBJECT}}”.
+        Re-run <b>/pr-showcase</b> if the branch advances; the skill rebuilds only the plates whose source files changed.
+      </div>
+    </section>
+
+    <!-- ══ UI / UX ════════════════════════════════════════════════════ -->
+    <!-- PLATE:UI START — duplicate this <section> per UI/UX change ────── -->
+    <section class="plate" id="p-ui-1">
+      <div class="titleblock">
+        <div class="eyebrow">UI / UX · {{UI_1_AREA}}</div>
+        <h1>{{UI_1_TITLE}}</h1>
+        <p class="lede">{{UI_1_LEDE}}</p>
+      </div>
+
+      <div class="ba">
+        <div class="frame old">
+          <div class="frame-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">{{UI_1_ROUTE}}</span><span class="frame-tag">BEFORE</span></div>
+          <div class="frame-body">
+            <!-- reconstruct the OLD rendered component here -->
+            <div class="app">{{UI_1_OLD_MARKUP}}</div>
+          </div>
+        </div>
+        <div class="arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="frame new">
+          <div class="frame-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">{{UI_1_ROUTE}}</span><span class="frame-tag">AFTER</span></div>
+          <div class="frame-body">
+            <!-- reconstruct the NEW rendered component here -->
+            <div class="app">{{UI_1_NEW_MARKUP}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="change-notes">
+        <!-- one .change per notable visual/behavioural delta -->
+        <div class="change"><span class="badge add">NEW</span><span>{{UI_1_CHANGE_1}}</span></div>
+        <div class="change"><span class="badge chg">CHANGED</span><span>{{UI_1_CHANGE_2}}</span></div>
+        <div class="change"><span class="badge rm">REMOVED</span><span>{{UI_1_CHANGE_3}}</span></div>
+      </div>
+    </section>
+    <!-- PLATE:UI END ─────────────────────────────────────────────────── -->
+
+    <!-- ══ CODE HIGHLIGHTS ════════════════════════════════════════════ -->
+    <!-- PLATE:CODE START — duplicate this <section> per highlight group ─ -->
+    <section class="plate" id="p-code-1">
+      <div class="titleblock">
+        <div class="eyebrow">Code highlight · {{CODE_1_AREA}}</div>
+        <h1>{{CODE_1_TITLE}}</h1>
+        <p class="lede">{{CODE_1_LEDE}}</p>
+      </div>
+
+      <!-- one .hl card per file/snippet worth knowing about. Highlights only. -->
+      <div class="hl">
+        <div class="hl-head"><span class="kind">{{CODE_1_KIND}}</span><span class="path">{{CODE_1_PATH}}</span></div>
+        <div class="why"><b>Why it matters:</b> {{CODE_1_WHY}}</div>
+        <pre class="code">{{CODE_1_SNIPPET}}</pre>
+      </div>
+    </section>
+    <!-- PLATE:CODE END ───────────────────────────────────────────────── -->
+
+    <!-- ══ DECISIONS ══════════════════════════════════════════════════ -->
+    <section class="plate" id="p-decisions">
+      <div class="titleblock">
+        <div class="eyebrow">Decisions · PRD vs PR</div>
+        <h1>What we decided, and why</h1>
+        <p class="lede">Each decision is compared against the PRD/ticket and tagged with where it came from. Provenance reconstructed from the working session; ask the author if a tag reads <em>uncertain</em>.</p>
+      </div>
+
+      <!-- PLATE:DECISION START — one .dec per decision ─────────────────── -->
+      <div class="dec">
+        <div class="dec-head">
+          <span class="q">{{DEC_1_QUESTION}}</span>
+          <!-- pick ONE provenance chip:
+               followed = matches PRD · deviated = differs from PRD (+why)
+               rejected = PRD asked for it, we said no (+why)
+               owncall  = author's own judgement, not in PRD
+               convo    = decided in a conversation off-ticket -->
+          <span class="prov followed">FOLLOWED PRD</span>
+        </div>
+        <div class="dec-body">
+          <div class="dec-col"><div class="lbl">PRD / ticket expected</div><p>{{DEC_1_PRD}}</p></div>
+          <div class="dec-col"><div class="lbl">What the PR did</div><p>{{DEC_1_PR}}</p></div>
+        </div>
+        <div class="dec-why"><b>Rationale:</b> {{DEC_1_WHY}}</div>
+      </div>
+      <!-- PLATE:DECISION END ───────────────────────────────────────────── -->
+
+    </section>
+
+  </div>
+
+  <div class="hint">← → or J / K to navigate</div>
+  <div class="counter"><b id="cur">1</b> / <span id="total">4</span></div>
+</div>
+
+<script>
+  const plates = Array.from(document.querySelectorAll('.plate'));
+  const ticks  = Array.from(document.querySelectorAll('.tick'));
+  const cur = document.getElementById('cur');
+  document.getElementById('total').textContent = plates.length;
+  let i = 0;
+
+  function show(n) {
+    i = Math.max(0, Math.min(plates.length - 1, n));
+    plates.forEach((p, k) => p.classList.toggle('active', k === i));
+    const id = plates[i].id;
+    ticks.forEach(t => t.classList.toggle('active', t.dataset.target === id));
+    cur.textContent = i + 1;
+    plates[i].scrollTop = 0;
+  }
+  ticks.forEach(t => t.addEventListener('click', () => {
+    const idx = plates.findIndex(p => p.id === t.dataset.target);
+    if (idx === -1) { console.warn('pr-showcase: tick has no matching plate:', t.dataset.target); return; }
+    show(idx);
+  }));
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight','ArrowDown','j','J',' '].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    if (['ArrowLeft','ArrowUp','k','K'].includes(e.key))        { e.preventDefault(); show(i - 1); }
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End')  show(plates.length - 1);
+  });
+  show(0);
+</script>

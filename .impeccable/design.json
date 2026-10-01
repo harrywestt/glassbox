@@ -1,0 +1,1294 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-29T13:03:14.651Z",
+  "title": "Design System: Glassbox",
+  "extensions": {
+    "colorMeta": {
+      "dark-desk": {
+        "role": "neutral",
+        "displayName": "Graphite Desk (dark)",
+        "canonical": "oklch(20.8% 0.007 258.4)",
+        "purpose": "Window ground, title bar, session header, dashboard floor.",
+        "tonalRamp": [
+          "#090b0e",
+          "#222427",
+          "#3e4043",
+          "#5b5e61",
+          "#7e8084",
+          "#9fa2a6",
+          "#c5c7cc",
+          "#eceff3"
+        ]
+      },
+      "light-desk": {
+        "role": "neutral",
+        "displayName": "Pale Grey Desk (light)",
+        "canonical": "oklch(94.2% 0.005 247.9)",
+        "purpose": "Window ground, title bar, session header, dashboard floor.",
+        "tonalRamp": [
+          "#090b0d",
+          "#222426",
+          "#3e4042",
+          "#5b5e60",
+          "#7e8083",
+          "#9fa2a5",
+          "#c5c8ca",
+          "#eceff2"
+        ]
+      },
+      "dark-screen": {
+        "role": "neutral",
+        "displayName": "Charcoal Screen (dark)",
+        "canonical": "oklch(23.8% 0.011 260.7)",
+        "purpose": "Monitor face; both monitors, inputs, the active session tab.",
+        "tonalRamp": [
+          "#090b10",
+          "#212429",
+          "#3d4045",
+          "#5a5e64",
+          "#7d8087",
+          "#9ea2a8",
+          "#c3c7ce",
+          "#eaeff6"
+        ]
+      },
+      "light-screen": {
+        "role": "neutral",
+        "displayName": "White Screen (light)",
+        "canonical": "oklch(100.0% 0.000 0)",
+        "purpose": "Monitor face; both monitors, inputs, the active session tab.",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#808080",
+          "#a1a1a1",
+          "#c7c7c7",
+          "#eeeeee"
+        ]
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "Raised Charcoal (dark)",
+        "canonical": "oklch(26.7% 0.013 258.4)",
+        "purpose": "Map modules, fleet cards, composer box, ask dock, side columns, dialogs.",
+        "tonalRamp": [
+          "#080b11",
+          "#20242a",
+          "#3c4047",
+          "#595e65",
+          "#7c8188",
+          "#9da2aa",
+          "#c2c8d0",
+          "#e9eff7"
+        ]
+      },
+      "light-surface": {
+        "role": "neutral",
+        "displayName": "Raised Pale (light)",
+        "canonical": "oklch(97.3% 0.003 264.5)",
+        "purpose": "Map modules, fleet cards, composer box, ask dock, side columns, dialogs.",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#232425",
+          "#3f4041",
+          "#5d5e5f",
+          "#7f8082",
+          "#a0a1a3",
+          "#c6c7c9",
+          "#edeef0"
+        ]
+      },
+      "dark-elevated": {
+        "role": "neutral",
+        "displayName": "Floating Slate (dark)",
+        "canonical": "oklch(30.7% 0.014 256.8)",
+        "purpose": "Popovers, menus, the map inspector, hover fills.",
+        "tonalRamp": [
+          "#070b11",
+          "#20242b",
+          "#3b4047",
+          "#585e66",
+          "#7b8189",
+          "#9ca2ab",
+          "#c1c8d1",
+          "#e8eff8"
+        ]
+      },
+      "light-elevated": {
+        "role": "neutral",
+        "displayName": "Floating Grey (light)",
+        "canonical": "oklch(93.3% 0.006 255.5)",
+        "purpose": "Popovers, menus, the map inspector, hover fills.",
+        "tonalRamp": [
+          "#090b0e",
+          "#222427",
+          "#3e4043",
+          "#5b5e61",
+          "#7e8084",
+          "#9fa2a5",
+          "#c5c7cb",
+          "#eceff3"
+        ]
+      },
+      "dark-bezel": {
+        "role": "neutral",
+        "displayName": "Hairline Bezel (dark)",
+        "canonical": "oklch(33.1% 0.016 259.8)",
+        "purpose": "Every 1px frame and rule.",
+        "tonalRamp": [
+          "#070b12",
+          "#20242c",
+          "#3b4048",
+          "#585e67",
+          "#7b818a",
+          "#9ca2ac",
+          "#c1c8d2",
+          "#e8eff9"
+        ]
+      },
+      "light-bezel": {
+        "role": "neutral",
+        "displayName": "Grey Bezel (light)",
+        "canonical": "oklch(89.0% 0.008 253.9)",
+        "purpose": "Every 1px frame and rule.",
+        "tonalRamp": [
+          "#090b0f",
+          "#212428",
+          "#3d4044",
+          "#5a5e62",
+          "#7d8185",
+          "#9ea2a7",
+          "#c4c8cd",
+          "#ebeff4"
+        ]
+      },
+      "dark-fg": {
+        "role": "neutral",
+        "displayName": "Monitor White (dark)",
+        "canonical": "oklch(93.0% 0.005 258.3)",
+        "purpose": "Primary text.",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232426",
+          "#3e4042",
+          "#5c5e60",
+          "#7e8083",
+          "#a0a2a4",
+          "#c5c7ca",
+          "#edeff2"
+        ]
+      },
+      "light-fg": {
+        "role": "neutral",
+        "displayName": "Ink (light)",
+        "canonical": "oklch(20.8% 0.009 255.6)",
+        "purpose": "Primary text.",
+        "tonalRamp": [
+          "#090b0f",
+          "#212429",
+          "#3d4045",
+          "#5a5e63",
+          "#7d8186",
+          "#9ea2a7",
+          "#c3c8cd",
+          "#eaeff5"
+        ]
+      },
+      "dark-strong": {
+        "role": "neutral",
+        "displayName": "Pure White (dark)",
+        "canonical": "oklch(100.0% 0.000 0)",
+        "purpose": "Markdown emphasis and table heads.",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#808080",
+          "#a1a1a1",
+          "#c7c7c7",
+          "#eeeeee"
+        ]
+      },
+      "light-strong": {
+        "role": "neutral",
+        "displayName": "Deep Ink (light)",
+        "canonical": "oklch(12.7% 0.009 253.7)",
+        "purpose": "Markdown emphasis and table heads.",
+        "tonalRamp": [
+          "#090b0f",
+          "#212428",
+          "#3d4044",
+          "#5a5e63",
+          "#7d8185",
+          "#9ea2a7",
+          "#c3c8cd",
+          "#eaeff4"
+        ]
+      },
+      "dark-muted": {
+        "role": "neutral",
+        "displayName": "Muted Grey (dark)",
+        "canonical": "oklch(70.7% 0.017 257.2)",
+        "purpose": "Secondary text, inactive tabs.",
+        "tonalRamp": [
+          "#070b12",
+          "#1f242c",
+          "#3a4049",
+          "#585e67",
+          "#7a818a",
+          "#9ba2ac",
+          "#c1c8d2",
+          "#e8effa"
+        ]
+      },
+      "light-muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate (light)",
+        "canonical": "oklch(46.8% 0.020 256.4)",
+        "purpose": "Secondary text, inactive tabs.",
+        "tonalRamp": [
+          "#060b14",
+          "#1e252e",
+          "#39404b",
+          "#565e69",
+          "#78818d",
+          "#99a2af",
+          "#bfc8d5",
+          "#e6effd"
+        ]
+      },
+      "dark-subtle": {
+        "role": "neutral",
+        "displayName": "Subtle Grey (dark)",
+        "canonical": "oklch(60.7% 0.017 257.2)",
+        "purpose": "Meta, placeholders, map paths, idle lamp ring.",
+        "tonalRamp": [
+          "#070b12",
+          "#1f242c",
+          "#3a4049",
+          "#585e68",
+          "#7a818b",
+          "#9ba2ad",
+          "#c0c8d3",
+          "#e7effa"
+        ]
+      },
+      "light-subtle": {
+        "role": "neutral",
+        "displayName": "Subtle Slate (light)",
+        "canonical": "oklch(55.6% 0.021 258.4)",
+        "purpose": "Meta, placeholders, map paths, idle lamp ring.",
+        "tonalRamp": [
+          "#060b14",
+          "#1e242e",
+          "#39404b",
+          "#565e6a",
+          "#79818d",
+          "#9aa2af",
+          "#bfc8d5",
+          "#e6effd"
+        ]
+      },
+      "dark-accent": {
+        "role": "primary",
+        "displayName": "Operator Blue (dark)",
+        "canonical": "oklch(72.9% 0.140 258.1)",
+        "purpose": "User accent (default Blue): selection, focus, current tab, primary action.",
+        "tonalRamp": [
+          "#000044",
+          "#001a65",
+          "#003b87",
+          "#245bab",
+          "#4880d2",
+          "#68a2f8",
+          "#8dc9ff",
+          "#b3f1ff"
+        ]
+      },
+      "light-accent": {
+        "role": "primary",
+        "displayName": "Operator Blue (light)",
+        "canonical": "oklch(51.9% 0.171 260.0)",
+        "purpose": "User accent (default Blue): selection, focus, current tab, primary action.",
+        "tonalRamp": [
+          "#050052",
+          "#000c74",
+          "#003597",
+          "#1857bc",
+          "#3e7ce4",
+          "#5f9fff",
+          "#83c6ff",
+          "#a9efff"
+        ]
+      },
+      "dark-accent-fg": {
+        "role": "primary",
+        "displayName": "Accent Ink (dark)",
+        "canonical": "oklch(19.5% 0.034 258.3)",
+        "purpose": "Text on accent fills.",
+        "tonalRamp": [
+          "#040b19",
+          "#1a2434",
+          "#354052",
+          "#525e71",
+          "#748195",
+          "#95a3b7",
+          "#bac8de",
+          "#e1f0ff"
+        ]
+      },
+      "light-accent-fg": {
+        "role": "primary",
+        "displayName": "Accent Ink (light)",
+        "canonical": "oklch(100.0% 0.000 0)",
+        "purpose": "Text on accent fills.",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#808080",
+          "#a1a1a1",
+          "#c7c7c7",
+          "#eeeeee"
+        ]
+      },
+      "dark-selection": {
+        "role": "neutral",
+        "displayName": "Selection Navy (dark)",
+        "canonical": "oklch(34.5% 0.063 260.9)",
+        "purpose": "Selected rows and text selection.",
+        "tonalRamp": [
+          "#000825",
+          "#112342",
+          "#2c4061",
+          "#495e82",
+          "#6b81a6",
+          "#8ba2ca",
+          "#b0c8f1",
+          "#d7f0ff"
+        ]
+      },
+      "light-selection": {
+        "role": "neutral",
+        "displayName": "Selection Mist (light)",
+        "canonical": "oklch(91.2% 0.031 258.9)",
+        "purpose": "Selected rows and text selection.",
+        "tonalRamp": [
+          "#040b18",
+          "#1b2433",
+          "#364050",
+          "#535e6f",
+          "#758193",
+          "#96a2b5",
+          "#bcc8dc",
+          "#e2f0ff"
+        ]
+      },
+      "dark-user-bubble": {
+        "role": "neutral",
+        "displayName": "Talkback Grey (dark)",
+        "canonical": "oklch(29.2% 0.014 261.7)",
+        "purpose": "The user's messages.",
+        "tonalRamp": [
+          "#080b11",
+          "#20242b",
+          "#3c4047",
+          "#595e66",
+          "#7c8089",
+          "#9da2aa",
+          "#c2c8d1",
+          "#e9eff8"
+        ]
+      },
+      "light-user-bubble": {
+        "role": "neutral",
+        "displayName": "Talkback Grey (light)",
+        "canonical": "oklch(95.4% 0.005 258.3)",
+        "purpose": "The user's messages.",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232426",
+          "#3e4042",
+          "#5c5e60",
+          "#7e8083",
+          "#a0a2a4",
+          "#c5c7ca",
+          "#edeff2"
+        ]
+      },
+      "dark-tally-live": {
+        "role": "tally",
+        "displayName": "On Air Red (dark)",
+        "canonical": "oklch(67.3% 0.215 29.2)",
+        "purpose": "Lamp: Claude is working; map module being edited; map footer lamp.",
+        "tonalRamp": [
+          "#3f0000",
+          "#660000",
+          "#8c0000",
+          "#b30000",
+          "#de3d30",
+          "#ff6452",
+          "#ff8c78",
+          "#ffb59e"
+        ]
+      },
+      "light-tally-live": {
+        "role": "tally",
+        "displayName": "On Air Red (light)",
+        "canonical": "oklch(59.4% 0.215 30.1)",
+        "purpose": "Lamp: Claude is working; map module being edited; map footer lamp.",
+        "tonalRamp": [
+          "#3f0000",
+          "#660000",
+          "#8c0000",
+          "#b30000",
+          "#de3e2c",
+          "#ff6450",
+          "#ff8d75",
+          "#ffb59b"
+        ]
+      },
+      "dark-warn": {
+        "role": "tally",
+        "displayName": "Needs You Amber (dark)",
+        "canonical": "oklch(76.5% 0.139 75.8)",
+        "purpose": "Lamp: waiting on you, or an account needs sign-in; major severity.",
+        "tonalRamp": [
+          "#270000",
+          "#470e00",
+          "#672f00",
+          "#894e00",
+          "#af7200",
+          "#d39424",
+          "#fbba54",
+          "#ffe17d"
+        ]
+      },
+      "light-warn": {
+        "role": "tally",
+        "displayName": "Needs You Amber (light)",
+        "canonical": "oklch(57.5% 0.124 70.8)",
+        "purpose": "Lamp: waiting on you, or an account needs sign-in; major severity.",
+        "tonalRamp": [
+          "#270000",
+          "#460f00",
+          "#662f00",
+          "#884e00",
+          "#ae7113",
+          "#d29340",
+          "#fab968",
+          "#ffe08f"
+        ]
+      },
+      "dark-ok": {
+        "role": "tally",
+        "displayName": "Ready Green (dark)",
+        "canonical": "oklch(70.1% 0.151 152.5)",
+        "purpose": "Lamp: ready or done; diff additions.",
+        "tonalRamp": [
+          "#001700",
+          "#003500",
+          "#00540c",
+          "#00742e",
+          "#139951",
+          "#46bc72",
+          "#71e396",
+          "#99ffbd"
+        ]
+      },
+      "light-ok": {
+        "role": "tally",
+        "displayName": "Ready Green (light)",
+        "canonical": "oklch(54.8% 0.132 152.5)",
+        "purpose": "Lamp: ready or done; diff additions.",
+        "tonalRamp": [
+          "#001600",
+          "#003300",
+          "#005217",
+          "#007236",
+          "#329658",
+          "#58b978",
+          "#80e09d",
+          "#a7ffc3"
+        ]
+      },
+      "dark-err": {
+        "role": "tally",
+        "displayName": "Stopped Red (dark)",
+        "canonical": "oklch(67.1% 0.181 29.4)",
+        "purpose": "Hollow lamp: stopped; failures; diff deletions.",
+        "tonalRamp": [
+          "#3b0000",
+          "#610000",
+          "#860000",
+          "#ac1b11",
+          "#d7483a",
+          "#fe6d5b",
+          "#ff9480",
+          "#ffbca6"
+        ]
+      },
+      "light-err": {
+        "role": "tally",
+        "displayName": "Stopped Red (light)",
+        "canonical": "oklch(55.3% 0.185 28.6)",
+        "purpose": "Hollow lamp: stopped; failures; diff deletions.",
+        "tonalRamp": [
+          "#3c0000",
+          "#620000",
+          "#880000",
+          "#ae1511",
+          "#d94639",
+          "#ff6b5b",
+          "#ff9280",
+          "#ffbaa6"
+        ]
+      },
+      "dark-info": {
+        "role": "tally",
+        "displayName": "Info Blue (dark)",
+        "canonical": "oklch(71.1% 0.116 251.9)",
+        "purpose": "Minor severity, read markers.",
+        "tonalRamp": [
+          "#000139",
+          "#002159",
+          "#00407a",
+          "#245f9c",
+          "#4883c3",
+          "#6aa6e8",
+          "#8fccff",
+          "#b5f4ff"
+        ]
+      },
+      "light-info": {
+        "role": "tally",
+        "displayName": "Info Blue (light)",
+        "canonical": "oklch(51.9% 0.171 260.0)",
+        "purpose": "Minor severity, read markers.",
+        "tonalRamp": [
+          "#050052",
+          "#000c74",
+          "#003597",
+          "#1857bc",
+          "#3e7ce4",
+          "#5f9fff",
+          "#83c6ff",
+          "#a9efff"
+        ]
+      },
+      "dark-cat-1": {
+        "role": "categorical",
+        "displayName": "Series 1 Blue (dark)",
+        "canonical": "#3987e5",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#0e2239",
+          "#1a3d67",
+          "#255895",
+          "#3073c3",
+          "#5799e9",
+          "#7eb1ee",
+          "#a6c9f3",
+          "#d7e7fa"
+        ]
+      },
+      "dark-cat-2": {
+        "role": "categorical",
+        "displayName": "Series 2 Orange (dark)",
+        "canonical": "#d95926",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#36160a",
+          "#622811",
+          "#8d3a19",
+          "#b84c20",
+          "#df7247",
+          "#e69372",
+          "#eeb49d",
+          "#f7ded4"
+        ]
+      },
+      "dark-cat-3": {
+        "role": "categorical",
+        "displayName": "Series 3 Teal (dark)",
+        "canonical": "#199e70",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#06281c",
+          "#0b4732",
+          "#106749",
+          "#15865f",
+          "#3cad85",
+          "#6ac0a2",
+          "#98d3bf",
+          "#d1ece2"
+        ]
+      },
+      "dark-cat-4": {
+        "role": "categorical",
+        "displayName": "Series 4 Violet (dark)",
+        "canonical": "#9085e9",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#24213a",
+          "#413c69",
+          "#5e5697",
+          "#7a71c6",
+          "#a197ec",
+          "#b7b0f1",
+          "#cdc8f5",
+          "#e9e7fb"
+        ]
+      },
+      "dark-cat-5": {
+        "role": "categorical",
+        "displayName": "Series 5 Pink (dark)",
+        "canonical": "#d55181",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#351420",
+          "#60243a",
+          "#8a3554",
+          "#b5456e",
+          "#db6b94",
+          "#e48ead",
+          "#ecb1c6",
+          "#f7dce6"
+        ]
+      },
+      "dark-cat-6": {
+        "role": "categorical",
+        "displayName": "Series 6 Amber (dark)",
+        "canonical": "#c98500",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#322100",
+          "#5a3c00",
+          "#835600",
+          "#ab7100",
+          "#d19726",
+          "#dcb059",
+          "#e7c88c",
+          "#f4e7cc"
+        ]
+      },
+      "dark-cat-7": {
+        "role": "categorical",
+        "displayName": "Series 7 Green (dark)",
+        "canonical": "#008300",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#002100",
+          "#003b00",
+          "#005500",
+          "#006f00",
+          "#269626",
+          "#59ae59",
+          "#8cc78c",
+          "#cce6cc"
+        ]
+      },
+      "dark-cat-8": {
+        "role": "categorical",
+        "displayName": "Series 8 Red (dark)",
+        "canonical": "#e66767",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#3a1a1a",
+          "#682e2e",
+          "#964343",
+          "#c45858",
+          "#ea7e7e",
+          "#ef9c9c",
+          "#f4bbbb",
+          "#fae1e1"
+        ]
+      },
+      "light-cat-1": {
+        "role": "categorical",
+        "displayName": "Series 1 Blue (light)",
+        "canonical": "#2a78d6",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#0b1e36",
+          "#133660",
+          "#1b4e8b",
+          "#2466b6",
+          "#4a8cdc",
+          "#75a7e4",
+          "#9fc2ed",
+          "#d4e4f7"
+        ]
+      },
+      "light-cat-2": {
+        "role": "categorical",
+        "displayName": "Series 2 Orange (light)",
+        "canonical": "#eb6834",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#3b1a0d",
+          "#6a2f17",
+          "#994422",
+          "#c8582c",
+          "#ee7f52",
+          "#f29d7b",
+          "#f6bba4",
+          "#fbe1d6"
+        ]
+      },
+      "light-cat-3": {
+        "role": "categorical",
+        "displayName": "Series 3 Teal (light)",
+        "canonical": "#1baf7a",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#072c1f",
+          "#0c4f37",
+          "#12724f",
+          "#179568",
+          "#3dbb8e",
+          "#6bcba9",
+          "#98dbc3",
+          "#d1efe4"
+        ]
+      },
+      "light-cat-4": {
+        "role": "categorical",
+        "displayName": "Series 4 Violet (light)",
+        "canonical": "#4a3aa7",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#130f2a",
+          "#211a4b",
+          "#30266d",
+          "#3f318e",
+          "#6558b4",
+          "#897fc6",
+          "#aea6d7",
+          "#dbd8ed"
+        ]
+      },
+      "light-cat-5": {
+        "role": "categorical",
+        "displayName": "Series 5 Pink (light)",
+        "canonical": "#e87ba4",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#3a1f29",
+          "#68374a",
+          "#97506b",
+          "#c5698b",
+          "#eb8fb2",
+          "#f0a9c4",
+          "#f5c4d6",
+          "#fae5ed"
+        ]
+      },
+      "light-cat-6": {
+        "role": "categorical",
+        "displayName": "Series 6 Amber (light)",
+        "canonical": "#eda100",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#3b2800",
+          "#6b4800",
+          "#9a6900",
+          "#c98900",
+          "#f0af26",
+          "#f3c259",
+          "#f7d58c",
+          "#fbeccc"
+        ]
+      },
+      "light-cat-7": {
+        "role": "categorical",
+        "displayName": "Series 7 Green (light)",
+        "canonical": "#008300",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#002100",
+          "#003b00",
+          "#005500",
+          "#006f00",
+          "#269626",
+          "#59ae59",
+          "#8cc78c",
+          "#cce6cc"
+        ]
+      },
+      "light-cat-8": {
+        "role": "categorical",
+        "displayName": "Series 8 Red (light)",
+        "canonical": "#e34948",
+        "purpose": "Context breakdown chart series, fixed order; legend table always present. Never state, selection or chrome.",
+        "tonalRamp": [
+          "#391212",
+          "#662120",
+          "#942f2f",
+          "#c13e3d",
+          "#e76463",
+          "#ed8988",
+          "#f2adad",
+          "#f9dbda"
+        ]
+      }
+    },
+    "accentPresets": [
+      {
+        "id": "teal",
+        "label": "Teal",
+        "dark": "#4fb3c8",
+        "light": "#0e7c90"
+      },
+      {
+        "id": "blue",
+        "label": "Blue",
+        "dark": "#6ea8fe",
+        "light": "#2563c9",
+        "default": true
+      },
+      {
+        "id": "violet",
+        "label": "Violet",
+        "dark": "#a78bfa",
+        "light": "#6d4fd6"
+      },
+      {
+        "id": "green",
+        "label": "Green",
+        "dark": "#5cc98a",
+        "light": "#1f8a4f"
+      },
+      {
+        "id": "amber",
+        "label": "Amber",
+        "dark": "#e8b24f",
+        "light": "#a86a00"
+      },
+      {
+        "id": "rose",
+        "label": "Rose",
+        "dark": "#f07892",
+        "light": "#c23a5a"
+      }
+    ],
+    "derivedColors": [
+      {
+        "name": "accent-soft",
+        "value": "color-mix(in srgb, var(--accent) 16%, transparent) (dark) / 12% (light)",
+        "purpose": "Toggled-on controls and armed rows."
+      },
+      {
+        "name": "focus-ring",
+        "value": "2px solid color-mix(in srgb, var(--accent) 75%, transparent), offset 1px",
+        "purpose": "Every focusable element."
+      },
+      {
+        "name": "map-edge",
+        "value": "color-mix(in srgb, var(--fg) 16%, transparent)",
+        "purpose": "Map dependency lines."
+      },
+      {
+        "name": "diff-add / diff-del",
+        "value": "color-mix(in srgb, var(--ok|--err) 12%, transparent)",
+        "purpose": "Diff line tints."
+      },
+      {
+        "name": "scrim",
+        "value": "rgba(6, 8, 10, .55)",
+        "purpose": "Dialog overlay."
+      }
+    ],
+    "tally": {
+      "source": "src/renderer/src/tally.ts (tallyOf, liveVerb, TALLY_LABEL)",
+      "states": [
+        {
+          "state": "live",
+          "word": "Working",
+          "token": "--tally-live",
+          "lamp": "solid fill, breathes to .55 opacity over 2.4s"
+        },
+        {
+          "state": "wait",
+          "word": "Needs you",
+          "token": "--tally-wait (= --warn)",
+          "lamp": "solid fill"
+        },
+        {
+          "state": "ok",
+          "word": "Done",
+          "token": "--tally-ok (= --ok)",
+          "lamp": "solid fill"
+        },
+        {
+          "state": "idle",
+          "word": "Ready",
+          "token": "--tally-idle (= --subtle)",
+          "lamp": "1.5px hollow ring"
+        },
+        {
+          "state": "err",
+          "word": "Stopped",
+          "token": "--tally-err (= --err)",
+          "lamp": "2px hollow ring"
+        }
+      ],
+      "precedence": "wait (pending permission, unanswered check-in or open question) > stopped > running > ready > idle",
+      "words": "Beside lamps in title-bar tabs, program strip and fleet cards: the live verb (liveVerb: \"Writing handler.js\", \"Asked you a question\", \"Needs your approval\", \"Done\", \"Stopped\"). Where a single state word is needed (tooltips, labels): TALLY_LABEL (Working, Needs you, Done, Ready, Stopped).",
+      "emphasisWithoutColour": "Current plan step and urgent side-tab counts are marked by weight (600/700 foreground), not accent or amber."
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles only (Dashboard)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Dialog titles, the ask dock question, ticket and flow titles, markdown headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card and panel titles; map module names at 650 and 92% width."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "UI text, rows, menus, inputs."
+      },
+      "conversation": {
+        "displayName": "Conversation",
+        "purpose": "Claude's replies and the user's messages; user-set 13-18px (--chat-size)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Tabs, session names, buttons, column heads; implemented as font-stretch: 88% (--label)."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Live verbs, decision kind and time, fleet footers, band labels; tabular figures."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Code, diffs, file paths, key caps only."
+      }
+    },
+    "controlHeights": [
+      {
+        "name": "h-row",
+        "value": "24px",
+        "purpose": "Controls inside rows, segments, filter chips."
+      },
+      {
+        "name": "h-ctl",
+        "value": "28px",
+        "purpose": "Buttons, inputs, list rows, menu items."
+      },
+      {
+        "name": "h-lg",
+        "value": "32px",
+        "purpose": "Send, dialog actions, session monitor tabs, Claude reason note, Changes summary row."
+      },
+      {
+        "name": "label-strip",
+        "value": "36px",
+        "purpose": "Tab strips inside monitors."
+      },
+      {
+        "name": "bar",
+        "value": "40px",
+        "purpose": "Title bar, program label strip, preview bar, map replay bar."
+      }
+    ],
+    "shadows": [
+      {
+        "name": "shadow-pop",
+        "value": "0 12px 32px rgba(0, 0, 0, .28), 0 2px 6px rgba(0, 0, 0, .12)",
+        "purpose": "Popovers, menus, dropdowns, Accounts popover, map inspector, tooltips, chart tips, app preview load-failure notice."
+      },
+      {
+        "name": "shadow-dialog",
+        "value": "0 24px 64px rgba(0, 0, 0, .35)",
+        "purpose": "Modal dialogs over the scrim."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.2, .7, .2, 1)",
+        "purpose": "The one easing for state transitions and glides."
+      },
+      {
+        "name": "state",
+        "value": "120ms",
+        "purpose": "Hover, border and colour changes; pop-in of floating layers (2px drop)."
+      },
+      {
+        "name": "on-air",
+        "value": "2.4s ease-in-out infinite, opacity to .55",
+        "purpose": "Live lamp and live map footer lamp breathing."
+      },
+      {
+        "name": "map-foot",
+        "value": "300ms var(--ease) fade in",
+        "purpose": "Map module footer (who is here, plan steps) appearing."
+      },
+      {
+        "name": "replay-head",
+        "value": "250ms var(--ease)",
+        "purpose": "Map replay playhead moving between moments."
+      },
+      {
+        "name": "switch",
+        "value": "150ms var(--ease)",
+        "purpose": "Toggle switch knob sliding."
+      },
+      {
+        "name": "map-read",
+        "value": "1.6s ease-out once",
+        "purpose": "Accent outline flash when a module is read."
+      },
+      {
+        "name": "fleet-slide",
+        "value": "500ms ease-out",
+        "purpose": "Fleet cards and connectors moving between columns."
+      },
+      {
+        "name": "ripple-wave",
+        "value": "2.6s ease-out once",
+        "purpose": "One accent wave each time Ripple opens."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "all animation and transition off",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "dash-two-col",
+        "value": "1500px"
+      },
+      {
+        "name": "gh-counts-two-col",
+        "value": "1200px"
+      },
+      {
+        "name": "dash-one-col",
+        "value": "1000px"
+      }
+    ],
+    "knownExceptions": [
+      "Filled tags and pills still ship: .tag (elevated fill) in NewSessionDialog, ActivityPanel, ConnectorsPanel, ContextPanel, GuardrailsPanel, SkillsPanel, EditCard, RadarCard, Signals, TestSignals, Dashboard, GitHubSection; .tag.accent, .warn-tag, .err-tag; .pill/.pill-accent (AgentsPanel, LiveTab); .agent-chip accent fill (Timeline); .admin-badge amber fill (SessionHeader). Only account-line, history-row and skill-title tags are text-only.",
+      "Status-tinted frames: callout-warn, loop-banner, guard-block/ask, checkin.waiting, drift, admin-warning, edit-card.failed, test-card.bad, service-error, sev-blocker borders; comment-box accent border.",
+      "Status tints off-lamp: touch-dot, heat-edit, mark-btn and req-chip mark colours, usage-ring warn/err, admin-modal-icon, side-reveal-dot, voice meter bars in on-air red.",
+      "Helper text classes still in use: .hint, .field-hint, .gh-hint, multi-paragraph .empty-body; GitHub empty states run to two sentences.",
+      "Off-scale values: heights 18/20/22/36/44px, radius 5px, ad hoc font-stretch 90%/92%, weights 650/700 (Stand-up title 20px/650 vs Display 600); .big 20px numbers still used in 3 files.",
+      "fleet-card focus outline is 1px against the global 2px ring.",
+      "Fixes are appended as override blocks at the end of styles.css (UI sweep 2026-09-29: .step-active, .side-count.urgent, .changes-summary, .unseen-dot hidden then restyled by weight), splitting the source of truth; --strong and --cat-* live in styles.css rather than theme.ts; dead .dot-* rules (running = pulsing accent) remain though no component uses them."
+    ],
+    "categorical": {
+      "source": "src/renderer/src/styles.css (--cat-1..--cat-8 per [data-theme]); panels/ContextPanel.tsx",
+      "order": "blue, orange, teal, violet, pink, amber, green, red (red/amber/green last so leading series never read as session state)",
+      "validation": "dataviz validator: lightness, chroma, CVD and contrast against each theme screen colour",
+      "legend": "Always a legend table: 8px swatch, name, right-aligned tabular value"
+    },
+    "monaco": {
+      "source": "src/renderer/src/monaco.ts (monacoTheme)",
+      "background": "--bg (screen)",
+      "lineNumbers": "--subtle / active --muted",
+      "cursor": "--accent",
+      "selection": "--selection",
+      "widgets": "--elevated with --border",
+      "diffLines": "ok/err at 12% (lines), 22% (text), 16% (gutter)",
+      "unchanged": "--surface with --muted text"
+    },
+    "allowedExceptions": [
+      "Micro radii 1-2px on tab/splitter underlines, the text caret, replay ticks and playhead, test-trend bars, legend swatches and the Stop square; 2px capsule ends on 4px meters and bars.",
+      "Codicon glyphs at 14px in tabs, notes and chevrons (12-13px in dense meta, 18px on task cards).",
+      "Switch track is a 28x16px capsule (8px radius)."
+    ]
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Default key: hairline bezel, no fill, fills on hover.",
+      "html": "<button class=\"ds-btn\">Share</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; font: 500 12px/1 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); background: transparent; color: var(--fg, #e6e8eb); border: 1px solid var(--border, #31363e); border-radius: 6px; cursor: pointer; transition: background .12s, border-color .12s, color .12s; } .ds-btn:hover { background: var(--elevated, #2b3037); } .ds-btn:active { background: color-mix(in srgb, var(--elevated, #2b3037) 70%, var(--fg, #e6e8eb) 8%); } .ds-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #6ea8fe) 75%, transparent); outline-offset: 1px; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action, lit by the user accent.",
+      "html": "<button class=\"ds-btn-primary\">New session</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; font: 500 12px/1 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); background: var(--accent, #6ea8fe); color: var(--accent-fg, #0b1524); border: 1px solid transparent; border-radius: 6px; cursor: pointer; transition: background .12s; } .ds-btn-primary:hover { background: color-mix(in srgb, var(--accent, #6ea8fe) 86%, var(--fg, #e6e8eb)); } .ds-btn-primary:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #6ea8fe) 75%, transparent); outline-offset: 1px; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Text key that fills on hover; used in strips and rows.",
+      "html": "<button class=\"ds-btn-quiet\">Later</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; font: 500 12px/1 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); background: transparent; color: var(--muted, #9aa1ab); border: 1px solid transparent; border-radius: 6px; cursor: pointer; transition: background .12s, color .12s; } .ds-btn-quiet:hover { color: var(--fg, #e6e8eb); background: var(--elevated, #2b3037); } .ds-btn-quiet:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #6ea8fe) 75%, transparent); outline-offset: 1px; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Screen-filled field; the border turns accent on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search past sessions\">",
+      "css": ".ds-input { height: 28px; padding: 0 8px; font: 13px/1.4 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); background: var(--bg, #1c1f24); color: var(--fg, #e6e8eb); border: 1px solid var(--border, #31363e); border-radius: 6px; caret-color: var(--accent, #6ea8fe); } .ds-input::placeholder { color: var(--subtle, #7c838d); } .ds-input:focus { outline: none; border-color: var(--accent, #6ea8fe); }"
+    },
+    {
+      "name": "Monitor with label strip",
+      "kind": "nav",
+      "refersTo": "label-strip",
+      "description": "A framed pane opening on a strip of plain text tabs; the current one has a 2px accent underline.",
+      "html": "<div class=\"ds-monitor\"><div class=\"ds-strip\"><button class=\"ds-tab on\">Conversation</button><button class=\"ds-tab\">Map</button><button class=\"ds-tab new\">Ripple</button><button class=\"ds-tab\">Flow</button></div><div class=\"ds-screen\"></div></div>",
+      "css": ".ds-monitor { background: var(--bg, #1c1f24); border: 1px solid var(--border, #31363e); border-radius: 8px; overflow: hidden; width: 420px; } .ds-strip { display: flex; gap: 4px; height: 36px; padding: 0 16px; border-bottom: 1px solid var(--border, #31363e); } .ds-tab { position: relative; padding: 0 8px; border: none; background: none; color: var(--muted, #9aa1ab); font: 500 12px/1 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); font-stretch: 88%; cursor: pointer; } .ds-tab:hover { color: var(--fg, #e6e8eb); } .ds-tab.new { color: var(--fg, #e6e8eb); font-weight: 700; } .ds-tab.on { color: var(--fg, #e6e8eb); } .ds-tab.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 1px; background: var(--accent, #6ea8fe); } .ds-tab:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #6ea8fe) 75%, transparent); outline-offset: 1px; } .ds-screen { height: 96px; }"
+    },
+    {
+      "name": "Session monitor tab",
+      "kind": "nav",
+      "refersTo": "session-monitor-tab",
+      "description": "Title bar tab per session: lamp, name, live verb.",
+      "html": "<div class=\"ds-tabstrip\"><div class=\"ds-stab on\"><span class=\"ds-lamp wait\"></span><span class=\"ds-stext\"><span class=\"ds-sname\">Add discount codes</span><span class=\"ds-sverb\">Asked you a question</span></span></div><div class=\"ds-stab\"><span class=\"ds-lamp live\"></span><span class=\"ds-stext\"><span class=\"ds-sname\">Add Coupons.js</span><span class=\"ds-sverb\">Editing Coupons.js</span></span></div></div>",
+      "css": ".ds-tabstrip { display: flex; gap: 4px; padding: 4px; background: var(--surface2, #16181b); } .ds-stab { display: flex; align-items: center; gap: 8px; height: 32px; width: 212px; padding: 0 4px 0 12px; border: 1px solid transparent; border-radius: 6px; color: var(--muted, #9aa1ab); cursor: pointer; transition: background .12s, color .12s; } .ds-stab:hover { background: color-mix(in srgb, var(--bg, #1c1f24) 55%, transparent); color: var(--fg, #e6e8eb); } .ds-stab.on { background: var(--bg, #1c1f24); border-color: var(--border, #31363e); color: var(--fg, #e6e8eb); } .ds-stext { display: flex; flex-direction: column; gap: 1px; line-height: 13px; min-width: 0; } .ds-sname { font: 500 12px var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); font-stretch: 88%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-sverb { font: 11px var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); font-stretch: 88%; color: var(--muted, #9aa1ab); } .ds-lamp { flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--subtle, #7c838d); } .ds-lamp.live { background: var(--tally-live, #ff4f3f); box-shadow: none; animation: ds-on-air 2.4s ease-in-out infinite; } .ds-lamp.wait { background: var(--warn, #e5a53c); box-shadow: none; } @keyframes ds-on-air { 50% { opacity: .55; } }"
+    },
+    {
+      "name": "Tally lamps",
+      "kind": "custom",
+      "refersTo": "tally-lamp",
+      "description": "The only home of session state colour, each with its status word.",
+      "html": "<div class=\"ds-lamps\"><span><i class=\"ds-l live\"></i>Working</span><span><i class=\"ds-l wait\"></i>Needs you</span><span><i class=\"ds-l ok\"></i>Done</span><span><i class=\"ds-l\"></i>Ready</span><span><i class=\"ds-l err\"></i>Stopped</span></div>",
+      "css": ".ds-lamps { display: flex; gap: 16px; font: 12px var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); color: var(--fg, #e6e8eb); } .ds-lamps span { display: inline-flex; align-items: center; gap: 8px; } .ds-l { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--subtle, #7c838d); transition: background .2s, box-shadow .2s; } .ds-l.live { background: var(--tally-live, #ff4f3f); box-shadow: none; animation: ds-air 2.4s ease-in-out infinite; } .ds-l.wait { background: var(--warn, #e5a53c); box-shadow: none; } .ds-l.ok { background: var(--ok, #43b96f); box-shadow: none; } .ds-l.err { box-shadow: inset 0 0 0 2px var(--err, #f0604f); } @keyframes ds-air { 50% { opacity: .55; } } @media (prefers-reduced-motion: reduce) { .ds-l.live { animation: none; } }"
+    },
+    {
+      "name": "Fleet card",
+      "kind": "card",
+      "refersTo": "fleet-card",
+      "description": "A session on the fleet board: lamp, title, live verb, meta footer.",
+      "html": "<button class=\"ds-fleet\"><span class=\"ds-fh\"><i class=\"ds-fl\"></i><span class=\"ds-ft\">Add discount codes to checkout</span></span><span class=\"ds-fv\">Asked you a question</span><span class=\"ds-ff\"><span>4 of 4 steps</span><span>NSD-1234</span><span class=\"ds-fc\">£0.23</span></span></button>",
+      "css": ".ds-fleet { display: flex; flex-direction: column; justify-content: space-between; gap: 2px; width: 300px; height: 64px; padding: 8px 12px; text-align: left; font: 400 13px/1.3 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); background: var(--surface, #22262c); color: var(--fg, #e6e8eb); border: 1px solid var(--border, #31363e); border-radius: 6px; cursor: pointer; transition: background .12s; } .ds-fleet:hover { background: var(--elevated, #2b3037); } .ds-fleet:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #6ea8fe) 75%, transparent); outline-offset: 1px; } .ds-fh { display: flex; align-items: center; gap: 8px; min-width: 0; } .ds-fl { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn, #e5a53c); } .ds-ft { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-fv { padding-left: 16px; font-size: 12px; color: var(--muted, #9aa1ab); } .ds-ff { display: flex; gap: 12px; padding-left: 16px; font-size: 11px; color: var(--subtle, #7c838d); font-variant-numeric: tabular-nums; } .ds-fc { margin-left: auto; }"
+    },
+    {
+      "name": "Map module",
+      "kind": "custom",
+      "refersTo": "map-module",
+      "description": "A 124px module box on the architect map: name, path, touched files, and a footer strip of who is there and plan steps; accent when selected, tally frame when being edited or waiting.",
+      "html": "<div class=\"ds-maprow\"><div class=\"ds-mod\"><b>Checkout</b><span class=\"ds-mp\">src/web/checkout</span><span class=\"ds-mf\">~ Checkout.js</span><span class=\"ds-foot\"><i class=\"ds-ml live\"></i>Claude editing Checkout.js<em>Step 4</em></span></div><div class=\"ds-mod sel\"><b>Orders</b><span class=\"ds-mp\">src/api/orders</span><span class=\"ds-foot\"><em class=\"now\">Step 3</em></span></div><div class=\"ds-mod ctx\"><b>UI</b><span class=\"ds-mp\">src/web/ui</span></div></div>",
+      "css": ".ds-maprow { display: flex; gap: 12px; align-items: flex-start; } .ds-mod { display: flex; flex-direction: column; gap: 4px; width: 176px; height: 124px; box-sizing: border-box; padding: 10px 12px 0; background: var(--surface, #22262c); border: 1px solid var(--border, #31363e); border-radius: 6px; font: 650 13px var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); font-stretch: 92%; color: var(--fg, #e6e8eb); cursor: pointer; transition: border-color .15s; } .ds-mod:hover { border-color: var(--muted, #9aa1ab); } .ds-mod.sel { border: 2px solid var(--accent, #6ea8fe); } .ds-mod.ctx { height: 64px; background: var(--bg, #1c1f24); color: var(--muted, #9aa1ab); } .ds-mp, .ds-mf { font: 400 11px var(--mono, 'IBM Plex Mono', monospace); color: var(--subtle, #7c838d); } .ds-mf { color: var(--muted, #9aa1ab); } .ds-foot { margin-top: auto; display: flex; align-items: center; gap: 6px; height: 28px; margin-left: -12px; margin-right: -12px; padding: 0 12px; border-top: 1px solid var(--border, #31363e); font: 500 11px var(--font, 'Archivo Variable', sans-serif); font-stretch: 90%; color: var(--muted, #9aa1ab); } .ds-foot em { margin-left: auto; font-style: normal; font-weight: 600; color: var(--subtle, #7c838d); text-decoration: line-through; } .ds-foot em.now { text-decoration: none; font-weight: 700; color: var(--fg, #e6e8eb); } .ds-ml { width: 8px; height: 8px; border-radius: 50%; background: var(--fg, #e6e8eb); } .ds-ml.live { background: var(--tally-live, #ff4f3f); animation: ds-mair 2.4s ease-in-out infinite; } @keyframes ds-mair { 50% { opacity: .55; } }"
+    },
+    {
+      "name": "Segmented control",
+      "kind": "chip",
+      "refersTo": "segmented",
+      "description": "A desk track whose active segment lights to the screen colour.",
+      "html": "<div class=\"ds-seg\"><button>Match Windows</button><button class=\"on\">Dark</button><button>Light</button></div>",
+      "css": ".ds-seg { display: inline-flex; gap: 1px; padding: 1px; background: var(--surface2, #16181b); border: 1px solid var(--border, #31363e); border-radius: 6px; } .ds-seg button { height: 24px; padding: 0 8px; border: none; background: none; color: var(--muted, #9aa1ab); font: 500 12px/1 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); border-radius: 4px; cursor: pointer; } .ds-seg button:hover { color: var(--fg, #e6e8eb); } .ds-seg button.on { background: var(--bg, #1c1f24); color: var(--fg, #e6e8eb); } .ds-seg button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #6ea8fe) 75%, transparent); outline-offset: 1px; }"
+    },
+    {
+      "name": "Toggle switch",
+      "kind": "custom",
+      "refersTo": "switch",
+      "description": "A 28x16px capsule: elevated track off, accent track with an accent-ink knob on.",
+      "html": "<div class=\"ds-sw-row\"><button class=\"ds-sw\" role=\"switch\" aria-checked=\"false\"><span></span></button><button class=\"ds-sw on\" role=\"switch\" aria-checked=\"true\"><span></span></button></div>",
+      "css": ".ds-sw-row { display: flex; gap: 16px; } .ds-sw { position: relative; width: 28px; height: 16px; padding: 0; border: none; border-radius: 8px; background: var(--elevated, #2b3037); cursor: pointer; } .ds-sw:hover { background: color-mix(in srgb, var(--elevated, #2b3037) 70%, var(--fg, #e6e8eb) 12%); } .ds-sw span { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted, #9aa1ab); transition: left .15s cubic-bezier(.2,.7,.2,1); } .ds-sw.on { background: var(--accent, #6ea8fe); } .ds-sw.on span { left: 14px; background: var(--accent-fg, #0b1524); } .ds-sw:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #6ea8fe) 75%, transparent); outline-offset: 1px; }"
+    },
+    {
+      "name": "Claude's reason note",
+      "kind": "custom",
+      "refersTo": "claude-note",
+      "description": "A 32px surface bar above anything Claude opens for you, with its one-line reason.",
+      "html": "<div class=\"ds-note\"><span class=\"ds-note-who\">Claude</span><span>Pricing is where the discount is applied, so the change starts here.</span></div>",
+      "css": ".ds-note { display: flex; align-items: center; gap: 8px; min-height: 32px; width: 520px; padding: 0 8px 0 24px; background: var(--surface, #22262c); border-bottom: 1px solid var(--border, #31363e); font: 400 13px/1.4 var(--font, 'Archivo Variable', 'Segoe UI', system-ui, sans-serif); color: var(--fg, #e6e8eb); } .ds-note-who { flex: none; font-weight: 650; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Gallery",
+    "overview": "Glassbox is a broadcast control-room gallery. The window is a desk; the program and preview panes are monitors set on it, framed by a hairline bezel with the desk showing between them. Every session is a small monitor with a tally lamp, so one glance at the session strip or the fleet board shows which is on air, which needs you and which is done. The room is matte and quiet. Only the lamps are lit.\n\nDensity is editor density: VS Code's tabs across the top, a side monitor on the right, 28px controls, 12 to 13px UI type. Hierarchy comes from the frame (desk, monitor, label strip) and from weight, never from coloured chrome. The user's own accent marks where they are: selection, focus, the active tab's underline, the primary action. Tally colours say what a session is doing and nothing else.\n\nThe user has rejected anything that reads as generated: pills and badges, coloured left stripes, helper paragraphs, glows, and the grey editor clone with an icon rail. The interface shows rather than explains. An empty area says one plain line or hides.",
+    "keyCharacteristics": [
+      "A desk ground (`desk`) with framed monitors (`screen`) sitting on it, 8px apart.",
+      "Tally lamps: red on air, amber needs you, green ready or done, hollow ring idle or stopped.",
+      "One accent, chosen by the user, for selection and focus only.",
+      "One UI face (Archivo, variable width) narrowed to 88% for label strips; IBM Plex Mono only for code and paths.",
+      "Flat at rest; a shadow only on things that float above the desk.",
+      "Motion reports state (a lamp breathing, the playhead moving, the fleet sliding), never decorates."
+    ],
+    "rules": [
+      {
+        "name": "The Tally Rule",
+        "body": "Red, amber and green mean working, needs you, and ready or done. They appear on lamps, on the map's lit module frame and footer lamp, on status and severity words, and on diff lines. They never tint a border, fill, tab, badge, count or banner. Where state needs emphasis without a lamp (the current plan step, an urgent count), it is carried by weight.",
+        "section": "colors"
+      },
+      {
+        "name": "The Operator Rule",
+        "body": "The accent marks where the user is (selection, focus, the current tab, the primary action) and never a session's state.",
+        "section": "colors"
+      },
+      {
+        "name": "The Matte Rule",
+        "body": "No glows, no gradients on chrome, no coloured shadows. The only gradient in chrome is the loading skeleton's sweep.",
+        "section": "colors"
+      },
+      {
+        "name": "The Categorical Rule",
+        "body": "The `cat` series live only inside charts, in their fixed order, with a legend table beside them. They never mark state, selection or chrome.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Face Rule",
+        "body": "Archivo carries all UI text; mono is for code and paths, never for labels or numbers.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Counts, costs, times, ticket keys and step numbers use tabular figures.",
+        "section": "typography"
+      },
+      {
+        "name": "The Plain Numbers Rule",
+        "body": "Dashboard figures are 13px/600 values in plain label-value rows, not hero tiles.",
+        "section": "typography"
+      },
+      {
+        "name": "The Legible Diagram Rule",
+        "body": "Diagram labels stay at 11px on screen at any drawn scale: Ripple divides its label size and halo by the scale it is drawn at, and the map lays out at a fixed type scale rather than shrinking.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Desk Rule",
+        "body": "Monitors, cards, rows and buttons have no shadow. A shadow means the layer floats and will go away.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put session state on a tally lamp with the live verb beside it (\"Writing handler.js\", \"Asked you a question\", \"Done\", \"Stopped\"); use the five state words (Working, Needs you, Done, Ready, Stopped) where a single word is needed, such as a lamp's tooltip.",
+      "Do use the user's accent for selection, focus, the current tab's underline and the primary action, and for nothing else.",
+      "Do frame panes as monitors (screen fill, 1px bezel, 8px corners) on the desk, with a label strip of plain text tabs.",
+      "Do keep to the scales: spacing 4/8/12/16/24, heights 24/28/32, corners 4/6/8/12 (with 1 to 2px only on micro marks and capsule ends).",
+      "Do narrow labels with the 88% width axis instead of shrinking them below 11px, and keep diagram labels at 11px on screen at any scale.",
+      "Do encode diagram meaning by fill, stroke weight and dash (Ripple, Flow, map) so it reads without colour.",
+      "Do mark new, unseen, current or urgent things by weight, not a dot or a tally colour.",
+      "Do divide sections by space and a hairline rule.",
+      "Do give every categorical chart its legend table and keep the series in their fixed order."
+    ],
+    "donts": [
+      "Don't use pills or badges: counts are plain numbers after the label; tags and meta are plain text, not filled lozenges.",
+      "Don't use coloured left stripes or coloured borders to signal state; neutral hairline dividers are fine.",
+      "Don't write helper paragraphs; an empty area says one plain line or hides.",
+      "Don't add glows, coloured shadows or gradients to chrome.",
+      "Don't put tally colours on tabs, frames, fills, counts, banners or buttons; status colour lives only on lamps, the map's lit module frame and footer lamp, status and severity words, and diff lines.",
+      "Don't use the accent to mean a session is working; working is on-air red.",
+      "Don't use the categorical series outside charts.",
+      "Don't use mono for labels, numbers or UI text.",
+      "Don't show dashboard figures as hero tiles.",
+      "Don't add an icon rail or other unfamiliar navigation; tabs across the top and a side monitor are the navigation."
+    ]
+  }
+}
