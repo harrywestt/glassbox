@@ -1,0 +1,186 @@
+/* The architect map. Tally colours only for state: red being edited, amber waiting for you. */
+.map-tab { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Laid out at the width it has, at a fixed type scale: it scrolls down, never sideways. */
+.map-view { flex: 1; min-height: 0; overflow: hidden auto; scrollbar-gutter: stable; padding: var(--s-3) var(--s-5); }
+.map-svg { display: block; }
+.map-empty { padding: var(--s-4); color: var(--muted); }
+.map-band { fill: none; stroke: var(--border); stroke-dasharray: 2 4; }
+.map-band-label { font: 600 11px var(--font); font-stretch: var(--label); fill: var(--subtle); }
+.map-edge { stroke: color-mix(in srgb, var(--fg) 16%, transparent); stroke-width: 1.2; }
+.map-edge.hot { stroke: var(--accent); stroke-width: 1.8; }
+.map-route { fill: none; stroke: var(--subtle); stroke-width: 1; stroke-dasharray: 3 5; opacity: .75; }
+.map-hatch-line { stroke: var(--muted); stroke-width: 2; opacity: .3; }
+
+.map-mod { cursor: pointer; outline: none; }
+.map-mod-bg { fill: var(--surface); stroke: var(--border); stroke-width: 1; transition: stroke .15s; }
+.map-mod:hover .map-mod-bg, .map-mod:focus-visible .map-mod-bg { stroke: var(--muted); }
+.map-mod.sel .map-mod-bg { stroke: var(--accent); stroke-width: 2; }
+.map-mod.ext .map-mod-bg { fill: transparent; stroke-dasharray: 4 3; }
+.map-mod-heat { fill: var(--fg); pointer-events: none; transition: opacity .4s; }
+.map-mod-edge { fill: none; stroke-width: 2; pointer-events: none; }
+.map-mod-edge.live { stroke: var(--tally-live); }
+.map-mod-edge.wait { stroke: var(--warn); }
+.map-mod-read { fill: none; stroke: var(--accent); stroke-width: 1.5; pointer-events: none; animation: map-read 1.6s ease-out forwards; }
+@keyframes map-read { from { opacity: .9; } to { opacity: 0; } }
+.map-mod-fence { fill: url(#map-hatch); stroke: var(--muted); pointer-events: none; }
+.map-mod-name { font: 650 13px var(--font); font-stretch: 92%; fill: var(--fg); }
+.map-mod-path { font: 400 11px var(--mono); fill: var(--subtle); }
+.map-mod-file { font: 400 11px var(--mono); fill: var(--muted); }
+.map-mod-file.new { fill: var(--fg); }
+.map-mod-tag { font: 600 11px var(--font); fill: var(--subtle); }
+
+.map-step { font: 600 11px var(--font); font-stretch: 90%; font-variant-numeric: tabular-nums; fill: var(--subtle); }
+.map-step.now { fill: var(--fg); font-weight: 700; }
+.map-step.done { fill: var(--subtle); text-decoration: line-through; }
+
+/* The footer strip: who is here, and which plan steps land here. Only a lamp carries colour. */
+.map-foot-rule { stroke: var(--border); stroke-width: 1; }
+.map-crew text { font: 500 11px var(--font); font-stretch: 90%; }
+.map-crew-who { font-weight: 650; fill: var(--fg); }
+.map-crew-say { fill: var(--muted); }
+.map-crew-more { font: 600 11px var(--font); fill: var(--subtle); }
+.map-crew-lamp { fill: var(--fg); stroke: none; }
+.map-crew.agent .map-crew-lamp { fill: var(--muted); }
+.map-crew.peer .map-crew-lamp { fill: none; stroke: var(--subtle); stroke-width: 1.5; }
+.map-crew.peer .map-crew-who { fill: var(--muted); font-weight: 500; }
+.map-crew.tally-live .map-crew-lamp { fill: var(--tally-live); animation: on-air 2.4s ease-in-out infinite; }
+.map-crew.tally-wait .map-crew-lamp { fill: var(--warn); }
+.map-crew.tally-ok .map-crew-lamp { fill: var(--ok); }
+.map-crew.tally-idle .map-crew-lamp, .map-crew.tally-err .map-crew-lamp { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.map-foot { animation: map-foot-in .3s var(--ease); }
+@keyframes map-foot-in { from { opacity: 0; } }
+
+.map-inspect { position: absolute; top: var(--s-3); right: var(--s-5); width: 380px; max-height: calc(100% - 52px - 40px - var(--s-3)); overflow-y: auto; padding: var(--s-3) var(--s-4) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); animation: pop-in .12s var(--ease); z-index: 2; }
+.map-inspect-head { display: flex; align-items: flex-start; gap: var(--s-2); margin-right: calc(-1 * var(--s-2)); }
+.map-inspect-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.map-inspect-title strong { font-size: 15px; font-weight: 650; }
+.map-inspect-title .mono { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-inspect-meta { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.map-inspect-section { display: flex; flex-direction: column; gap: var(--s-1); }
+.map-inspect-label { font-size: 11px; font-weight: 600; font-stretch: var(--label); color: var(--subtle); }
+.map-inspect-files { display: flex; flex-direction: column; max-height: 132px; overflow-y: auto; margin: 0 calc(-1 * var(--s-2)); }
+.map-inspect-file { display: flex; align-items: center; justify-content: flex-start; width: 100%; gap: var(--s-2); height: var(--h-row); padding: 0 var(--s-2); border: none; border-radius: var(--r-sm); background: none; color: var(--muted); font: 400 12px var(--mono); text-align: left; cursor: pointer; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-inspect-file:hover, .map-inspect-file:focus-visible { background: color-mix(in srgb, var(--fg) 7%, transparent); color: var(--fg); }
+.map-inspect-file.new { color: var(--fg); }
+.map-inspect-mark { flex: none; width: 1ch; color: var(--subtle); }
+.map-inspect-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.map-inspect-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.map-inspect-bounds { display: flex; flex-direction: column; gap: 2px; padding-top: var(--s-3); border-top: 1px solid var(--border); }
+.map-inspect-bounds .map-inspect-label { margin-bottom: 2px; }
+.map-bound { display: flex; align-items: flex-start; gap: var(--s-2); padding: 6px var(--s-2); margin: 0 calc(-1 * var(--s-2)); border-radius: var(--r-md); cursor: pointer; }
+.map-bound:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.map-bound input { flex: none; margin: 2px 0 0; accent-color: var(--accent); }
+.map-bound-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.map-bound-label { font-size: 13px; font-weight: 600; color: var(--fg); }
+.map-bound:not(.on) .map-bound-label { font-weight: 500; }
+.map-bound-note { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.map-bound:not(.on) .map-bound-note { display: none; }
+.map-bound:hover .map-bound-note, .map-bound:focus-within .map-bound-note { display: block; }
+
+/* The replay bar: a mark for every touch (edits tall, reads short), the playhead, and what happened then. */
+.map-replay { flex: none; display: flex; align-items: center; gap: var(--s-3); height: 40px; padding: 0 var(--s-4) 0 var(--s-3); border-top: 1px solid var(--border); background: var(--bg); }
+.map-replay-track { position: relative; flex: 1; min-width: 80px; height: 24px; }
+.map-replay-marks { position: absolute; inset: 0; pointer-events: none; }
+.map-replay-marks::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--border); }
+.map-replay-marks span { position: absolute; top: 50%; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--subtle); opacity: .7; transform: translateY(-50%); }
+/* Your messages stand tallest (they start each stretch of work), edits mid, Claude's decisions a dot. */
+.map-replay-marks span.you { height: 16px; }
+.map-replay-marks span.edit { height: 9px; }
+.map-replay-marks span.decision { width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; }
+.map-replay-marks span.seen { background: var(--fg); opacity: 1; }
+.map-replay-marks span.hover { background: var(--accent); opacity: 1; }
+.map-replay-head { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--accent); pointer-events: none; transition: left .25s var(--ease); }
+.map-replay:not(.past) .map-replay-head { opacity: 0; }
+.map-replay-input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; -webkit-appearance: none; appearance: none; background: none; }
+/* A hairline thumb, so where you press is exactly where the playhead lands. */
+.map-replay-input::-webkit-slider-thumb { -webkit-appearance: none; width: 2px; height: 24px; }
+.map-replay-track:has(.map-replay-input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+.map-replay-status { flex: 0 1 360px; display: flex; align-items: baseline; gap: var(--s-2); min-width: 120px; font-size: 12px; color: var(--muted); }
+.map-replay-status .num { color: var(--fg); font-variant-numeric: tabular-nums; }
+.map-replay-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .map-mod-heat, .map-replay-head { transition: none; } .map-foot { animation: none; } .map-mod-read { animation: none; opacity: 0; } }
+
+/* An open module's connections: its lines stand out, the rest step back; the one you point at is strongest. */
+.map-edge { transition: opacity .15s, stroke .15s; }
+.map-edge.focus { stroke: color-mix(in srgb, var(--fg) 55%, transparent); stroke-width: 1.6; }
+.map-edge.dim { opacity: .35; }
+.map-edge.pointed { stroke: var(--accent); stroke-width: 2.4; }
+.map-edge-hit { stroke: transparent; stroke-width: 12; pointer-events: stroke; }
+
+/* Each connection: the other module, why they're connected, then the imports behind it. */
+.map-conn { display: flex; flex-direction: column; gap: 2px; padding: var(--s-2); margin: 0 calc(-1 * var(--s-2)); border-radius: var(--r-md); }
+.map-conn:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.map-conn-name { font-size: 13px; font-weight: 650; }
+.map-conn-why { font-size: 13px; line-height: 1.45; color: var(--fg); }
+.map-conn-why.skeleton-bar { height: 12px; width: 85%; margin: 3px 0; }
+.map-conn-links { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.map-conn-link { font: 400 12px/1.5 var(--mono); color: var(--subtle); overflow-wrap: anywhere; }
+.map-conn-names { color: var(--muted); }
+button.map-conn-file { display: inline; height: auto; padding: 0; border: none; background: none; font: inherit; color: var(--fg); cursor: pointer; white-space: normal; }
+button.map-conn-file:hover:not(:disabled) { background: none; text-decoration: underline; }
+.map-conn-more { font-size: 12px; color: var(--subtle); }
+.map-conn-changed { font-size: 12px; font-weight: 600; color: var(--fg); margin-top: 2px; }
+.map-conn-why.skeleton-bar { background: linear-gradient(90deg, color-mix(in srgb, var(--fg) 8%, transparent) 25%, color-mix(in srgb, var(--fg) 16%, transparent) 50%, color-mix(in srgb, var(--fg) 8%, transparent) 75%); background-size: 200% 100%; }
+/* With a module open, the map re-flows into the space left of the panel so nothing hides under it. */
+.map-tab.inspecting .map-view { padding-right: calc(380px + var(--s-5) * 2); }
+
+/* Scope: this conversation's part of the project, or all of it. */
+.map-bar { flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-5) 0; min-width: 0; }
+.map-bar-note { font-size: 12px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-tab:has(.map-bar) .map-inspect { top: 52px; }
+.map-empty-scope { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); max-width: 480px; margin: var(--s-6) auto; padding: 0 var(--s-5); line-height: 1.5; }
+.map-empty-scope strong { font-size: 15px; font-weight: 650; color: var(--fg); }
+.map-empty-scope .btn { margin-top: var(--s-2); }
+/* Connected modules shown for context: outlined, quieter, so the ones Claude works in lead. */
+.map-mod.ctx .map-mod-bg { fill: var(--bg); }
+.map-mod.ctx .map-mod-name { fill: var(--muted); }
+/* Modules Claude pointed at (show_on_map): outlined in the accent until you pick another. */
+.map-mod.pt .map-mod-bg { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: none; }
+/* HTTP calls (a frontend calling a backend's routes) are dashed; imports are solid. */
+.map-edge.http { stroke-dasharray: 5 4; }
+
+/* Loose HTTP matches (only the URL's shape lines up) step back. */
+.map-edge.http.weak { stroke-dasharray: 2 4; opacity: .6; }
+
+/* Claude's plan over the map: planned modules outlined in the accent, new ones as outlines of
+   boxes that don't exist yet, planned connections dashed in the accent (removals struck in red). */
+.map-mod-plan { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; pointer-events: none; }
+.map-mod.ghost .map-mod-bg { fill: transparent; stroke: none; }
+.map-mod.ghost .map-mod-name { fill: var(--muted); }
+.map-mod-tag.plan { fill: var(--accent); }
+.map-edge-plan { stroke-width: 1.8; stroke-dasharray: 6 4; pointer-events: none; }
+.map-edge-plan.new { stroke: var(--accent); }
+.map-edge-plan.removed { stroke: var(--err); opacity: .8; }
+/* Limits you set: hands off is hatched; public API only has an inner line (a wall with a door). */
+.map-mod-api { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 10 3 2 3; pointer-events: none; }
+.map-mod.bound-ask .map-mod-bg { stroke: var(--warn); stroke-dasharray: 4 3; }
+
+.map-plan-bar { flex: none; display: flex; align-items: center; gap: var(--s-3); margin: var(--s-2) var(--s-5) 0; padding: var(--s-2) var(--s-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); min-width: 0; }
+.map-plan-bar.waiting { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.map-plan-key { flex: none; width: 18px; height: 0; border-top: 2px dashed var(--accent); }
+.map-plan-text { flex: 1; min-width: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.map-plan-text strong { color: var(--fg); font-weight: 600; }
+.map-plan-bar .btn { flex: none; }
+.map-tab:has(.map-plan-bar) .map-inspect { top: 100px; }
+.map-inspect-plan { padding: var(--s-2) var(--s-3); margin: 0 calc(-1 * var(--s-3)); border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.map-plan-conn { display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+.map-plan-conn.removed > span:first-child { text-decoration: line-through; text-decoration-color: var(--err); }
+.map-decision { display: flex; flex-direction: column; gap: 1px; padding: 2px 0; font-size: 13px; line-height: 1.45; }
+.map-decision-title { color: var(--fg); }
+.map-decision-when { font-size: 11px; color: var(--subtle); }
+
+/* Connections run edge to edge as curves with an arrowhead (towards what's used); whole project shows them on hover or pick. */
+.map-edge, .map-edge-plan, .map-edge-hit { fill: none; }
+.map-arrow { fill: color-mix(in srgb, var(--fg) 40%, transparent); }
+/* Groups fold (whole project): click the heading. */
+.map-band-g.foldable { cursor: pointer; }
+.map-band-g.foldable:hover .map-band { stroke: var(--muted); }
+.map-band.folded { fill: color-mix(in srgb, var(--fg) 3%, transparent); }
+.map-band-count { font: 400 11px var(--font); fill: var(--subtle); }
+/* The size of a module the conversation hasn't touched, where its activity would go. */
+.map-mod-size { font: 400 11px var(--font); fill: var(--subtle); }
+/* Searching: matches outlined (as pointed), the rest step back. */
+.map-mod.faded { opacity: .35; }
+.map-search { width: 220px; height: var(--h-ctl); padding: 0 var(--s-2); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
+.map-search:focus { outline: none; border-color: var(--accent); }
+.map-band-chevron { fill: none; stroke: var(--subtle); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }

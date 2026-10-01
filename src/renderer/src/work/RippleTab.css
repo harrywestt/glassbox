@@ -1,0 +1,36 @@
+/* Ripple: rings of dependents around a changed module. The wave plays once each time it opens. */
+.ripple-view { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 272px; }
+.ripple-empty { padding: var(--s-4); color: var(--muted); }
+.ripple-canvas { min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--s-4); overflow: hidden; }
+.ripple-canvas svg { width: 100%; height: 100%; max-height: 640px; }
+.ripple-wave { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0; transform-origin: 320px 230px; animation: ripple-wave 2.6s ease-out forwards; }
+@keyframes ripple-wave { 0% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(8); } }
+.ripple-edge { stroke: var(--accent); stroke-width: 1.5; opacity: .18; animation: ripple-edge .5s ease-out forwards; }
+@keyframes ripple-edge { to { opacity: .85; } }
+.ripple-node circle { fill: var(--surface); stroke: var(--bg); stroke-width: 2; }
+.ripple-node { animation: ripple-reach .5s ease-out forwards; }
+.ripple-node.changed circle { fill: var(--fg); stroke: var(--bg); }
+.ripple-node.covered circle { fill: var(--muted); }
+.ripple-node.untested circle { fill: var(--bg); stroke: var(--fg); stroke-width: 2; stroke-dasharray: 3 2.5; }
+.ripple-key { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.ripple-key.changed { background: var(--fg); }
+.ripple-key.covered { background: var(--muted); }
+.ripple-key.untested { border: 2px dashed var(--fg); width: 11px; height: 11px; }
+@keyframes ripple-reach { from { opacity: .45; } to { opacity: 1; } }
+.ripple-name { font: 600 calc(11px / var(--rs, 1)) var(--font); font-stretch: 90%; fill: var(--fg); paint-order: stroke fill; stroke: var(--bg); stroke-width: calc(6px / var(--rs, 1)); stroke-linejoin: round; }
+.ripple-path { font: 400 calc(11px / var(--rs, 1)) var(--mono); fill: var(--subtle); paint-order: stroke fill; stroke: var(--bg); stroke-width: calc(6px / var(--rs, 1)); stroke-linejoin: round; }
+.ripple-aside { border-left: 1px solid var(--border); padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); overflow-y: auto; }
+.ripple-title { margin: 0; font-size: 13px; font-weight: 600; }
+.ripple-counts { display: grid; grid-template-columns: 1fr auto; gap: var(--s-2) var(--s-3); margin: 0; font-size: 13px; }
+.ripple-counts dt { display: flex; align-items: center; gap: var(--s-2); }
+.ripple-counts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.ripple-note { margin: 0; color: var(--muted); font-size: 12px; }
+.ripple-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; color: var(--muted); }
+.ripple-list .mono { font-size: 11px; }
+.ripple-aside .btn { align-self: flex-start; }
+.ripple-pick { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
+.ripple-pick-label { font-size: 12px; color: var(--subtle); }
+@media (prefers-reduced-motion: reduce) {
+  .ripple-wave { display: none; }
+  .ripple-edge, .ripple-node, .ripple-node circle { animation-duration: 0s !important; animation-delay: 0s !important; }
+}

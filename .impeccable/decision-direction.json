@@ -1,0 +1,242 @@
+{
+  "title": "Choose Glassbox's visual world",
+  "question": "The roll dealt Redline. Keep it, take an alternate, or re-roll. Whichever you pick keeps VS Code-style tabs and panels, both themes, your accent picker, and the keyboard and voice controls.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Redline",
+      "kicker": "THE ROLL",
+      "lineage": "Engineering drawing sheets and redline review markup",
+      "thesis": "Each session is a drawing under review: Claude drafts, you redline, and every change carries a revision mark back to the decision behind it.",
+      "palette": [
+        "#eef1f2",
+        "#22272b",
+        "#b9c0c5",
+        "#d0372c",
+        "#15191c"
+      ],
+      "materials": [
+        "cool drafting film (light) and graphite sheet (dark)",
+        "0.25mm technical-pen hairlines on a 4px sheet grid",
+        "redline ink reserved for what needs you"
+      ],
+      "viewport": "The session window as one sheet: a title block in the header (repo, branch, ticket, status, cost), the conversation as the drawing field, and a revision table on the right listing decisions and questions, each numbered with a revision triangle that also marks the edit it produced.",
+      "risk": "Hairline drafting can drift into the broadsheet-hairline look if labels go small, tracked and monospace, so labels stay sentence case in the body face.",
+      "raised": [
+        {
+          "from": "challenger-gate-board",
+          "raise": "A change stays marked until you've seen it: new edits, answers and failures keep their redline until you open them."
+        },
+        {
+          "from": "challenger-oscilloscope",
+          "raise": "Everything sits on one measured grid: every size and gap is a multiple of the 4px sheet module, with no exceptions."
+        },
+        {
+          "from": "challenger-busytown",
+          "raise": "Every busy thing says what it's doing right now: agents, services and tests carry a live verb label instead of a spinner."
+        },
+        {
+          "from": "challenger-one-bit",
+          "raise": "One state rule everywhere: selected means filled, pressed means inset, disabled means dimmed, across tabs, rows and buttons alike."
+        },
+        {
+          "from": "challenger-deep-dive",
+          "raise": "One time axis rules the conversation: timestamps sit in a single gutter, so you can scan a long session by time."
+        },
+        {
+          "from": "challenger-alphabet-storm",
+          "raise": "One type family does all the work, at five sizes; hierarchy comes from weight and space, not extra faces."
+        }
+      ],
+      "comp": ".impeccable/mocks/decision/assigned.webp"
+    },
+    {
+      "id": "model-pick",
+      "label": "Gallery",
+      "kicker": "IMPECCABLE\u2019S PICK",
+      "lineage": "Broadcast control-room galleries: multiview monitors and tally lights",
+      "thesis": "You're the director watching several live feeds: each session is a monitor, and a tally light tells you at a glance which one is on air, which needs you and which is done.",
+      "palette": [
+        "#16181b",
+        "#2a2e33",
+        "#e9ebee",
+        "#e0342b",
+        "#2fa35a"
+      ],
+      "materials": [
+        "matte monitor bezels",
+        "tally lamps: red on air, green ready, amber needs you",
+        "under-monitor label strips"
+      ],
+      "viewport": "Tabs become a strip of small live monitors with tally lamps; the active session fills the main monitor, with a program/preview split between the conversation and the file Claude is editing.",
+      "risk": "The most familiar choice for a monitoring tool, and dark control rooms slide easily into the near-black-with-neon look that reads generated.",
+      "comp": ".impeccable/mocks/decision/model-pick.webp"
+    },
+    {
+      "id": "challenger-gate-board",
+      "label": "Gate Board",
+      "verdict": "competitive",
+      "lineage": "Airport departure boards and segmented boarding passes",
+      "thesis": "Sessions are departures: the board ranks them by who needs you, and a changed row moves in place and stays lit until you've noticed.",
+      "palette": [
+        "#0b0d10",
+        "#1c2127",
+        "#e6e8eb",
+        "#ffffff",
+        "#ffd400"
+      ],
+      "materials": [
+        "high-contrast matte panels",
+        "tabular figures in a fixed column grid",
+        "one alert yellow reserved for changes"
+      ],
+      "viewport": "A live board of sessions in the tab strip and dashboard, ranked by urgency; the session header is a segmented pass (repo, branch, ticket, model, cost) with torn-edge dividers.",
+      "case": "Fuses well for juggling sessions and wins on clarity of state, but loses on identification: developers don't picture code review as air travel.",
+      "risk": "Uppercase signage type everywhere turns into airport cosplay and costs readability in long conversations.",
+      "comp": ".impeccable/mocks/decision/challenger-gate-board.webp",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-boarding-pass-and-gate-board-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/vernacular-ephemera-boarding-pass-and-gate-board.webp"
+    },
+    {
+      "id": "challenger-oscilloscope",
+      "label": "Signal Bench",
+      "verdict": "declined",
+      "lineage": "CRT oscilloscope on a signal bench",
+      "thesis": "Claude's work as a live trace on a graticule, triggered and frozen for inspection.",
+      "palette": [
+        "#0c0f0d",
+        "#3a4a40",
+        "#5cff8a",
+        "#f2b53a"
+      ],
+      "materials": [
+        "phosphor on glass",
+        "etched graticule",
+        "seven-segment readouts"
+      ],
+      "viewport": "The conversation as a sweeping trace with events plotted against time.",
+      "case": "Fuses poorly: a conversation isn't a waveform, and phosphor green on black is the neon-on-black default.",
+      "kept": "Everything measured against one grid.",
+      "risk": "Reads as a hacker theme within a minute.",
+      "hero": "https://impeccable.style/worlds/cards/scientific-notation-oscilloscope-signal-bench-hero.webp"
+    },
+    {
+      "id": "challenger-busytown",
+      "label": "Cutaway Town",
+      "verdict": "declined",
+      "lineage": "Busytown cross-section picture books",
+      "thesis": "Every agent visible mid-task in one labelled cutaway scene.",
+      "palette": [
+        "#fbf8f1",
+        "#c2412d",
+        "#f2b632",
+        "#4f9a4a"
+      ],
+      "materials": [
+        "gouache flats",
+        "hairline label pointers"
+      ],
+      "viewport": "A panoramic scene of agents at work, each building a subsystem.",
+      "case": "Fuses poorly: charming, but wrong register for a tool used for hours at work.",
+      "kept": "Every busy thing says what it's doing.",
+      "risk": "Toy-like; hurts trust in a review tool.",
+      "hero": "https://impeccable.style/worlds/cards/graphic-worlds-publishing-busytown-cross-section-hero.webp"
+    },
+    {
+      "id": "challenger-one-bit",
+      "label": "One-Bit Desktop",
+      "verdict": "declined",
+      "lineage": "Early one-bit desktop GUIs",
+      "thesis": "Overlapping windows, dither and marching ants as the whole interface.",
+      "palette": [
+        "#000000",
+        "#ffffff",
+        "#808080"
+      ],
+      "materials": [
+        "ordered dither",
+        "one-pixel chrome"
+      ],
+      "viewport": "Sessions as overlapping windows on a dithered desk.",
+      "case": "Fuses poorly: nostalgic, and it breaks the VS Code familiarity you asked to keep.",
+      "kept": "One state rule for selected, pressed and disabled.",
+      "risk": "Retro novelty; no theme or accent support.",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-one-bit-desktop-hero.webp"
+    },
+    {
+      "id": "challenger-deep-dive",
+      "label": "Deep Dive",
+      "verdict": "declined",
+      "lineage": "Technical dive profiles and dive computers",
+      "thesis": "A session as a descent, logged against one depth-time axis.",
+      "palette": [
+        "#0b1e33",
+        "#1f5a7a",
+        "#7fe3f0",
+        "#f4f6f7"
+      ],
+      "materials": [
+        "abyssal gradient",
+        "dive-computer digits"
+      ],
+      "viewport": "The timeline as a vertical dive profile.",
+      "case": "Fuses poorly: atmospheric, but no link to reviewing code.",
+      "kept": "One time axis rules the conversation.",
+      "risk": "Mood over task; gradients read decorative.",
+      "hero": "https://impeccable.style/worlds/cards/rivers-tides-ocean-depths-mesophotic-deep-dive-hero.webp"
+    },
+    {
+      "id": "challenger-alphabet-storm",
+      "label": "Alphabet Storm",
+      "verdict": "declined",
+      "lineage": "Kinetic typography as weather",
+      "thesis": "Words as matter, transforming as Claude writes.",
+      "palette": [
+        "#ffffff",
+        "#111111",
+        "#b8bcc2"
+      ],
+      "materials": [
+        "monumental grotesk",
+        "particle weather"
+      ],
+      "viewport": "Streaming text as a moving typographic field.",
+      "case": "Fuses poorly: motion-heavy, and unreadable for long sessions.",
+      "kept": "One type family does all the work.",
+      "risk": "Distracting at exactly the moment you need to read.",
+      "hero": "https://impeccable.style/worlds/cards/dream-surreal-impossible-worlds-alphabet-storm-hero.webp"
+    }
+  ],
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "buildPath": {
+    "value": "code",
+    "toggle": true
+  },
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "A clean editor-style tool like VS Code or Linear, executed with full craft.",
+    "palette": [
+      "#ffffff",
+      "#1e1f22",
+      "#e3e5e8",
+      "#3b6fe0"
+    ],
+    "materials": [
+      "neutral greys",
+      "one blue accent",
+      "system UI font"
+    ],
+    "viewport": "Today's layout proposal: one row of named side tabs, a quiet header and the conversation first.",
+    "risk": "Indistinguishable from every other developer tool by design.",
+    "comp": ".impeccable/mocks/decision/canon.webp"
+  },
+  "steer": true,
+  "seedKey": "de274518",
+  "chosen": "model-pick"
+}

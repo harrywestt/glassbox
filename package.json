@@ -1,0 +1,72 @@
+{
+  "name": "glassbox",
+  "version": "0.1.0",
+  "description": "Desktop host for Claude with full visibility into context, tools, agents, code and diagrams",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "icons": "electron scripts/make-icons.mjs",
+    "dist": "electron-vite build && electron-builder --win dir",
+    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.282",
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@huggingface/transformers": "^4.3.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@vscode/codicons": "^0.0.46-24",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "dompurify": "^3.4.16",
+    "marked": "^18.0.14",
+    "mermaid": "^12.0.0",
+    "monaco-editor": "^0.57.0",
+    "node-pty": "^1.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6"
+  },
+  "productName": "Glassbox",
+  "author": {
+    "name": "Harry West",
+    "email": "harrywest@live.co.uk"
+  },
+  "build": {
+    "appId": "com.harrywest.glassbox.desktop",
+    "productName": "Glassbox",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**",
+      "resources/**",
+      "package.json"
+    ],
+    "asar": false,
+    "npmRebuild": false,
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}

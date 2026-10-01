@@ -1,0 +1,38 @@
+/* Fleet board: every session in a Plan → Ready column, sliding along as it progresses. */
+
+.fleet-title { font-size: 13px; font-weight: 600; margin-bottom: var(--s-3); }
+.fleet-empty { font-size: 12px; color: var(--muted); text-align: left; }
+
+.fleet-board { position: relative; width: 100%; overflow: visible; }
+
+.fleet-col { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--border); }
+.fleet-col:first-child { border-left: none; }
+.fleet-col-head {
+  height: 28px; padding: 0 var(--s-2); display: flex; align-items: center;
+  font-size: 12px; font-weight: 600; font-stretch: var(--label); color: var(--muted);
+}
+
+button.fleet-card {
+  position: absolute; top: 0; left: 0; height: 64px;
+  display: flex; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 2px;
+  padding: var(--s-2) var(--s-3); text-align: left; white-space: nowrap; font-weight: 400; line-height: 1.3;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); color: var(--fg);
+  transition: transform 500ms ease-out, background .12s, border-color .12s;
+}
+button.fleet-card:hover:not(:disabled) { background: var(--elevated); }
+button.fleet-card:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+button.fleet-card.fleet-wait { border-color: var(--border); }
+
+.fleet-card-head { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.fleet-card-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.fleet-card-verb { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; padding-left: calc(8px + var(--s-2)); }
+.fleet-card-foot { display: flex; gap: var(--s-3); font-size: 11px; color: var(--subtle); min-width: 0; overflow: hidden; padding-left: calc(8px + var(--s-2)); font-variant-numeric: tabular-nums; }
+.fleet-card-foot .fleet-cost { margin-left: auto; }
+
+.fleet-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.fleet-line { fill: none; stroke: var(--muted); stroke-width: 1px; stroke-dasharray: 4 3; transition: d 500ms ease-out; }
+.fleet-line-label { font-size: 11px; fill: var(--muted); transition: transform 500ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  button.fleet-card, .fleet-line, .fleet-line-label { transition: none; }
+}

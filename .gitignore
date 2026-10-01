@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+*.log
+release/
+# Launch-video renders (large; regenerate with /brag)
+brag-output*/
+# Design-review screenshots
+.impeccable/review/
