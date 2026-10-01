@@ -38,14 +38,12 @@ jobs:
           if-no-files-found: error
 
   mac:
+    # Apple Silicon only: the speech engine (onnxruntime) no longer ships an Intel Mac build.
     strategy:
-      fail-fast: false
       matrix:
         include:
-          - runner: macos-latest      # Apple Silicon
+          - runner: macos-latest
             arch: arm64
-          - runner: macos-15-intel    # Intel Macs
-            arch: x64
     runs-on: ${{ matrix.runner }}
     env:
       # No Apple Developer certificate yet: the app is ad-hoc signed (package.json), so don't look for one.
@@ -93,6 +91,6 @@ jobs:
 
             **Windows:** download `Glassbox-Setup-${{ env.VERSION }}.exe` and run it. It installs for your user only (no admin needed), adds Start menu and desktop shortcuts, and is removed from Settings > Apps. It isn't code-signed yet, so if SmartScreen warns about an unknown publisher, choose **More info**, then **Run anyway**.
 
-            **macOS:** download `Glassbox-${{ env.VERSION }}-arm64.dmg` for Apple Silicon (M1 and later) or `-x64.dmg` for Intel, open it and drag Glassbox to Applications. It isn't notarized yet, so the first time, right-click Glassbox in Applications and choose **Open**. If macOS says it's damaged, run `xattr -dr com.apple.quarantine /Applications/Glassbox.app` in Terminal and open it again.
+            **macOS:** download `Glassbox-${{ env.VERSION }}-arm64.dmg` (Apple Silicon: M1 and later), open it and drag Glassbox to Applications. It isn't notarized yet, so the first time, right-click Glassbox in Applications and choose **Open**. If macOS says it's damaged, run `xattr -dr com.apple.quarantine /Applications/Glassbox.app` in Terminal and open it again.
 
             You need Claude Code signed in on the machine (`claude auth login`). Git is needed for the git features; the GitHub CLI is optional.
