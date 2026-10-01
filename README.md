@@ -8,7 +8,7 @@
 A desktop app for Claude Code that shows every plan, edit, command and agent as it happens, so there are no surprises at review time.</p>
 
 <p align="center">
-  <a href="https://github.com/harrywestt/glassbox/releases/latest"><b>Download for Windows</b></a> ·
+  <a href="https://github.com/harrywestt/glassbox/releases/latest"><b>Download for Windows and macOS</b></a> ·
   <a href="#install">Install</a> ·
   <a href="#how-to-use-it">How to use it</a> ·
   <a href="#run-it-from-source">Run from source</a>
@@ -22,19 +22,26 @@ It runs on your machine with your existing Claude Code sign-in and settings. You
 
 ## Install
 
-**Windows:** download `Glassbox-Setup-<version>.exe` from the [latest release](https://github.com/harrywestt/glassbox/releases/latest) and run it.
+Download from the [latest release](https://github.com/harrywestt/glassbox/releases/latest). A new release is built automatically on every push to `main`, and installing a newer one upgrades in place, keeping your sessions and settings.
+
+**Windows:** run `Glassbox-Setup-<version>.exe`.
 
 - It installs for your user only (no admin rights needed) into `%LOCALAPPDATA%\Programs\Glassbox`, adds Start menu and desktop shortcuts, and is removed like any other app from **Settings > Apps**.
 - The installer isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher. Choose **More info**, then **Run anyway**.
-- A new release is built automatically on every push to `main`. Running a newer installer upgrades in place and keeps your sessions and settings.
+
+**macOS:** download `Glassbox-<version>-arm64.dmg` for Apple Silicon (M1 and later), or `-x64.dmg` for Intel. Open it and drag Glassbox to Applications.
+
+- It isn't notarized by Apple yet, so the first time, right-click Glassbox in Applications and choose **Open**, then **Open** again.
+- If macOS says the app "is damaged and can't be opened", that's the download quarantine. Run `xattr -dr com.apple.quarantine /Applications/Glassbox.app` in Terminal, then open it again.
+- The first time you hold Space to dictate, macOS asks for microphone access.
 
 **You'll also need:**
 
 - **Claude Code**, signed in on this machine: `npm install -g @anthropic-ai/claude-code`, then `claude auth login`. Glassbox uses the same account and plan.
-- **Git**, for branches, diffs, worktrees and automatic commits. Git for Windows also provides the Bash used by `!` commands.
+- **Git**, for branches, diffs, worktrees and automatic commits. On Windows, Git for Windows also provides the Bash used by `!` commands; on a Mac, `xcode-select --install` installs it.
 - *Optional:* the **GitHub CLI** (`gh auth login`) for pull requests, reviews and the dashboard's GitHub section.
 
-**macOS and Linux:** there's no packaged build yet; [run it from source](#run-it-from-source).
+**Linux:** there's no packaged build yet; [run it from source](#run-it-from-source).
 
 ## How to use it
 
@@ -110,6 +117,7 @@ npm run dev
 | `npm run dev` | Hot-reloading development build (uses its own "Glassbox Dev" profile) |
 | `npm run typecheck` | TypeScript check |
 | `npm run dist:installer` | Builds the Windows installer into `release/` |
+| `npm run dist:mac` | Builds the macOS disk image into `release/` (on a Mac) |
 | `npm run install:local` | Builds and installs the app on this Windows machine |
 | `npm run icons` | Renders `icon.png` and `icon.ico` from `resources/icon.svg` |
 
@@ -133,6 +141,10 @@ Renderer (React)  ⇄ IPC ⇄  Main process
 
 ## Known limits
 
-- Windows is the only packaged platform so far. The code allows for macOS, but it hasn't been built or tested there.
-- The installer isn't code-signed, so SmartScreen warns on first run.
+- The Windows installer isn't code-signed and the Mac app isn't notarized, so both warn the first time you open them.
+- The macOS build is new and has had less use than the Windows one. Please open an issue if something doesn't work on a Mac.
 - Plan limits come from an experimental SDK API. If it changes, the dashboard shows the error and keeps the local token history.
+
+## License
+
+[MIT](LICENSE) © Harry West

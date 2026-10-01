@@ -108,6 +108,12 @@ function openTerminal(title: string, file: string, args: string[]) {
   if (process.platform === 'win32') {
     // A visible console, left open so any code the login shows can be read.
     spawn('cmd.exe', ['/c', 'start', `"${title}"`, 'cmd', '/k', [file, ...args].map(q).join(' ')], { detached: true, windowsVerbatimArguments: true, stdio: 'ignore' }).unref()
+  } else if (process.platform === 'darwin') {
+    // A Terminal window, so the sign-in code and prompts can be seen (spawning it hidden shows nothing).
+    const sh = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
+    const command = [file, ...args].map(sh).join(' ')
+    const apple = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    spawn('osascript', ['-e', `tell application "Terminal" to do script "${apple}"`, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref()
   } else {
     spawn(file, args, { detached: true, stdio: 'ignore' }).unref()
   }
