@@ -1,0 +1,780 @@
+import type { SDKMessage, SDKRateLimitInfo } from '@anthropic-ai/claude-agent-sdk'
+import {
+  emptyRequirements,
+  type AcceptanceCriterion,
+  type CheckIn,
+  type Finding,
+  type ContextUsage,
+  type Decision,
+  type GitInfo,
+  type GuardHit,
+  type HostStatus,
+  type McpServerStatus,
+  type Requirements,
+  type SessionEvent,
+  type SideTask,
+  type SlashCommand,
+  type TaskStep,
+  type GlassboxCommit,
+  type FlowHop,
+  type OpenTarget,
+  type PlanMap,
+  type LoaderState
+} from '../../shared/events'
+
+export type SessionStatus = HostStatus | 'new'
+
+export type ToolCall = {
+  id: string
+  name: string
+  input: Record<string, unknown>
+  agentId: string | null
+  status: 'running' | 'done' | 'error'
+  result?: string
+  at: number
+  endedAt?: number
+  turn: number
+}
+
+export type AgentNode = {
+  id: string
+  type: string
+  description: string
+  prompt: string
+  parentId: string | null
+  status: 'running' | 'done' | 'error'
+  toolCalls: number
+  result?: string
+  at: number
+  /** Running in the background: its tool call returned at once, and it reports progress and its end separately. */
+  background?: boolean
+  /** When it finished (done or failed). */
+  endedAt?: number
+  /** The SDK's id for it as a task, and its latest one-line progress. */
+  taskId?: string
+  progress?: string
+}
+
+/** What a review comment points at. */
+export type CommentTarget =
+  | { kind: 'code'; path: string; startLine: number; endLine: number; snippet: string }
+  | { kind: 'tool'; toolId: string; label: string }
+  | { kind: 'decision'; id: string; title: string }
+  /** One message answering several open questions at once. */
+  | { kind: 'questions'; ids: string[]; titles: string[] }
+  | { kind: 'step'; label: string }
+  | { kind: 'message'; excerpt: string }
+  | { kind: 'plan' }
+
+/** A command you ran yourself with "! command". */
+export type Bang = { id: string; command: string; output: string; status: 'running' | 'done' | 'failed'; code?: number | null; at: number; sent?: boolean }
+const BANG_KEEP = 200_000
+
+/**
+ * What Claude gets from the commands you ran since your last message, in the tags the CLI uses for
+ * its own "!" commands. Each output is cut to its last 10,000 characters.
+ */
+export function bangContext(bangs: Bang[]): string {
+  return bangs
+    .map((b) => `<bash-input>${b.command}</bash-input>\n<bash-stdout>${b.output.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').slice(-10_000).trimEnd()}</bash-stdout>${b.status === 'failed' ? `\n<bash-stderr>Exited with code ${b.code ?? 'unknown'}</bash-stderr>` : ''}`)
+    .join('\n\n')
+}
+/** Your message as you wrote it, without the command output that went along with it. */
+export const withoutBangs = (text: string) => text.replace(/<bash-input>[\s\S]*?<\/bash-stdout>(\s*<bash-stderr>[\s\S]*?<\/bash-stderr>)?\s*/g, '').trim()
+
+export type TimelineItem =
+  | { kind: 'user'; text: string; at: number; uuid?: string; turn: number }
+  | { kind: 'comment'; text: string; target: CommentTarget; at: number; uuid: string }
+  | { kind: 'text'; text: string; agentId: string | null; at: number }
+  | { kind: 'thinking'; text: string; agentId: string | null; at: number }
+  | { kind: 'tool'; toolId: string; agentId: string | null; at: number }
+  | { kind: 'decision'; id: string; agentId: string | null; at: number }
+  /** A file Claude put in front of you (present_file): shown as a card you open with a click. */
+  | { kind: 'present'; id: string; agentId: string | null; at: number }
+  | { kind: 'guard'; hit: GuardHit; at: number }
+  | { kind: 'finding'; id: string; at: number }
+  | { kind: 'checkin'; id: string; at: number }
+  | { kind: 'note'; text: string; tone: 'info' | 'warn' | 'error'; at: number }
+  | { kind: 'result'; costUsd: number; durationMs: number; turns: number; isError: boolean; at: number }
+  | { kind: 'commits'; commits: GlassboxCommit[]; skipped?: string; error?: string; at: number }
+  /** A running service logged an error; `after` is Claude's most recent edit before it. */
+  | { kind: 'service-error'; service: string; text: string; at: number; after?: { path: string; at: number } }
+  /** A command you ran yourself ("! command"); its output is in `bangs`. */
+  | { kind: 'bang'; id: string; at: number }
+
+/** `dismissed`: a question you closed without answering (Claude wasn't told). */
+export type DecisionEntry = Decision & { id: string; agentId: string | null; at: number; challenged?: boolean; reply?: string; dismissed?: boolean }
+
+// Questions you dismissed, by their tool call id (stable across a resume), so they stay closed.
+const DISMISSED_KEY = 'glassbox.dismissedQuestions'
+function dismissedIds(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]') as string[])
+  } catch {
+    return new Set()
+  }
+}
+function rememberDismissed(ids: string[]) {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...new Set([...dismissedIds(), ...ids])].slice(-500)))
+  } catch {
+    /* dismissed for this run only */
+  }
+}
+export type FileTouch = { path: string; tool: string; toolId: string; agentId: string | null; at: number; turn: number }
+export type Diagram = { id: string; title: string; mermaid: string; at: number }
+export type { FlowHop }
+export type Flow = { id: string; title: string; lanes: string[]; before?: FlowHop[]; after: FlowHop[]; at: number }
+export type PermissionRequest = Extract<SessionEvent, { kind: 'permission' }>
+/** Text or thinking currently streaming in, keyed by thread (main or a subagent's tool_use id). */
+export type Draft = { kind: 'text' | 'thinking'; text: string; agentId: string | null }
+export type Alert = { level: 'info' | 'warn' | 'error'; text: string; at: number }
+
+export interface SessionState {
+  status: SessionStatus
+  sessionId?: string
+  model?: string
+  mode: string
+  /** Access mode you chose (plan mode returns to it). */
+  access?: string
+  tools: string[]
+  permissionMode?: string
+  commands: SlashCommand[]
+  mcp: McpServerStatus[]
+  context?: ContextUsage
+  git?: GitInfo
+  requirements: Requirements
+  timeline: TimelineItem[]
+  toolCalls: Record<string, ToolCall>
+  agents: Record<string, AgentNode>
+  files: FileTouch[]
+  pins: { path: string; reason?: string }[]
+  diagrams: Record<string, Diagram>
+  flows: Record<string, Flow>
+  decisions: DecisionEntry[]
+  guardHits: GuardHit[]
+  criteria?: { source?: string; list: AcceptanceCriterion[]; at: number }
+  findings: (Finding & { status: 'open' | 'sent' | 'dismissed' })[]
+  checkins: (CheckIn & { answer?: string })[]
+  sideTasks: Record<string, SideTask>
+  reviewer: { busy: boolean; pending: number; error?: string; reviewedEdits: number }
+  /** Commits Glassbox made of Claude's changes this session, and whether it's doing so. */
+  commits: GlassboxCommit[]
+  autoCommit: boolean
+  alerts: Alert[]
+  task?: { summary: string; steps?: TaskStep[] }
+  plan?: { text: string; status: 'proposed' | 'approved' | 'changes-requested'; at: number }
+  /** The plan's shape on the map (show_plan_on_map): modules it changes or adds, connections it adds or removes. */
+  planMap?: PlanMap
+  /** How many background agents the SDK says are still working (its level signal). */
+  backgroundAgents?: number
+  /** Background work still going (agents, commands), from the same signal; `since` is when it was first seen. */
+  backgroundTasks?: { id: string; type: string; description: string; since: number }[]
+  /** Loaders Claude shows above the message box (show_progress), by id. */
+  loaders?: Record<string, LoaderState>
+  /** Commands you ran yourself ("! command"), by id. `sent`: already passed to Claude with a message. */
+  bangs?: Record<string, Bang>
+  /** Files Claude presented to you (present_file), oldest first. */
+  presented?: { id: string; path: string; title?: string; why?: string; at: number }[]
+  drafts: Record<string, Draft>
+  showcase?: { path: string; title: string; artifactUrl?: string; at: number }
+  /** The latest thing Claude asked to show the user (n counts up so each request acts once). */
+  open?: { n: number; target: OpenTarget; why?: string; at: number }
+  /** costBase: the cost before this run of the session (a resume starts the query's own count at 0). */
+  usage: { contextTokens: number; outputTokens: number; costUsd: number; turns: number; costBase?: number }
+  rateLimits: Record<string, SDKRateLimitInfo>
+  permissions: PermissionRequest[]
+  raw: { at: number; event: SessionEvent }[]
+  stderr: string[]
+  busySince?: number
+  /** Claude's guess at your next message, offered in the message box until you type or send. */
+  suggestion?: string
+  /** Index of the current user turn; tool calls and edits are tagged with it for checkpoints. */
+  turn: number
+}
+
+export type SessionAction =
+  | { type: 'event'; event: SessionEvent }
+  | { type: 'user-prompt'; text: string; uuid?: string }
+  | { type: 'comment'; text: string; target: CommentTarget; uuid: string }
+  | { type: 'plan-status'; status: 'approved' | 'changes-requested' }
+  /** Glassbox itself bringing something up (as Claude's open_* tools do), e.g. a connection on the map. */
+  | { type: 'show'; target: OpenTarget; why?: string }
+  /** Close questions without answering them. */
+  | { type: 'dismiss-questions'; ids: string[] }
+  /** Clear a loader from above the message box. */
+  | { type: 'dismiss-loader'; id: string }
+  /** You ran a command yourself ("! command"). */
+  | { type: 'bang-start'; id: string; command: string }
+  /** Those commands' output went to Claude with your message. */
+  | { type: 'bang-sent'; ids: string[] }
+  | { type: 'requirements'; requirements: Requirements }
+  | { type: 'dismiss-alert'; at: number }
+  | { type: 'finding-status'; id: string; status: 'sent' | 'dismissed' }
+
+export const newSession = (): SessionState => ({
+  status: 'new',
+  mode: 'default',
+  tools: [],
+  commands: [],
+  mcp: [],
+  requirements: emptyRequirements,
+  timeline: [],
+  toolCalls: {},
+  agents: {},
+  files: [],
+  pins: [],
+  diagrams: {},
+  flows: {},
+  decisions: [],
+  guardHits: [],
+  findings: [],
+  checkins: [],
+  sideTasks: {},
+  reviewer: { busy: false, pending: 0, reviewedEdits: 0 },
+  commits: [],
+  autoCommit: true,
+  alerts: [],
+  drafts: {},
+  usage: { contextTokens: 0, outputTokens: 0, costUsd: 0, turns: 0 },
+  rateLimits: {},
+  permissions: [],
+  raw: [],
+  stderr: [],
+  turn: 0
+})
+
+const RAW_LIMIT = 1500
+const AGENT_TOOLS = new Set(['Agent', 'Task'])
+export const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+/** Everything that changes files: the edit tools, plus files a shell command changed (tool 'ShellEdit'). */
+export const CHANGE_TOOLS = new Set([...EDIT_TOOLS, 'ShellEdit'])
+const FILE_TOOLS = new Set(['Read', ...EDIT_TOOLS])
+/** Glassbox's own tools are shown through their panels, not as tool rows. */
+const HIDDEN_TOOLS = new Set(['mcp__glassbox__show_progress', 'mcp__glassbox__present_file', 'mcp__glassbox__set_current_task', 'mcp__glassbox__log_decision', 'mcp__glassbox__set_acceptance_criteria', 'mcp__glassbox__report_finding', 'mcp__glassbox__check_in', 'mcp__glassbox__pin_file'])
+
+export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
+  const at = Date.now()
+  switch (action.type) {
+    case 'user-prompt': {
+      const turn = state.turn + 1
+      return { ...state, turn, status: 'running', busySince: at, suggestion: undefined, timeline: [...state.timeline, { kind: 'user', text: action.text, uuid: action.uuid, at, turn }] }
+    }
+    case 'comment': {
+      const decisions =
+        action.target.kind === 'decision'
+          ? state.decisions.map((d) => (d.id === (action.target as { id: string }).id ? { ...d, challenged: true, reply: action.text } : d))
+          : action.target.kind === 'questions'
+            ? state.decisions.map((d) => ((action.target as { ids: string[] }).ids.includes(d.id) ? { ...d, challenged: true, reply: action.text } : d))
+            : state.decisions
+      return { ...state, decisions, status: 'running', busySince: state.busySince ?? at, timeline: [...state.timeline, { kind: 'comment', text: action.text, target: action.target, uuid: action.uuid, at }] }
+    }
+    case 'bang-start':
+      return {
+        ...state,
+        bangs: { ...state.bangs, [action.id]: { id: action.id, command: action.command, output: '', status: 'running', at } },
+        timeline: [...state.timeline, { kind: 'bang', id: action.id, at }]
+      }
+    case 'bang-sent': {
+      const bangs = { ...state.bangs }
+      for (const id of action.ids) if (bangs[id]) bangs[id] = { ...bangs[id], sent: true }
+      return { ...state, bangs }
+    }
+    case 'dismiss-loader': {
+      const loaders = { ...state.loaders }
+      delete loaders[action.id]
+      return { ...state, loaders }
+    }
+    case 'dismiss-questions':
+      rememberDismissed(action.ids)
+      return { ...state, decisions: state.decisions.map((d) => (action.ids.includes(d.id) ? { ...d, challenged: true, dismissed: true } : d)) }
+    case 'show':
+      return { ...state, open: { n: (state.open?.n ?? 0) + 1, target: action.target, why: action.why, at: Date.now() } }
+    case 'plan-status':
+      return state.plan ? { ...state, plan: { ...state.plan, status: action.status } } : state
+    case 'requirements':
+      return { ...state, requirements: action.requirements }
+    case 'dismiss-alert':
+      return { ...state, alerts: state.alerts.filter((a) => a.at !== action.at) }
+    case 'finding-status':
+      return { ...state, findings: state.findings.map((f) => (f.id === action.id ? { ...f, status: action.status } : f)) }
+    case 'event': {
+      // Stream deltas are far too chatty for the raw log.
+      const raw = action.event.kind === 'sdk' && action.event.msg.type === 'stream_event' ? state.raw : [...state.raw.slice(-(RAW_LIMIT - 1)), { at, event: action.event }]
+      return applyEvent({ ...state, raw }, action.event)
+    }
+  }
+}
+
+function applyEvent(state: SessionState, event: SessionEvent): SessionState {
+  const at = Date.now()
+  switch (event.kind) {
+    case 'status':
+      return { ...state, status: event.status, busySince: event.status === 'running' ? (state.busySince ?? at) : undefined, drafts: event.status === 'running' ? state.drafts : {} }
+    case 'error':
+      return note(state, event.message, 'error')
+    case 'stderr':
+      return { ...state, stderr: [...state.stderr.slice(-299), event.text] }
+    case 'bang': {
+      const b = state.bangs?.[event.id]
+      if (!b) return state
+      // Kept to the last BANG_KEEP characters, so a chatty command can't swamp the session.
+      const output = event.data ? (b.output + event.data).slice(-BANG_KEEP) : b.output
+      const done = event.exit !== undefined
+      const next: Bang = { ...b, output: event.error ? `${output}${output && !output.endsWith('\n') ? '\n' : ''}${event.error}\n` : output, ...(done ? { status: event.exit === 0 ? 'done' : 'failed', code: event.exit } : {}) }
+      return { ...state, bangs: { ...state.bangs, [event.id]: next } }
+    }
+    case 'permission': {
+      const next = { ...state, permissions: [...state.permissions, event] }
+      if (event.toolName === 'ExitPlanMode' && typeof event.input.plan === 'string') next.plan = { text: event.input.plan, status: 'proposed', at }
+      return next
+    }
+    case 'permission-cancelled':
+      return { ...state, permissions: state.permissions.filter((p) => p.id !== event.id) }
+    case 'capabilities':
+      return { ...state, commands: event.commands }
+    case 'mcp':
+      return { ...state, mcp: event.servers }
+    case 'context':
+      return { ...state, context: event.usage, usage: { ...state.usage, contextTokens: event.usage.totalTokens } }
+    case 'git':
+      return { ...state, git: event.info }
+    case 'mode':
+      return { ...state, mode: event.mode, access: event.base }
+    case 'guard':
+      return { ...state, guardHits: [...state.guardHits, event.hit], timeline: [...state.timeline, { kind: 'guard', hit: event.hit, at }] }
+    case 'checkin':
+      return { ...state, checkins: [...state.checkins, event.checkin], timeline: [...state.timeline, { kind: 'checkin', id: event.checkin.id, at }] }
+    case 'side':
+      return { ...state, sideTasks: { ...state.sideTasks, [event.task.id]: event.task } }
+    case 'checkin-resolved':
+      return { ...state, checkins: state.checkins.map((c) => (c.id === event.id ? { ...c, answer: event.answer } : c)) }
+    case 'reviewer': {
+      const fresh = event.findings.map((f) => ({ ...f, status: 'open' as const }))
+      return {
+        ...state,
+        findings: [...state.findings, ...fresh],
+        reviewer: { ...state.reviewer, reviewedEdits: state.reviewer.reviewedEdits + event.reviewed.length },
+        timeline: [...state.timeline, ...fresh.map((f) => ({ kind: 'finding' as const, id: f.id, at }))]
+      }
+    }
+    case 'commits':
+      return { ...state, commits: [...state.commits, ...event.commits], timeline: [...state.timeline, { kind: 'commits', commits: event.commits, skipped: event.skipped, error: event.error, at: Date.now() }] }
+    case 'restore': {
+      // Shell-made edits back where they happened in time, and the cost carried on from before.
+      const restored = event.shellEdits.flatMap((r) => r.files.map((path) => ({ path, tool: 'ShellEdit', toolId: r.toolId, agentId: r.agentId, at: r.at, turn: state.turn })))
+      const files = [...state.files, ...restored].sort((a, b) => a.at - b.at)
+      return { ...state, files, usage: { ...state.usage, costUsd: event.costUsd, costBase: event.costUsd } }
+    }
+    case 'shell-edits': {
+      const at = event.at ?? Date.now()
+      return { ...state, files: [...state.files, ...event.files.map((path) => ({ path, tool: 'ShellEdit', toolId: event.toolId, agentId: event.agentId, at, turn: state.turn }))] }
+    }
+    case 'service-error': {
+      const last = [...state.files].reverse().find((f) => CHANGE_TOOLS.has(f.tool) && f.at <= event.at && event.at - f.at < 10 * 60_000)
+      const item: TimelineItem = { kind: 'service-error', service: event.service, text: event.text, at: event.at, after: last ? { path: last.path, at: last.at } : undefined }
+      return { ...state, timeline: [...state.timeline, item] }
+    }
+    case 'autocommit':
+      return { ...state, autoCommit: event.enabled }
+    case 'reviewer-state':
+      return { ...state, reviewer: { ...state.reviewer, busy: event.busy, pending: event.pending, error: event.error } }
+    case 'alert':
+      return { ...state, alerts: [...state.alerts.slice(-4), { level: event.level, text: event.text, at }], timeline: [...state.timeline, { kind: 'note', text: event.text, tone: event.level === 'error' ? 'error' : 'warn', at }] }
+    case 'history': {
+      let next = state
+      for (const m of event.messages) {
+        if (m.type === 'system') continue
+        next = applySdk(next, { ...m, message: m.message } as SDKMessage, true, m.timestamp)
+      }
+      const settle = <T extends { status: string }>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.status === 'running' ? { ...v, status: 'done' } : v]))
+      next = { ...next, toolCalls: settle(next.toolCalls), agents: settle(next.agents) }
+      return next.timeline.length ? note(next, 'Resumed: earlier conversation loaded from the transcript', 'info') : next
+    }
+    case 'glassbox': {
+      const s = event.signal
+      if (s.type === 'diagram') return { ...state, diagrams: { ...state.diagrams, [s.id]: { ...s, at } } }
+      if (s.type === 'flow') return { ...state, flows: { ...state.flows, [s.id]: { ...s, at } } }
+      if (s.type === 'task') return { ...state, task: { summary: s.summary, steps: s.steps } }
+      if (s.type === 'showcase') return { ...state, showcase: { ...s, at } }
+      if (s.type === 'open') return { ...state, open: { n: (state.open?.n ?? 0) + 1, target: s.target, why: s.why, at } }
+      if (s.type === 'loader') return { ...state, loaders: { ...state.loaders, [s.loader.id]: s.loader } }
+      return { ...state, pins: [...state.pins.filter((p) => p.path !== s.path), { path: s.path, reason: s.reason }] }
+    }
+    case 'hook': {
+      const h = event.input
+      switch (h.hook_event_name) {
+        case 'PreCompact':
+          return note(state, 'Compacting context…', 'warn')
+        case 'PostCompact':
+          return note(state, 'Context compacted', 'warn')
+        case 'Notification':
+          return note(state, h.message, 'info')
+        default:
+          return state
+      }
+    }
+    case 'sdk':
+      return applySdk(state, event.msg, false)
+  }
+  return state
+}
+
+function applyStream(state: SessionState, msg: Extract<SDKMessage, { type: 'stream_event' }>): SessionState {
+  const key = msg.parent_tool_use_id ?? 'main'
+  const e = msg.event
+  if (e.type === 'content_block_start') {
+    const kind = e.content_block.type === 'text' ? 'text' : e.content_block.type === 'thinking' ? 'thinking' : null
+    if (!kind) return state
+    return { ...state, drafts: { ...state.drafts, [key]: { kind, text: '', agentId: msg.parent_tool_use_id } } }
+  }
+  if (e.type === 'content_block_delta') {
+    const d = state.drafts[key]
+    if (!d) return state
+    const delta = e.delta.type === 'text_delta' ? e.delta.text : e.delta.type === 'thinking_delta' ? e.delta.thinking : ''
+    return delta ? { ...state, drafts: { ...state.drafts, [key]: { ...d, text: d.text + delta } } } : state
+  }
+  return state
+}
+
+function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, when?: number): SessionState {
+  const at = when ?? Date.now()
+  switch (msg.type) {
+    case 'stream_event':
+      return applyStream(state, msg)
+
+    case 'system':
+      if (msg.subtype === 'init') {
+        return { ...state, sessionId: msg.session_id, model: msg.model, tools: msg.tools, permissionMode: msg.permissionMode }
+      }
+      if (msg.subtype === 'compact_boundary') return note(state, 'Earlier context was summarized (compaction)', 'warn')
+      if (msg.subtype === 'background_tasks_changed' && !fromHistory) {
+        const tasks = ((msg as { tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[] }).tasks ?? []).filter((t) => !t.ambient)
+        const before = new Map((state.backgroundTasks ?? []).map((t) => [t.id, t.since]))
+        return {
+          ...state,
+          backgroundAgents: tasks.filter((t) => t.task_type === 'local_agent').length,
+          backgroundTasks: tasks.map((t) => ({ id: t.task_id, type: t.task_type ?? '', description: t.description ?? '', since: before.get(t.task_id) ?? at }))
+        }
+      }
+      // Agents (and other tasks) reporting on themselves: the only signal for one running in the
+      // background, whose tool call returned straight away.
+      if (msg.subtype === 'task_started' || msg.subtype === 'task_progress' || msg.subtype === 'task_updated' || msg.subtype === 'task_notification') {
+        const m = msg as { subtype: string; task_id: string; tool_use_id?: string; is_backgrounded?: boolean; summary?: string; last_tool_name?: string; usage?: { tool_uses: number }; status?: string; patch?: { status?: string; is_backgrounded?: boolean } }
+        const a = (m.tool_use_id && state.agents[m.tool_use_id]) || Object.values(state.agents).find((x) => x.taskId === m.task_id)
+        if (!a) return state
+        const next: AgentNode = { ...a, taskId: m.task_id }
+        if (m.subtype === 'task_started') {
+          next.background = next.background || !!m.is_backgrounded
+          if (!fromHistory) next.status = 'running'
+        }
+        if (m.subtype === 'task_progress') {
+          if (m.usage) next.toolCalls = Math.max(next.toolCalls, m.usage.tool_uses)
+          const doing = m.summary || (m.last_tool_name ? `Using ${m.last_tool_name}` : undefined)
+          if (doing) next.progress = doing
+        }
+        if (m.subtype === 'task_updated') {
+          if (m.patch?.is_backgrounded) next.background = true
+          const st = m.patch?.status
+          if (st === 'completed') (next.status = 'done'), (next.endedAt = at)
+          else if (st === 'failed' || st === 'killed') (next.status = 'error'), (next.endedAt = at)
+          else if (st === 'running' && !fromHistory) next.status = 'running'
+        }
+        if (m.subtype === 'task_notification') {
+          next.status = m.status === 'completed' ? 'done' : 'error'
+          next.endedAt = at
+          if (m.summary) next.result = m.summary
+          next.progress = undefined
+          if (m.usage) next.toolCalls = Math.max(next.toolCalls, m.usage.tool_uses)
+        }
+        return { ...state, agents: { ...state.agents, [a.id]: next } }
+      }
+      return state
+
+    case 'rate_limit_event': {
+      const info = msg.rate_limit_info
+      return { ...state, rateLimits: { ...state.rateLimits, [info.rateLimitType ?? 'unknown']: info } }
+    }
+
+    case 'assistant': {
+      const agentId = msg.parent_tool_use_id
+      const drafts = { ...state.drafts }
+      delete drafts[agentId ?? 'main']
+      const next: SessionState = {
+        ...state,
+        drafts,
+        sessionId: state.sessionId ?? msg.session_id,
+        timeline: [...state.timeline],
+        toolCalls: { ...state.toolCalls },
+        agents: { ...state.agents },
+        files: [...state.files],
+        decisions: state.decisions
+      }
+      for (const block of msg.message.content) {
+        if (block.type === 'text' && block.text.trim()) {
+          next.timeline.push({ kind: 'text', text: block.text, agentId, at })
+        } else if (block.type === 'thinking' && block.thinking.trim()) {
+          next.timeline.push({ kind: 'thinking', text: block.thinking, agentId, at })
+        } else if (block.type === 'tool_use') {
+          const input = (block.input ?? {}) as Record<string, unknown>
+          next.toolCalls[block.id] = { id: block.id, name: block.name, input, agentId, status: 'running', at, turn: state.turn }
+          if (block.name === 'mcp__glassbox__set_current_task') {
+            next.task = { summary: String(input.summary ?? ''), steps: input.steps as TaskStep[] | undefined }
+          }
+          if (block.name === 'mcp__glassbox__show_diagram' && typeof input.id === 'string') {
+            next.diagrams = { ...next.diagrams, [input.id]: { id: input.id, title: String(input.title ?? input.id), mermaid: String(input.mermaid ?? ''), at } }
+          }
+          if (block.name === 'mcp__glassbox__show_flow') {
+            const flow = parseFlow(input, at)
+            if (flow) next.flows = { ...next.flows, [flow.id]: flow }
+          }
+          if (block.name === 'mcp__glassbox__set_acceptance_criteria' && Array.isArray(input.criteria)) {
+            next.criteria = { source: typeof input.source === 'string' ? input.source : next.criteria?.source, list: input.criteria as AcceptanceCriterion[], at }
+          }
+          if (block.name === 'mcp__glassbox__report_finding') {
+            const severity = ['blocker', 'major', 'minor', 'nit', 'question'].includes(String(input.severity)) ? (input.severity as Finding['severity']) : 'minor'
+            next.findings = [
+              ...(next.findings ?? state.findings),
+              {
+                id: block.id,
+                source: 'claude',
+                severity,
+                title: String(input.title ?? ''),
+                detail: typeof input.detail === 'string' ? input.detail : undefined,
+                file: typeof input.file === 'string' ? input.file : undefined,
+                line: typeof input.line === 'number' ? input.line : undefined,
+                suggestion: typeof input.suggestion === 'string' ? input.suggestion : undefined,
+                at,
+                status: 'open'
+              }
+            ]
+            next.timeline.push({ kind: 'finding', id: block.id, at })
+          }
+          if (block.name === 'mcp__glassbox__show_plan_on_map' && Array.isArray(input.modules)) {
+            const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined)
+            next.planMap = {
+              modules: (input.modules as Record<string, unknown>[]).filter((m) => str(m?.path)).map((m) => ({ path: String(m.path), change: m.change === 'new' ? 'new' : 'change', why: str(m.why) })),
+              connections: (Array.isArray(input.connections) ? (input.connections as Record<string, unknown>[]) : [])
+                .filter((c) => str(c?.from) && str(c?.to))
+                .map((c) => ({ from: String(c.from), to: String(c.to), change: c.change === 'removed' ? 'removed' : 'new', why: str(c.why), http: c.http === true || undefined })),
+              at
+            }
+          }
+          if (block.name === 'mcp__glassbox__present_file' && typeof input.path === 'string' && input.path.trim()) {
+            const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined)
+            next.presented = [...(next.presented ?? []), { id: block.id, path: input.path, title: str(input.title), why: str(input.why), at }]
+            next.timeline.push({ kind: 'present', id: block.id, agentId, at })
+          }
+          if (block.name === 'mcp__glassbox__log_decision') {
+            const kind = input.kind === 'assumption' || input.kind === 'question' ? input.kind : 'decision'
+            next.decisions = [
+              ...next.decisions,
+              {
+                id: block.id,
+                kind,
+                title: String(input.title ?? ''),
+                detail: typeof input.detail === 'string' ? input.detail : undefined,
+                alternatives: Array.isArray(input.alternatives) ? (input.alternatives as string[]) : undefined,
+                files: Array.isArray(input.files) ? (input.files as string[]) : undefined,
+                agentId,
+                at,
+                ...(kind === 'question' && dismissedIds().has(block.id) ? { challenged: true, dismissed: true } : {})
+              }
+            ]
+            next.timeline.push({ kind: 'decision', id: block.id, agentId, at })
+          }
+          if (HIDDEN_TOOLS.has(block.name)) continue
+          next.timeline.push({ kind: 'tool', toolId: block.id, agentId, at })
+          const parent = agentId ? next.agents[agentId] : undefined
+          if (parent) next.agents[parent.id] = { ...parent, toolCalls: parent.toolCalls + 1 }
+          if (AGENT_TOOLS.has(block.name)) {
+            next.agents[block.id] = {
+              id: block.id,
+              type: String(input.subagent_type ?? 'general-purpose'),
+              description: String(input.description ?? ''),
+              prompt: String(input.prompt ?? ''),
+              parentId: agentId,
+              status: 'running',
+              toolCalls: 0,
+              at,
+              ...(input.run_in_background === true ? { background: true } : {})
+            }
+          }
+          const path = input.file_path ?? input.notebook_path
+          if (FILE_TOOLS.has(block.name) && typeof path === 'string') {
+            next.files.push({ path, tool: block.name, toolId: block.id, agentId, at, turn: state.turn })
+          }
+        }
+      }
+      const u = msg.message.usage
+      if (!agentId && u && !fromHistory) {
+        next.usage = {
+          ...next.usage,
+          contextTokens: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+          outputTokens: next.usage.outputTokens + (u.output_tokens ?? 0)
+        }
+      }
+      return next
+    }
+
+    case 'user': {
+      const content = msg.message.content
+      if (typeof content === 'string') return fromHistory ? historyPrompt(state, content, msg.uuid, at) : state
+      const toolCalls = { ...state.toolCalls }
+      const agents = { ...state.agents }
+      let next = state
+      for (const block of content) {
+        if (block.type === 'text' && fromHistory && !msg.parent_tool_use_id) next = historyPrompt(next, block.text, msg.uuid, at)
+        if (block.type !== 'tool_result') continue
+        const call = toolCalls[block.tool_use_id]
+        if (!call) continue
+        const status = block.is_error ? 'error' : 'done'
+        const result = contentToText(block.content)
+        toolCalls[call.id] = { ...call, status, result, endedAt: fromHistory && !when ? undefined : at }
+        // A background agent's tool result only says it has started; it ends with its own notification.
+        const bg = agents[call.id]?.background || /running in the background|launched (successfully )?in the background|async agent/i.test(result.slice(0, 300))
+        if (agents[call.id]) agents[call.id] = bg && status === 'done' ? { ...agents[call.id], background: true } : { ...agents[call.id], status, result, endedAt: at }
+      }
+      return { ...next, toolCalls, agents }
+    }
+
+    case 'prompt_suggestion':
+      return fromHistory ? state : { ...state, suggestion: msg.suggestion.trim() || undefined }
+    case 'result':
+      return {
+        ...state,
+        status: 'ready',
+        busySince: undefined,
+        drafts: {},
+        usage: { ...state.usage, costUsd: (state.usage.costBase ?? 0) + msg.total_cost_usd, turns: state.usage.turns + msg.num_turns },
+        timeline: [
+          ...state.timeline,
+          { kind: 'result', costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, turns: msg.num_turns, isError: msg.is_error, at }
+        ]
+      }
+
+    default:
+      return state
+  }
+}
+
+/** Transcript user text: show real prompts and slash commands, skip harness-injected wrappers. */
+function historyPrompt(state: SessionState, text: string, uuid: string | undefined, when = Date.now()): SessionState {
+  const command = text.match(/<command-name>([^<]+)<\/command-name>/)
+  let shown: string | undefined
+  if (command) shown = `${command[1]} ${text.match(/<command-args>([^<]*)<\/command-args>/)?.[1] ?? ''}`.trim()
+  else if (text.trim() && !text.startsWith('<') && !text.startsWith('Caveat:') && !text.startsWith('[Request interrupted')) shown = text
+  if (!shown) return state
+  // An answer or comment sent from Glassbox: tie it back to what it was about, so a question you
+  // answered stays answered when the session is reopened.
+  const review = text.match(/^Review comment from the user \(sent from Glassbox while you work\) on what you logged: "([\s\S]+?)"\n\n([\s\S]*?)\n\nTake this into account now/)
+  if (review) {
+    const [, title, reply] = review
+    const d = [...state.decisions].reverse().find((x) => x.title === title && !x.challenged) ?? [...state.decisions].reverse().find((x) => x.title === title)
+    if (d) {
+      const decisions = state.decisions.map((x) => (x.id === d.id ? { ...x, challenged: true, reply } : x))
+      return { ...state, decisions, timeline: [...state.timeline, { kind: 'comment', text: reply, target: { kind: 'decision', id: d.id, title: d.title }, uuid: uuid ?? '', at: when }] }
+    }
+  }
+  // Several questions answered in one message: every one of them stays answered.
+  const many = text.match(/^Answers from the user \(sent from Glassbox\) to your open questions:\n([\s\S]+?)\n\nTheir answer, covering all of them:\n([\s\S]*?)\n\nWork out which part/)
+  if (many) {
+    const titles = [...many[1].matchAll(/^\d+\. "([\s\S]*?)"$/gm)].map((m) => m[1])
+    const reply = many[2]
+    const ids = titles.map((t) => ([...state.decisions].reverse().find((x) => x.title === t && !x.challenged) ?? [...state.decisions].reverse().find((x) => x.title === t))?.id).filter((x): x is string => !!x)
+    if (ids.length) {
+      const decisions = state.decisions.map((x) => (ids.includes(x.id) ? { ...x, challenged: true, reply } : x))
+      return { ...state, decisions, timeline: [...state.timeline, { kind: 'comment', text: reply, target: { kind: 'questions', ids, titles }, uuid: uuid ?? '', at: when }] }
+    }
+  }
+  const turn = state.turn + 1
+  return { ...state, turn, timeline: [...state.timeline, { kind: 'user', text: shown, uuid, at: when, turn }] }
+}
+
+function note(state: SessionState, text: string, tone: 'info' | 'warn' | 'error'): SessionState {
+  return { ...state, timeline: [...state.timeline, { kind: 'note', text, tone, at: Date.now() }] }
+}
+
+export function contentToText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .map((c) => (c && typeof c === 'object' && 'text' in c ? String((c as { text: unknown }).text) : `[${(c as { type?: string })?.type ?? 'block'}]`))
+      .join('\n')
+  }
+  return content == null ? '' : JSON.stringify(content, null, 2)
+}
+
+/** One-line description of a tool call's input, for list rows. */
+export function toolSummary(call: ToolCall): string {
+  const i = call.input
+  const pick = i.description ?? i.file_path ?? i.notebook_path ?? i.command ?? i.pattern ?? i.url ?? i.query ?? i.skill ?? i.summary ?? i.title
+  if (typeof pick === 'string') return pick
+  const json = JSON.stringify(i)
+  return json.length > 140 ? json.slice(0, 137) + '…' : json
+}
+
+export const approxTokens = (text: string | undefined) => Math.ceil((text?.length ?? 0) / 4)
+
+/** Claude Code's own plan and memory files (~/.claude/plans, ~/.claude/projects) aren't project changes. */
+export function isClaudeOwnFile(path: string): boolean {
+  return /\/\.claude\/(plans|projects|pr-showcase)\//.test(path.replace(/\\/g, '/').toLowerCase())
+}
+
+const SHELL_SEARCH = /(^|[\s;&|(])(rg|grep|git\s+grep|findstr|fd|find|Select-String|Get-ChildItem|gci|ls|dir)\b/i
+const MAX_HITS = 300
+
+/** A file path at the start of a search-output line ("path", "path:12:text", "path-12-text", "path:3"). */
+function pathFromLine(line: string): string | null {
+  const s = line.trim()
+  if (!s || s.length > 400 || /^(Found \d+|No (files|matches) found|\(Results are truncated)/i.test(s)) return null
+  const drive = /^[A-Za-z]:[\\/]/.test(s) ? s.slice(0, 2) : ''
+  const rest = s.slice(drive.length)
+  const m = rest.match(/^(.+?)(?::\d+(?::|-|$)|-\d+-|$)/)
+  if (!m) return null
+  const path = (drive + m[1]).trim()
+  // Must look like a file: a separator or an extension, and no spaces in its last segment.
+  const last = path.split(/[\\/]/).pop() ?? ''
+  if (!last || /\s/.test(last) || !(/[\\/]/.test(path) || /\.[A-Za-z0-9]{1,10}$/.test(last))) return null
+  return path.replace(/\\/g, '/')
+}
+
+/**
+ * Files a search turned up: Grep and Glob results, and shell searches (rg, grep, find, …).
+ * These are files Claude saw in results, even if it never opened them.
+ */
+export function searchHits(call: ToolCall): string[] {
+  if (call.status !== 'done' || !call.result) return []
+  const shell = call.name === 'Bash' || call.name === 'PowerShell'
+  if (!(call.name === 'Grep' || call.name === 'Glob' || (shell && SHELL_SEARCH.test(String(call.input.command ?? ''))))) return []
+  const hits = new Set<string>()
+  for (const line of call.result.split('\n')) {
+    const p = pathFromLine(line)
+    if (p) hits.add(p)
+    if (hits.size >= MAX_HITS) break
+  }
+  return [...hits]
+}
+
+/** A show_flow tool input as a Flow, or null if it's malformed (the tool rejects hops whose ends aren't lanes). */
+function parseFlow(input: Record<string, unknown>, at: number): Flow | null {
+  if (typeof input.id !== 'string' || !Array.isArray(input.lanes) || !Array.isArray(input.after)) return null
+  const lanes = input.lanes.map(String)
+  const known = new Set(lanes)
+  const hops = (v: unknown): FlowHop[] | null => {
+    if (!Array.isArray(v)) return null
+    const out: FlowHop[] = []
+    for (const h of v as Record<string, unknown>[]) {
+      const from = String(h?.from ?? '')
+      const to = String(h?.to ?? '')
+      if (!known.has(from) || !known.has(to)) return null
+      const kind = h.kind === 'new' || h.kind === 'changed' || h.kind === 'removed' ? h.kind : undefined
+      out.push({ from, to, label: String(h.label ?? ''), kind })
+    }
+    return out
+  }
+  const after = hops(input.after)
+  const before = input.before === undefined ? undefined : hops(input.before)
+  if (!after || before === null) return null
+  return { id: input.id, title: String(input.title ?? input.id), lanes, before, after, at }
+}
