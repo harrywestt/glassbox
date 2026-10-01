@@ -1,7 +1,7 @@
 {
   "name": "glassbox",
   "version": "0.1.0",
-  "description": "Desktop host for Claude with full visibility into context, tools, agents, code and diagrams",
+  "description": "A desktop app for Claude Code: watch every plan, edit and command as it happens, and steer it while it works.",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -13,7 +13,8 @@
     "icons": "electron scripts/make-icons.mjs",
     "dist": "electron-vite build && electron-builder --win dir",
     "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1",
-    "dist:installer": "electron-vite build && electron-builder --win nsis --publish never"
+    "dist:installer": "electron-vite build && electron-builder --win nsis --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac dmg --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.282",
@@ -59,9 +60,7 @@
       "package.json",
       "!node_modules/{mermaid,@mermaid-js,monaco-editor,@monaco-editor,react,react-dom,marked,dompurify,@xterm,@vscode,@fontsource,@fontsource-variable,cytoscape,cytoscape-cose-bilkent,cytoscape-fcose,elkjs,katex,khroma,dagre-d3-es,@iconify,roughjs,langium,chevrotain,@chevrotain}/**",
       "!node_modules/d3*/**",
-      "!node_modules/onnxruntime-web/**",
-      "!node_modules/onnxruntime-node/bin/napi-v6/{darwin,linux}/**",
-      "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"
+      "!node_modules/onnxruntime-web/**"
     ],
     "asar": false,
     "npmRebuild": false,
@@ -69,6 +68,17 @@
       "icon": "resources/icon.ico",
       "target": [
         "nsis"
+      ],
+      "files": [
+        "out/**",
+        "resources/**",
+        "package.json",
+        "!node_modules/{mermaid,@mermaid-js,monaco-editor,@monaco-editor,react,react-dom,marked,dompurify,@xterm,@vscode,@fontsource,@fontsource-variable,cytoscape,cytoscape-cose-bilkent,cytoscape-fcose,elkjs,katex,khroma,dagre-d3-es,@iconify,roughjs,langium,chevrotain,@chevrotain}/**",
+        "!node_modules/d3*/**",
+        "!node_modules/onnxruntime-web/**",
+        "!node_modules/onnxruntime-node/bin/napi-v6/{darwin,linux}/**",
+        "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**",
+        "!node_modules/node-pty/prebuilds/{darwin-arm64,darwin-x64,win32-arm64}/**"
       ]
     },
     "nsis": {
@@ -82,11 +92,41 @@
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
       "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "icon": "resources/icon.png",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "darkModeSupport": true,
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "artifactName": "Glassbox-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Glassbox uses the microphone when you hold Space to dictate a message. Speech is transcribed on this Mac.",
+        "NSAppleEventsUsageDescription": "Glassbox opens Terminal so you can sign in to Claude or GitHub."
+      },
+      "files": [
+        "out/**",
+        "resources/**",
+        "package.json",
+        "!node_modules/{mermaid,@mermaid-js,monaco-editor,@monaco-editor,react,react-dom,marked,dompurify,@xterm,@vscode,@fontsource,@fontsource-variable,cytoscape,cytoscape-cose-bilkent,cytoscape-fcose,elkjs,katex,khroma,dagre-d3-es,@iconify,roughjs,langium,chevrotain,@chevrotain}/**",
+        "!node_modules/d3*/**",
+        "!node_modules/onnxruntime-web/**",
+        "!node_modules/onnxruntime-node/bin/napi-v6/{win32,linux}/**",
+        "!node_modules/node-pty/prebuilds/{win32-arm64,win32-x64}/**"
+      ]
+    },
+    "dmg": {
+      "title": "Glassbox ${version}"
     }
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/harrywestt/glassbox.git"
   },
-  "homepage": "https://github.com/harrywestt/glassbox"
+  "homepage": "https://github.com/harrywestt/glassbox",
+  "license": "MIT"
 }

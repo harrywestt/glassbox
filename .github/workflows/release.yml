@@ -1,5 +1,5 @@
-# Every push to main builds the Windows installer and publishes it as a GitHub release, so anyone
-# can install the latest Glassbox from the Releases page without building it themselves.
+# Every push to main builds the Windows installer and the macOS disk images, and publishes them as one
+# GitHub release, so anyone can install the latest Glassbox from the Releases page.
 name: Build and release
 
 on:
@@ -14,47 +14,85 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  # Each build gets its own version (0.1.<run number>), so releases sort and installers upgrade in place.
+  VERSION: 0.1.${{ github.run_number }}
+
 jobs:
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - run: npm version "${{ env.VERSION }}" --no-git-tag-version --allow-same-version
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run dist:installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: release/Glassbox-Setup-${{ env.VERSION }}.exe
+          if-no-files-found: error
 
-      # Each build gets its own version (0.1.<run number>), so releases sort and the installer upgrades in place.
-      - name: Set version
-        shell: bash
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest      # Apple Silicon
+            arch: arm64
+          - runner: macos-15-intel    # Intel Macs
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      # No Apple Developer certificate yet: the app is ad-hoc signed (package.json), so don't look for one.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm version "${{ env.VERSION }}" --no-git-tag-version --allow-same-version
+      - run: npm ci
+      - name: Build disk image
+        run: npm run dist:mac
+      - name: Check the app has this Mac's native parts
         run: |
-          VERSION="0.1.${{ github.run_number }}"
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          APP="$(ls -d release/mac*/Glassbox.app | head -1)/Contents/Resources/app/node_modules"
+          ls "$APP/@anthropic-ai/claude-agent-sdk-darwin-${{ matrix.arch }}/claude"
+          ls "$APP/node-pty/prebuilds/darwin-${{ matrix.arch }}"
+          ls "$APP/onnxruntime-node/bin/napi-v6/darwin/${{ matrix.arch }}"
+          codesign --verify --verbose=2 "$(ls -d release/mac*/Glassbox.app | head -1)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ matrix.arch }}
+          path: release/Glassbox-${{ env.VERSION }}-${{ matrix.arch }}.dmg
+          if-no-files-found: error
 
-      - name: Install
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Build installer
-        run: npm run dist:installer
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
+  release:
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
           name: Glassbox ${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
           make_latest: true
+          files: dist/*
           body: |
             Built from ${{ github.sha }}.
 
-            **Install:** download `Glassbox-Setup-${{ env.VERSION }}.exe` below and run it. It installs for your user only (no admin needed), adds Start menu and desktop shortcuts, and can be removed from Settings > Apps.
+            **Windows:** download `Glassbox-Setup-${{ env.VERSION }}.exe` and run it. It installs for your user only (no admin needed), adds Start menu and desktop shortcuts, and is removed from Settings > Apps. It isn't code-signed yet, so if SmartScreen warns about an unknown publisher, choose **More info**, then **Run anyway**.
 
-            The installer isn't code-signed yet, so Windows SmartScreen may say it's from an unknown publisher: choose **More info**, then **Run anyway**.
+            **macOS:** download `Glassbox-${{ env.VERSION }}-arm64.dmg` for Apple Silicon (M1 and later) or `-x64.dmg` for Intel, open it and drag Glassbox to Applications. It isn't notarized yet, so the first time, right-click Glassbox in Applications and choose **Open**. If macOS says it's damaged, run `xattr -dr com.apple.quarantine /Applications/Glassbox.app` in Terminal and open it again.
 
-            You need Claude Code signed in on this machine (`claude auth login`). Git and the GitHub CLI are optional, for the git and GitHub features.
-          files: release/Glassbox-Setup-${{ env.VERSION }}.exe
+            You need Claude Code signed in on the machine (`claude auth login`). Git is needed for the git features; the GitHub CLI is optional.

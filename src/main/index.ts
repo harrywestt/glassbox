@@ -6,6 +6,7 @@ import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { listSessions, type SDKSessionInfo } from '@anthropic-ai/claude-agent-sdk'
+import { adoptLoginShellPath } from './shellPath'
 import { runBang, stopBang, stopAllBangs } from './bang'
 import { pinSession, pinnedSessions, refreshPinned, restorePinned, unpinSession } from './pinned'
 import { AgentHost } from './agentHost'
@@ -44,6 +45,8 @@ import type { AccessMode, DiffMode, GuardRule, SideTaskSpec, PermissionDecision,
 if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'Glassbox Dev'))
 // Testing a packaged build without touching the real profile: GLASSBOX_PROFILE_DIR=<folder>.
 if (process.env.GLASSBOX_PROFILE_DIR) app.setPath('userData', process.env.GLASSBOX_PROFILE_DIR)
+// macOS: opened from the Finder, the app doesn't get your shell's PATH (git, gh, Homebrew).
+adoptLoginShellPath()
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'showcase', privileges: { standard: true, secure: true, supportFetchAPI: true } },
