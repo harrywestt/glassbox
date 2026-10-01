@@ -1,0 +1,60 @@
+# Every push to main builds the Windows installer and publishes it as a GitHub release, so anyone
+# can install the latest Glassbox from the Releases page without building it themselves.
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Each build gets its own version (0.1.<run number>), so releases sort and the installer upgrades in place.
+      - name: Set version
+        shell: bash
+        run: |
+          VERSION="0.1.${{ github.run_number }}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build installer
+        run: npm run dist:installer
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Glassbox ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            Built from ${{ github.sha }}.
+
+            **Install:** download `Glassbox-Setup-${{ env.VERSION }}.exe` below and run it. It installs for your user only (no admin needed), adds Start menu and desktop shortcuts, and can be removed from Settings > Apps.
+
+            The installer isn't code-signed yet, so Windows SmartScreen may say it's from an unknown publisher: choose **More info**, then **Run anyway**.
+
+            You need Claude Code signed in on this machine (`claude auth login`). Git and the GitHub CLI are optional, for the git and GitHub features.
+          files: release/Glassbox-Setup-${{ env.VERSION }}.exe
