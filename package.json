@@ -60,7 +60,10 @@
       "package.json",
       "!node_modules/{mermaid,@mermaid-js,monaco-editor,@monaco-editor,react,react-dom,marked,dompurify,@xterm,@vscode,@fontsource,@fontsource-variable,cytoscape,cytoscape-cose-bilkent,cytoscape-fcose,elkjs,katex,khroma,dagre-d3-es,@iconify,roughjs,langium,chevrotain,@chevrotain}/**",
       "!node_modules/d3*/**",
-      "!node_modules/onnxruntime-web/**"
+      "!node_modules/onnxruntime-web/**",
+      "!node_modules/onnxruntime-node/bin/napi-v6/!(${platform})/**",
+      "!node_modules/onnxruntime-node/bin/napi-v6/*/!(${arch})/**",
+      "!node_modules/node-pty/prebuilds/!(${platform}-${arch})/**"
     ],
     "asar": false,
     "npmRebuild": false,
@@ -68,17 +71,6 @@
       "icon": "resources/icon.ico",
       "target": [
         "nsis"
-      ],
-      "files": [
-        "out/**",
-        "resources/**",
-        "package.json",
-        "!node_modules/{mermaid,@mermaid-js,monaco-editor,@monaco-editor,react,react-dom,marked,dompurify,@xterm,@vscode,@fontsource,@fontsource-variable,cytoscape,cytoscape-cose-bilkent,cytoscape-fcose,elkjs,katex,khroma,dagre-d3-es,@iconify,roughjs,langium,chevrotain,@chevrotain}/**",
-        "!node_modules/d3*/**",
-        "!node_modules/onnxruntime-web/**",
-        "!node_modules/onnxruntime-node/bin/napi-v6/{darwin,linux}/**",
-        "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**",
-        "!node_modules/node-pty/prebuilds/{darwin-arm64,darwin-x64,win32-arm64}/**"
       ]
     },
     "nsis": {
@@ -107,17 +99,7 @@
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Glassbox uses the microphone when you hold Space to dictate a message. Speech is transcribed on this Mac.",
         "NSAppleEventsUsageDescription": "Glassbox opens Terminal so you can sign in to Claude or GitHub."
-      },
-      "files": [
-        "out/**",
-        "resources/**",
-        "package.json",
-        "!node_modules/{mermaid,@mermaid-js,monaco-editor,@monaco-editor,react,react-dom,marked,dompurify,@xterm,@vscode,@fontsource,@fontsource-variable,cytoscape,cytoscape-cose-bilkent,cytoscape-fcose,elkjs,katex,khroma,dagre-d3-es,@iconify,roughjs,langium,chevrotain,@chevrotain}/**",
-        "!node_modules/d3*/**",
-        "!node_modules/onnxruntime-web/**",
-        "!node_modules/onnxruntime-node/bin/napi-v6/{win32,linux}/**",
-        "!node_modules/node-pty/prebuilds/{win32-arm64,win32-x64}/**"
-      ]
+      }
     },
     "dmg": {
       "title": "Glassbox ${version}"
