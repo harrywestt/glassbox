@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "icons": "electron scripts/make-icons.mjs",
     "dist": "electron-vite build && electron-builder --win dir",
-    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1"
+    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1",
+    "dist:installer": "electron-vite build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.282",
@@ -45,10 +46,7 @@
     "vite": "^7.3.6"
   },
   "productName": "Glassbox",
-  "author": {
-    "name": "Harry West",
-    "email": "harrywest@live.co.uk"
-  },
+  "author": "Harry West <harrywest@live.co.uk>",
   "build": {
     "appId": "com.harrywest.glassbox.desktop",
     "productName": "Glassbox",
@@ -58,15 +56,37 @@
     "files": [
       "out/**",
       "resources/**",
-      "package.json"
+      "package.json",
+      "!node_modules/{mermaid,@mermaid-js,monaco-editor,@monaco-editor,react,react-dom,marked,dompurify,@xterm,@vscode,@fontsource,@fontsource-variable,cytoscape,cytoscape-cose-bilkent,cytoscape-fcose,elkjs,katex,khroma,dagre-d3-es,@iconify,roughjs,langium,chevrotain,@chevrotain}/**",
+      "!node_modules/d3*/**",
+      "!node_modules/onnxruntime-web/**",
+      "!node_modules/onnxruntime-node/bin/napi-v6/{darwin,linux}/**",
+      "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"
     ],
     "asar": false,
     "npmRebuild": false,
     "win": {
       "icon": "resources/icon.ico",
       "target": [
-        "dir"
+        "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Glassbox",
+      "artifactName": "Glassbox-Setup-${version}.${ext}",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "deleteAppDataOnUninstall": false
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harrywestt/glassbox.git"
+  },
+  "homepage": "https://github.com/harrywestt/glassbox"
 }

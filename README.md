@@ -1,121 +1,138 @@
-# Glassbox
+<p align="center">
+  <img src="resources/icon.png" width="96" alt="Glassbox logo: code brackets around a red on-air lamp">
+</p>
 
-A desktop app that runs Claude Code sessions (through the Claude Agent SDK) and shows everything they do: context, tools, subagents, code changes, diagrams, connectors, skills and your plan usage.
+<h1 align="center">Glassbox</h1>
 
-## Run
+<p align="center"><b>Watch Claude Code work, and steer it while it does.</b><br>
+A desktop app for Claude Code that shows every plan, edit, command and agent as it happens, so there are no surprises at review time.</p>
 
-```sh
-npm install
-node node_modules/electron/install.js   # only if the Electron binary didn't download (npm may skip install scripts)
-npm run dev                             # hot-reloading dev build
-npm run build && npx electron .         # production build
-npm run typecheck
-```
+<p align="center">
+  <a href="https://github.com/harrywestt/glassbox/releases/latest"><b>Download for Windows</b></a> ·
+  <a href="#install">Install</a> ·
+  <a href="#how-to-use-it">How to use it</a> ·
+  <a href="#run-it-from-source">Run from source</a>
+</p>
 
-Auth works the same way as the Claude Code CLI (your existing login, or `ANTHROPIC_API_KEY`). Sessions load your user, project and local settings, so your CLAUDE.md files, skills, MCP servers and claude.ai connectors all apply.
+## Why
+
+The Claude Code CLI gives you a scrolling transcript, and your editor shows you the result. Glassbox is the layer in between. You approve the plan before anything changes, watch edits land on a map of your code, comment on a step mid-turn, and run several sessions side by side without them tripping over each other.
+
+It runs on your machine with your existing Claude Code sign-in and settings. Your `CLAUDE.md`, skills, MCP servers and claude.ai connectors all apply.
+
+## Install
+
+**Windows:** download `Glassbox-Setup-<version>.exe` from the [latest release](https://github.com/harrywestt/glassbox/releases/latest) and run it.
+
+- It installs for your user only (no admin rights needed) into `%LOCALAPPDATA%\Programs\Glassbox`, adds Start menu and desktop shortcuts, and is removed like any other app from **Settings > Apps**.
+- The installer isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher. Choose **More info**, then **Run anyway**.
+- A new release is built automatically on every push to `main`. Running a newer installer upgrades in place and keeps your sessions and settings.
+
+**You'll also need:**
+
+- **Claude Code**, signed in on this machine: `npm install -g @anthropic-ai/claude-code`, then `claude auth login`. Glassbox uses the same account and plan.
+- **Git**, for branches, diffs, worktrees and automatic commits. Git for Windows also provides the Bash used by `!` commands.
+- *Optional:* the **GitHub CLI** (`gh auth login`) for pull requests, reviews and the dashboard's GitHub section.
+
+**macOS and Linux:** there's no packaged build yet; [run it from source](#run-it-from-source).
+
+## How to use it
+
+1. **Open a session** in your project folder with **+** (or Ctrl+T). Pick what you're doing: build from a ticket, review a pull request, plan an idea, write a PRD, or start blank.
+2. **Ask for a change.** Turn on **Plan first** and Claude plans the work before it touches anything.
+3. **Approve the plan.** It opens in its own **Plan** tab. Read it, request changes or approve it. The rest of the app stays usable while it waits.
+4. **Watch it work.** The conversation shows every step. **Map** shows which parts of your code it's in, **Live changes** follows each edit with its diff, and **Changes** keeps the running diff against your base branch.
+5. **Step in whenever you like.** Comment on any step, message, decision or line of a diff, and Claude reads it during the current turn. Press Stop to halt it.
+6. **Run a command yourself.** Start a message with `!` (for example `! git status`) to run it in the session's folder. Claude sees the command and its output with your next message.
+7. **Run sessions side by side.** When a second session opens in a repo already in use, Glassbox offers it its own git worktree (kept inside the repo under `.claude/worktrees`). Each session runs its own copy of your services on its own random ports.
 
 ## What's in it
 
-**Dashboard (home tab, full width)**
-- Plan usage: 5-hour and weekly limits, per-model limits and extra usage, with reset times. This comes from an idle SDK session, so no model call is made.
-- Tokens per day for the last 14 days, broken down by model and by project. Read from local Claude Code transcripts, so CLI sessions are included.
-- History of every past session, searchable. Click one to resume it in a tab.
-- GitHub (through the `gh` CLI): your open PRs with check status, PRs awaiting your review or assigned to you, workflow runs you started, and open PR counts for the repos you work in.
+**Views** (tabs next to the conversation; open any of them from **+**, and keep the ones you want for a project with the pin)
 
-**Review while Claude works** (the point of Glassbox: no surprises at PR time)
-- **Comments mid-task.** Comment on a tool call, a message, a plan step, a decision or selected lines in any file or diff. Comments are sent with priority `now`, so Claude reads them during the current turn, not after it.
-- **Plan first.** Toggle it in the composer: Claude plans in plan mode, you approve or request changes in a plan review, and each step lists the files it expects to touch. Edits outside the plan are flagged as drift.
-- **Decisions log.** Claude records decisions, assumptions and questions (`log_decision`) as it makes them. Questions pull focus; anything can be challenged in one click.
-- **Guardrails.** Enforced rules on every tool call, whatever your permission settings: block or ask for terraform apply, force push, git push, recursive deletes, SQL drops, cloud deletes, installs, PR merges, connector actions that send or change things, don't-touch files and writes outside the project. Add your own regex rules. The side-effects view classifies everything Claude did outside the conversation by risk.
-- **Rolling review.** Changeset against the base branch, what needs a look (open assumptions, drift, risky actions), the latest test, lint and build results Claude ran, and checkpoints: rewind files to before any message (with a dry-run preview).
-- **Acceptance criteria.** A live checklist Claude keeps up to date; a criterion only counts as tested with evidence, and "done but untested" is flagged.
-- **Check-ins.** When Claude isn't confident about a consequential step it calls `check_in`, which genuinely pauses it until you pick an option or reply.
-- **Background reviewer.** A fast second model (Haiku) reviews each batch of edits and flags likely bugs inline; send any flag to Claude in one click. Can be switched off per session.
-- **Blast radius.** For every edited file, the files that import it and may be affected.
-- **Heatmap.** The Explorer shades files by how much attention Claude gave them.
-- **Replay.** Scrub through a session event by event, with the diff at each edit and what was true at that point.
-- **Share.** A read-only live view teammates on your network can open (activity and decisions, never file contents), or have Claude draft a status update to a Slack channel or Jira ticket.
-- **Tray.** A system-tray icon shows whether any session needs you, is working or failed.
-- **Alerts and live output.** Desktop notifications when Claude needs approval, finishes, errors, loops on the same call or goes quiet for 3 minutes. Text and thinking summaries stream in as they're written. Coming back to a tab after a while shows a "While you were away" digest.
-
-**New session launcher** (the + button or Ctrl+T). Pick the project, then what you're doing:
-- **Build from a ticket:** a Jira key, GitHub issue or description. Claude fetches it, sets up an acceptance-criteria checklist, optionally creates the branch, then plans first or starts coding.
-- **Review a pull request:** pick from the repo's open PRs (yours to review first). Optionally check it out into a separate worktree so Claude can run it. Claude reports findings by severity and drafts the review; nothing is posted without you.
-- **Plan or explore an idea:** plan mode, so nothing changes; Claude asks questions, draws options and recommends one.
-- **Write a PRD:** Claude interviews you, researches the codebase and writes `docs/prd/<name>.md`, optionally publishing to Confluence once you approve.
-- **Blank session.**
-
-**Session tabs.** Chrome-style: drag to reorder, middle-click to close, Ctrl+Tab to switch, Ctrl+W to close. Open tabs are restored and resumed on the next launch. Each session header shows the folder, git branch (with uncommitted and ahead/behind counts), status, context left, tokens, cost and a **Run** button for project services.
-
-**Side panels** (activity bar on the right):
-
-| Panel | What it does |
+| View | What it shows |
 |---|---|
-| Now | Current task and plan steps (with drift), the approved plan, alerts, tool calls and agents in flight, recent activity |
-| Review | Rolling PR preview: changeset, what needs a look, checks run, checkpoints to rewind |
-| Decisions | Decisions, assumptions and questions Claude logged, with Challenge and Answer |
-| Guardrails | Side effects by risk, guardrail stops, and the rules (block, ask, off, or your own) |
-| Services | Start and stop the project's services from `.glassbox/services.json`, with live logs. "Ask Claude" writes the config for you |
-| Explorer | Project file tree. Mark files **must read**, **must edit** or **don't touch**, and Claude gets the marks with every message |
-| Context | Real context-window breakdown (`getContextUsage`), files brought in grouped by module, memory files, loaded capabilities |
-| Changes | Every file Claude edited, with a diff per change, or compare the working tree with any branch (since branching, or directly) |
-| Agents | Subagent tree with each agent's brief and report. Follow one to filter the chat to what it did |
-| Diagrams | Mermaid diagrams Claude pushes, plus "generate a diagram of…" |
-| Connectors | claude.ai connectors and MCP servers with status and tools. Toggle per session, or **Require** one for the session |
-| Skills | Every skill and command. Click **Run**, add arguments, or pin one as preferred. Also available by typing `/` in the composer |
-| Showcase | Claude builds a shareable HTML deck of the session's work and publishes it as a Claude Artifact when the Artifact tool is available |
-| Raw | Every SDK event and hook, filterable, plus stderr |
+| Plan | Claude's plan to approve, or to read again later |
+| Map | The parts of the project this conversation works in, how they connect, and which ones Claude has edited. Switch to the whole project, fold groups and search |
+| Live changes | Each file as Claude edits it, with its full diff and an "Ask why" on any edit |
+| Ripple | What a change could affect, and what's covered by tests |
+| Flow | How a request moves through the system, before and after the change |
+| Database | Tables and how they connect, read from your migrations or schema. Ask for an area to focus on |
+| Diagrams | Diagrams Claude draws in the conversation |
+| Browser | Web pages inside Glassbox, in tabs that keep your sign-ins. Claude browses here too |
+| Terminal | Your own shell in the session's folder |
+| Attachments | Files you attached and files Claude made |
+| Showcase, Replay | A shareable deck of the work, and a step-through of the whole session |
 
-Light and dark themes follow the system until you toggle. Themes are token maps in `src/renderer/src/theme.ts`, so adding a custom theme means adding one entry.
+**Side panels:** Route (what's happening now, running agents, services), Decisions (choices, assumptions and questions Claude logged, which you can challenge), Changes, Ticket, Git, Guardrails, Explorer, Context, Connectors, Skills and Raw events.
 
-## Services config
+**Also**
 
-`.glassbox/services.json` in the project folder. Glassbox watches it, and Claude is told about it, so asking it to "set up services" works.
+- **Guardrails** on every tool call, whatever your permission mode: block or ask for things like force pushes, `terraform apply`, recursive deletes, SQL drops, and connector actions that send or change things. Add your own rules.
+- **Check-ins and questions:** when Claude isn't sure about something consequential it asks, and genuinely waits for your answer.
+- **Everyday or Engineering view:** keep the conversation, diagrams and decisions, or add the engineering side (map, changes, flows).
+- **Voice:** hold Space to dictate. Transcribed on your machine, so audio never leaves it.
+- **Pinned sessions:** pin a session to keep its history even after Claude Code would clear it.
+- **Share:** a read-only live view for teammates on your network, or a two-line handoff message with the PR link.
+- **Dashboard:** plan usage and limits, tokens per day, searchable session history and your GitHub pull requests.
+- **Tray and notifications:** see at a glance which session needs you.
+
+## Services
+
+Put `.glassbox/services.json` in your project (or ask Claude to "set up services" and it will write one). **Run all** starts them in dependency order.
 
 ```json
 {
   "services": [
     { "name": "db", "command": "docker compose up postgres", "readyPattern": "ready to accept connections" },
-    { "name": "api", "command": "dotnet run --project api/App.Api", "cwd": ".", "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
-      "url": "http://localhost:5000", "readyPattern": "Now listening", "dependsOn": ["db"] },
-    { "name": "web", "command": "pnpm dev", "cwd": "ui/web", "url": "http://localhost:3000", "dependsOn": ["api"] }
+    { "name": "api", "command": "npm run api -- --port ${port}", "port": 3000, "readyPattern": "listening", "dependsOn": ["db"] },
+    { "name": "web", "command": "npm run web -- --port ${port}", "port": 5173,
+      "env": { "API_URL": "http://localhost:${port:api}" }, "url": "http://localhost:${port}", "dependsOn": ["api"] }
   ]
 }
 ```
 
-Only `name` and `command` are required. **Run all** starts services in `dependsOn` order, waiting for each `readyPattern` (up to 90 seconds). Set `"autostart": false` to leave a service out of Run all. Every service is stopped when Glassbox quits.
+Only `name` and `command` are required. A service with a `port` gets a random free port in each session. `${port}` is its own port and `${port:api}` is another service's, so each session's web app talks to that session's API. `PORT` is set too. Shared infrastructure, such as a database, can leave `port` out.
+
+## Run it from source
+
+You need Node 20 or newer, plus Claude Code signed in (see [Install](#install)).
+
+```sh
+git clone https://github.com/harrywestt/glassbox
+cd glassbox
+npm install
+npm run dev
+```
+
+| Script | What it does |
+|---|---|
+| `npm run dev` | Hot-reloading development build (uses its own "Glassbox Dev" profile) |
+| `npm run typecheck` | TypeScript check |
+| `npm run dist:installer` | Builds the Windows installer into `release/` |
+| `npm run install:local` | Builds and installs the app on this Windows machine |
+| `npm run icons` | Renders `icon.png` and `icon.ico` from `resources/icon.svg` |
 
 ## How it works
 
 ```
 Renderer (React)  ⇄ IPC ⇄  Main process
                             ├─ AgentHost (one per tab) ── query() ── Claude Agent SDK
-                            │    ├─ starts idle, so skills/connectors/context are inspectable before the first message
-                            │    ├─ canUseTool        → approval dialog and plan review (ExitPlanMode)
-                            │    ├─ PreToolUse hook   → guardrails (deny / ask), enforced in every permission mode
-                            │    ├─ other hooks       → subagent/compaction events; UserPromptSubmit attaches your requirements
-                            │    ├─ checkpoints       → enableFileCheckpointing + rewindFiles
-                            │    └─ glassbox MCP      → show_diagram, set_current_task, log_decision, pin_file, showcase_ready
-                            ├─ UsageService   ── idle SDK session (plan limits) + transcript scan (token history)
-                            ├─ ServiceRegistry ── .glassbox/services.json processes and logs
-                            ├─ GitHub          ── gh CLI (PRs, reviews, workflow runs), cached 60s
-                            └─ git / files    ── branch info, diffs, file tree
+                            │    ├─ canUseTool / PreToolUse hook → approvals, plan review, guardrails
+                            │    ├─ checkpoints                  → enableFileCheckpointing + rewindFiles
+                            │    └─ glassbox MCP server          → plans on the map, diagrams, decisions, loaders, browser tools
+                            ├─ ServiceRegistry ── .glassbox/services.json processes, per-session ports, logs
+                            ├─ UsageService    ── plan limits + token history from local transcripts
+                            ├─ GitHub          ── gh CLI (PRs, reviews, workflow runs)
+                            └─ git / files     ── branches, diffs, worktrees, file tree
 ```
 
-- `src/main/agentHost.ts`: session lifecycle, resume, permissions, requirement injection.
-- `src/renderer/src/session.ts`: reducer from SDK events to timeline, tool calls, agent tree, files and usage. The same code rebuilds a resumed transcript.
-- `src/renderer/src/panels/*`: one file per side panel.
-
-## Icon
-
-`resources/icon.svg` is the source. `npm run icons` renders `icon.png` and `icon.ico` from it.
-
-## Dev: screenshots
-
-`GLASSBOX_SNAPSHOTS=<steps.json>` runs a list of `{ "wait": ms, "script": "js to run in the page", "out": "file.png" }` steps against the live window, then quits. Useful for checking UI changes without clicking through them.
+- `src/main/agentHost.ts`: session lifecycle, resume, permissions and guardrails.
+- `src/renderer/src/session.ts`: turns SDK events into the timeline, tool calls, agents, files and usage. The same code rebuilds a resumed session.
+- `src/renderer/src/work/*` and `src/renderer/src/panels/*`: one file per view and side panel.
 
 ## Known limits
 
-- The system prompt text isn't exposed by the SDK. The Context panel shows its size and sections, not its content.
-- `usage_EXPERIMENTAL…` (plan limits) is an unstable SDK API. If it changes, the dashboard shows the error and keeps the local token history.
-- Showcase publishing depends on the Artifact tool being available in SDK sessions; otherwise you get a local HTML file with a preview.
+- Windows is the only packaged platform so far. The code allows for macOS, but it hasn't been built or tested there.
+- The installer isn't code-signed, so SmartScreen warns on first run.
+- Plan limits come from an experimental SDK API. If it changes, the dashboard shows the error and keeps the local token history.
