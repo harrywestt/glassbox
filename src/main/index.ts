@@ -42,6 +42,8 @@ import type { AccessMode, DiffMode, GuardRule, SideTaskSpec, PermissionDecision,
 // Development builds keep their own profile (settings, tabs, rates), so running from source never
 // touches the installed app's data.
 if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'Glassbox Dev'))
+// Testing a packaged build without touching the real profile: GLASSBOX_PROFILE_DIR=<folder>.
+if (process.env.GLASSBOX_PROFILE_DIR) app.setPath('userData', process.env.GLASSBOX_PROFILE_DIR)
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'showcase', privileges: { standard: true, secure: true, supportFetchAPI: true } },
