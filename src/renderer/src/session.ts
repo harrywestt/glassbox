@@ -189,6 +189,8 @@ export interface SessionState {
   permissions: PermissionRequest[]
   /** Questions Claude asked (AskUserQuestion) that wait for your answers. */
   userQuestions?: { id: string; questions: UserQuestion[] }[]
+  /** Quick replies to messages you sent while Claude was tied up, by the message's uuid. */
+  quickAnswers?: Record<string, { status: 'running' | 'done' | 'failed'; text?: string }>
   raw: { at: number; event: SessionEvent }[]
   stderr: string[]
   busySince?: number
@@ -336,6 +338,8 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
     }
     case 'user-questions':
       return { ...state, userQuestions: [...(state.userQuestions ?? []).filter((q) => q.id !== event.id), { id: event.id, questions: event.questions }] }
+    case 'quick-answer':
+      return { ...state, quickAnswers: { ...state.quickAnswers, [event.uuid]: { status: event.status, text: event.text } } }
     case 'user-questions-done':
       return { ...state, userQuestions: (state.userQuestions ?? []).filter((q) => q.id !== event.id) }
     case 'permission-cancelled':

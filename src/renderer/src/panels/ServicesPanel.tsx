@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from '../views/SessionView'
+import { ServiceErrorCard } from '../session-ui/Timeline'
 import { useServices } from '../services'
 import { Empty, Icon, IconButton, PanelHeader } from '../components/ui'
 import { READ_TOOLS, SHELL_TOOLS } from '../side'
@@ -40,6 +41,8 @@ export function ServicesPanel() {
     if (el) el.scrollTop = el.scrollHeight
   }, [selected, logs[selected ?? '']?.length])
 
+  const lastUser = s.timeline.map((i) => i.kind).lastIndexOf('user')
+  const errors = [...new Map(s.timeline.slice(lastUser + 1).flatMap((i) => (i.kind === 'service-error' ? [[i.service, i] as const] : []))).values()]
   if (!snapshot) return <div className="panel"><PanelHeader title="Services" /></div>
   const anyRunning = snapshot.services.some((x) => x.status === 'running' || x.status === 'starting' || x.status === 'waiting')
 
@@ -98,6 +101,14 @@ export function ServicesPanel() {
                 </div>
               )
             })}
+            {/* Errors the services logged since your last message, one card per service (they used to land in the conversation). */}
+            {errors.length > 0 && (
+              <div className="services-errors">
+                {errors.map((e) => (
+                  <ServiceErrorCard key={e.service} item={e} />
+                ))}
+              </div>
+            )}
             {snapshot.services.some((x) => !x.config.port) && (
               <div className="services-note small muted">
                 <span title="Every session runs its own copy of these services. Services with a port set get a random free port of their own in each session; the others would clash.">Services without a port can clash between sessions.</span>{' '}

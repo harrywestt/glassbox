@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, protocol, shell } from 'electron'
 import { Updater } from './updater'
+import { askMap, type MapAskModule } from './mapAsk'
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
@@ -73,6 +74,9 @@ let titleBar = { color: '#121418', symbolColor: '#d8dce4' }
 const hosts = new Map<string, AgentHost>()
 const usage = new UsageService()
 
+// Dev aid: snapshot runs keep painting while other windows cover this one (Windows otherwise pauses
+// a covered window, and capturePage hands back an old frame).
+if (process.env.GLASSBOX_SNAPSHOTS) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const toRenderer = (channel: string, payload: unknown) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
@@ -235,7 +239,11 @@ async function captureSnapshots(w: BrowserWindow, file: string) {
   const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string }[]
   await new Promise<void>((r) => w.webContents.once('did-finish-load', () => r()))
   for (const step of steps) {
-    if (step.script) await w.webContents.executeJavaScript(step.script).catch((e) => console.error('snapshot script failed', e))
+    if (step.script) {
+      const r = await w.webContents.executeJavaScript(`(() => { try { ${step.script}
+; return 'ok' } catch (e) { return 'ERR ' + (e && e.stack || e) } })()`).catch((e) => String(e))
+      if (r !== 'ok') console.error('snapshot script failed', step.out, r)
+    }
     await new Promise((r) => setTimeout(r, step.wait))
     // Dev aid: report what each embedded frame shows (screenshots can miss cross-site frames).
     if (process.env.GLASSBOX_SNAPSHOT_FRAMES)
@@ -365,6 +373,7 @@ ipcMain.handle('deps:find', (_e, cwd: string, files: string[]) => findDependents
 onArchitectureChanged((root) => toRenderer('glassbox:architecture', root))
 ipcMain.handle('architecture:explain', (_e, cwd: string, id: string) => explainModule(cwd, id))
 // The map's "This conversation" view, grouped by Claude from the session's heatmap.
+ipcMain.handle('architecture:ask', (_e, root: string, question: string, mods: MapAskModule[], force?: boolean) => askMap(root, question, mods, force))
 ipcMain.handle('architecture:group', (_e, root: string, mods: HeatModule[], force?: boolean) => groupSessionMap(root, mods, force))
 ipcMain.handle('architecture:get', (_e, cwd: string, force?: boolean) => getArchitecture(cwd, force))
 ipcMain.handle('architecture:diff', (_e, cwd: string, ref: string, mode: DiffMode, apiOnly?: string[]) => architectureDiff(cwd, ref, mode, apiOnly))

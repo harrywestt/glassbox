@@ -189,3 +189,23 @@ button.map-conn-file:hover:not(:disabled) { background: none; text-decoration: u
 .map-grouped { display: inline-flex; align-items: center; gap: var(--s-1); font-size: 12px; color: var(--muted); white-space: nowrap; }
 .map-grouped .codicon { font-size: 14px; color: var(--accent); }
 .map-grouped .link { margin-left: var(--s-1); }
+
+/* "Show me a feature": ask the map in plain words. */
+.map-ask { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-3) var(--s-4) 0; padding: 0 var(--s-1) 0 var(--s-3); height: var(--h-lg); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); }
+.map-ask:focus-within { border-color: var(--accent); }
+.map-ask input { height: 100%; border: none; background: none; padding: 0; font-size: 13px; outline: none; }
+.map-ask .btn { height: calc(var(--h-lg) - 8px); }
+.map-ask.busy { border-style: dashed; }
+.map-ask-busy { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.map-ask-error { margin: var(--s-2) var(--s-4) 0; }
+.map-feature { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 var(--s-4) var(--s-2); padding: var(--s-3) var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+.map-feature-head { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-ctl); font-size: 14px; }
+.map-feature-summary { margin: 0; font-size: 13px; line-height: 1.5; color: color-mix(in srgb, var(--fg) 85%, var(--muted)); max-width: 80ch; }
+.map-feature-steps { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.map-feature-steps li { display: flex; align-items: baseline; gap: var(--s-2); min-height: 24px; font-size: 13px; }
+.map-feature-n { flex-shrink: 0; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; align-self: center; }
+.map-feature-step { flex-shrink: 0; font-weight: 500; }
+.map-feature-files { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); min-width: 0; }
+.map-mod-file.note { fill: color-mix(in srgb, var(--fg) 75%, var(--muted)); }
+.map-feature-toggle { align-self: flex-start; }
+.map-feature-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

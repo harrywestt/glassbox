@@ -1,4 +1,5 @@
 import type { HeatModule, MapGroups } from '../main/mapGroups'
+import type { MapAnswer, MapAskModule } from '../main/mapAsk'
 import { contextBridge, ipcRenderer, webFrame, webUtils, type IpcRendererEvent } from 'electron'
 import type { AccountsResult, ArchDiff, ModuleExplain, ProjectDecision, Standup,
   DiffMode,
@@ -160,6 +161,8 @@ const api = {
     explain: (cwd: string, id: string): Promise<ModuleExplain> => invoke('architecture:explain', cwd, id),
     /** Group this session's modules (from its heatmap) the way an engineer would want to see the work. */
     group: (root: string, mods: HeatModule[], force?: boolean): Promise<MapGroups> => invoke('architecture:group', root, mods, force),
+    /** "Show me a feature": the modules and files involved, in the order the work flows (read-only). */
+    ask: (root: string, question: string, mods: MapAskModule[], force?: boolean): Promise<MapAnswer> => invoke('architecture:ask', root, question, mods, force),
     /** Connections between modules the working tree adds or removes against a base; apiOnly flags imports past an api-only module's entry. */
     diff: (cwd: string, ref: string, mode: DiffMode, apiOnly?: string[]): Promise<ArchDiff> => invoke('architecture:diff', cwd, ref, mode, apiOnly),
     /** A project's map was redrawn in the background (new session, or Claude named its categories). */
