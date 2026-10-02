@@ -446,7 +446,11 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
       w = { id: 'preview', kind: 'preview' }
     }
     else if (t.view === 'erd') w = { id: 'erd', kind: 'erd', entities: t.entities, query: t.query }
-    else w = t.tab === 'map' ? MAP : t.tab === 'conversation' ? CONVERSATION : ({ id: t.tab, kind: t.tab } as WorkTab)
+    else {
+      // Tool names for views, mapped to the views' own kinds.
+      const kind = t.tab === 'database' ? 'erd' : t.tab === 'browser' ? 'preview' : t.tab
+      w = kind === 'map' ? MAP : kind === 'conversation' ? CONVERSATION : ({ id: kind, kind } as WorkTab)
+    }
     openWork(w)
     setClaudeNote(o.why ? { work: w.id, text: o.why } : null)
   }, [session.open, tab.cwd, openWork])

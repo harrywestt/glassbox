@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSession } from '../views/SessionView'
-import { toolSummary, type ToolCall } from '../session'
+import { HIDDEN_TOOLS, taskOf, toolSummary, type ToolCall } from '../session'
 import { baseName, relPath, renderMarkdown } from '../lib'
 import { Empty, Icon, PanelHeader, Section } from '../components/ui'
 import { CommentBox } from '../components/CommentBox'
@@ -15,7 +15,21 @@ const shortSummary = (c: ToolCall) => {
 }
 
 export function ActivityPanel() {
-  const { tab, s, showPanel, setFilter, openFile, actions, openPlan } = useSession()
+  const { tab, s, showPanel, setFilter, openFile, actions, openPlan, filter } = useSession()
+  // Tasks follow the conversation picker: the agent you're looking at shows its own list; "everything"
+  // shows Claude's list and then each agent's, under its name.
+  const viewing = filter !== 'all' && filter !== 'main' ? filter : undefined
+  const task = taskOf(s, viewing)
+  const agentLists =
+    filter === 'all'
+      ? Object.keys(s.agentTodos ?? {})
+          .filter((id) => s.agentTodos![id].length && s.agents[id])
+          .map((id) => ({ id, agent: s.agents[id], task: taskOf(s, id)! }))
+      : []
+  const agentName = (id: string) => {
+    const a = s.agents[id]
+    return a ? `${a.type ? a.type[0].toUpperCase() + a.type.slice(1) : 'An'} agent: ${a.description}` : 'This agent'
+  }
   const [commentOn, setCommentOn] = useState<string | null>(null)
   const [showPlan, setShowPlan] = useState(false)
   const [now, setNow] = useState(Date.now())
@@ -25,7 +39,7 @@ export function ActivityPanel() {
   }, [])
 
   // Glassbox's own tools show up as the task, decisions and checklist, not as activity.
-  const calls = Object.values(s.toolCalls).filter((c) => !c.name.startsWith('mcp__glassbox__'))
+  const calls = Object.values(s.toolCalls).filter((c) => !c.name.startsWith('mcp__glassbox__') && !HIDDEN_TOOLS.has(c.name))
   const waitingOnYou = s.checkins.filter((c) => c.answer === undefined)
   const running = calls.filter((c) => c.status === 'running' && !s.agents[c.id])
   const agents = Object.values(s.agents).filter((a) => a.status === 'running')
@@ -60,11 +74,13 @@ export function ActivityPanel() {
         )}
 
         {/* Sections with nothing in them aren't shown; each can be folded away. */}
-        {s.task && (
-          <Section id="task" title="Current task">
+        {(task || agentLists.length > 0) && (
+          <Section id="task" title="Tasks" meta={task?.steps?.length ? <span className="muted small">{task.steps.filter((x) => x.status === 'done').length} of {task.steps.length} done</span> : undefined}>
             <>
-              <div className="task-summary">{s.task.summary}</div>
-              {s.task.steps?.map((step, i) => (
+              {viewing && <div className="task-owner small muted">{agentName(viewing)}</div>}
+              {task && <div className="task-summary">{task.summary}</div>}
+              {!task && <div className="muted small">Claude hasn’t made a list for this yet.</div>}
+              {task?.steps?.map((step, i) => (
                 <div key={i}>
                   <div className={`step step-${step.status}`}>
                     <Icon name={step.status === 'done' ? 'pass-filled' : step.status === 'active' ? 'circle-large-filled' : 'circle-large-outline'} />
@@ -81,6 +97,20 @@ export function ActivityPanel() {
                     </div>
                   ) : null}
                   {commentOn === step.label && <CommentBox target={{ kind: 'step', label: step.label }} onDone={() => setCommentOn(null)} />}
+                </div>
+              ))}
+              {agentLists.map(({ id, agent, task: t }) => (
+                <div key={id} className="task-agent">
+                  <button className="task-owner link small" onClick={() => setFilter(id)} title="Show only this agent">
+                    {agentName(id)}
+                    <span className="muted"> {t.steps?.filter((x) => x.status === 'done').length ?? 0} of {t.steps?.length ?? 0} done{agent.status !== 'running' ? ', finished' : ''}</span>
+                  </button>
+                  {t.steps?.map((step, i) => (
+                    <div key={i} className={`step step-${step.status}`}>
+                      <Icon name={step.status === 'done' ? 'pass-filled' : step.status === 'active' ? 'circle-large-filled' : 'circle-large-outline'} />
+                      <span className="grow">{step.label}</span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </>
@@ -154,7 +184,7 @@ export function ActivityPanel() {
             ))}
           </Section>
         )}
-        {!s.task && !s.plan && !recent.length && !running.length && !agents.length && !s.alerts.length && !waitingOnYou.length && !s.permissions.length && (
+        {!task && !agentLists.length && !s.plan && !recent.length && !running.length && !agents.length && !s.alerts.length && !waitingOnYou.length && !s.permissions.length && (
           <Empty icon="pulse" title={s.status === 'running' ? 'Claude is starting' : 'Nothing happening yet'}>
             The task, what’s running and recent tool calls show up here once Claude starts.
           </Empty>

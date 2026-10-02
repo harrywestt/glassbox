@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useActions } from '../App'
 import { money, useFx } from '../money'
-import { CHANGE_TOOLS, isClaudeOwnFile, type SessionState } from '../session'
+import { CHANGE_TOOLS, isClaudeOwnFile, taskOf, type SessionState } from '../session'
 import { tabTitle, type Tab } from '../tabs'
 import { checkOf } from '../review'
 import { backgroundWork, liveVerb, tallyOf } from '../tally'
@@ -65,7 +65,7 @@ function columnOf(tabId: string, s: SessionState | undefined): Column {
     .sort((a, b) => b.at - a.at)[0]
   if (running && checkOf(running)) return 'Test'
   if (s.mode === 'plan' || s.permissionMode === 'plan') return 'Plan'
-  const hasSteps = !!s.task?.steps?.length
+  const hasSteps = !!taskOf(s)?.steps?.length
   const hasEdits = s.files.some((f) => CHANGE_TOOLS.has(f.tool))
   return hasSteps || hasEdits ? 'Build' : 'Plan'
 }

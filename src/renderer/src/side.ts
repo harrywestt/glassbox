@@ -1,5 +1,5 @@
 import type { SessionState } from './session'
-import { CHANGE_TOOLS } from './session'
+import { CHANGE_TOOLS, taskOf } from './session'
 import { relPath } from './lib'
 
 export const READ_TOOLS = ['Read', 'Grep', 'Glob']
@@ -11,9 +11,10 @@ export const SHELL_TOOLS = ['Bash', 'PowerShell']
  */
 export function sessionBrief(s: SessionState, cwd: string): string {
   const lines: string[] = []
-  if (s.task) {
-    lines.push(`Current task: ${s.task.summary}`)
-    for (const st of s.task.steps ?? []) lines.push(`  - [${st.status}] ${st.label}`)
+  const task = taskOf(s)
+  if (task) {
+    lines.push(`Current task: ${task.summary}`)
+    for (const st of task.steps ?? []) lines.push(`  - [${st.status}] ${st.label}`)
   }
   const prompts = s.timeline.filter((i) => i.kind === 'user').slice(-4)
   if (prompts.length) lines.push('What the user asked (most recent last):', ...prompts.map((p) => `  - ${(p as { text: string }).text.slice(0, 400)}`))

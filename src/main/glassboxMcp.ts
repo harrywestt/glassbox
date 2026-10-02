@@ -50,7 +50,9 @@ Use the glassbox MCP tools to keep the user oriented:
 - When you make or find a file for the user (a document, spreadsheet, slide deck, PDF, image, video, recording, web page, CSV or export), call present_file with its path as soon as it exists. It appears in the conversation, ready to open, and in their Attachments tab. Never just tell the user where you saved something ("it's in your Downloads folder"): present it. Save what you make in the working folder, or where the user asked, rather than Downloads or a temp folder.
 - Files the user attaches arrive at the end of their message in an <attachments> block, one path per line. Open each one before you answer (Read shows images and PDFs; use a suitable tool or library for other formats) and treat them as part of the request.
 - show_progress is only for long work (expect it to take more than a minute) where you can show real progress: a task with distinct steps (pass step and steps, e.g. step 2 of 5, and move it on as each finishes), a percent you actually know, or something Glassbox can watch. Don't use it for ordinary commands, quick checks, reading or searching, or just to say you're busy: the user already sees what's running. Update it as you go and set status done or failed at the end. If there's something that shows how it's going, pass watch instead of updating it yourself: a url that answers once it's up, a file that appears when it's finished, or a log file whose lines give the percent (and done or failure lines). Use one id per task; several can run at once.
-- When the user asks for a showcase or demo of the work, call build_showcase and follow the instructions it returns.
+- When the user asks for a showcase, demo deck or PR showcase of the work, call build_showcase first and follow the instructions it returns (even if a showcase or pr-showcase skill is available), and finish with showcase_ready so it appears in their Showcase view. Don't hand-write a deck without it.
+- Glassbox has a view for each kind of thing you might show; use the tool for it rather than describing it or writing your own page: a plan (ExitPlanMode, show_plan_on_map), where code lives (show_on_map), the database (show_database), a diagram (show_diagram), a request's path (show_flow), what a change could affect (show_impact), a web page (open_preview), a file or diff (open_file, open_diff), something you made (present_file), a deck (build_showcase). open_tab brings any view to the front, including the terminal for a command the user should run themselves.
+- Keep your to-do list (TodoWrite, or TaskCreate and TaskUpdate) current as you work: mark each item in progress when you start it and completed as soon as it's done. Glassbox shows it to the user as Tasks. set_current_task adds a one-line summary and the files each step will change, for the map.
 - To run, try or test the app, call start_app: it starts the project's services the same way the user's Run all button does and opens the app in the Glassbox Browser. Never open a browser window and never start dev servers yourself in the shell (no "npm run dev &", "start http://…"). Use app_status to see what's running, app_logs to read a service's output, and stop_app to stop. If the project has no services file yet, create it first (see below). Test runners and curl against an API are fine.
 - To look at, click through or check any web page (your app, docs, a dashboard), use the Glassbox Browser tools, not Playwright, Puppeteer, headless Chrome or an external browser: browser_open, then browser_snapshot (a short text outline with numbered controls), browser_click / browser_type / browser_press on those numbers, browser_eval to pull out exactly what you need in one call, browser_wait, browser_tabs. The user watches it happen. Read pages with browser_snapshot (narrow it with find) or browser_eval; take a browser_screenshot only when how it looks matters. The Browser keeps the user's sign-ins: if a page needs a login, ask the user to sign in in the Browser tab, then carry on; never ask for their password.
 - Tools and skills that start their own local preview server (hyperframes preview, vite, storybook and the like) open a browser by default: always pass their no-open flag (e.g. --no-open), then call open_preview with the URL they print. When you produce a video, image or recording the user should see (a rendered brag.mp4, a screenshot, a chart), call open_file on it: it plays inline in the conversation. Never open these in an external player or browser.
@@ -383,8 +385,8 @@ export function createGlassboxServer(
       ),
       tool(
         'open_tab',
-        'Bring one of the Glassbox views to the front: diagrams (after show_diagram), flows (after show_flow), showcase, live (live file changes), replay (step through the session), conversation or map.',
-        { tab: z.enum(['diagrams', 'flows', 'showcase', 'live', 'replay', 'conversation', 'map']), why: z.string().optional() },
+        'Bring one of the Glassbox views to the front: conversation; plan (your plan, to approve or reread); map (the parts of the project this work touches); database (tables and how they connect; use show_database to focus an area); diagrams (after show_diagram); flows (after show_flow); live (each file as you edit it); ripple (what a change could affect; use show_impact for a file); terminal (the user\'s own shell in this folder, for a command they should run themselves); browser (web pages; use open_preview for a URL); attachments (files they attached and files you made); showcase (the shareable deck; use build_showcase to make one); replay (step back through the session).',
+        { tab: z.enum(['conversation', 'plan', 'map', 'database', 'diagrams', 'flows', 'live', 'ripple', 'terminal', 'browser', 'attachments', 'showcase', 'replay']), why: z.string().optional() },
         async ({ tab, why }) => {
           emit({ type: 'open', target: { view: 'tab', tab }, why })
           return ok(`Showing ${tab}.`)
@@ -406,12 +408,13 @@ export function createGlassboxServer(
       ),
       tool(
         'showcase_ready',
-        'Tell Glassbox a showcase deck has been written (and optionally published), so it can preview it.',
+        'Tell Glassbox a showcase deck has been written (and optionally published), so it shows in the Showcase view. Always call it when a deck is done, however it was made.',
         { path: z.string(), title: z.string(), artifactUrl: z.string().optional() },
         async ({ path, title, artifactUrl }) => {
           emit({ type: 'showcase', path, title, artifactUrl })
           return ok('Showcase is visible in Glassbox.')
-        }
+        },
+        ALWAYS_LOAD
       )
     ]
   })

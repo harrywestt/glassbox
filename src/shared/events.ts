@@ -40,7 +40,7 @@ export type OpenTarget =
   | { view: 'ripple'; path: string }
   | { view: 'preview'; url: string }
   | { view: 'erd'; entities?: string[]; query?: string }
-  | { view: 'tab'; tab: 'diagrams' | 'flows' | 'showcase' | 'live' | 'replay' | 'conversation' | 'map' }
+  | { view: 'tab'; tab: 'conversation' | 'plan' | 'map' | 'database' | 'diagrams' | 'flows' | 'live' | 'ripple' | 'terminal' | 'browser' | 'attachments' | 'showcase' | 'replay' }
 
 export type HostStatus = 'starting' | 'ready' | 'running' | 'stopped'
 
