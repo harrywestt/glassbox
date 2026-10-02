@@ -4,14 +4,14 @@ import { money, useFx } from '../money'
 import { CHANGE_TOOLS, isClaudeOwnFile, type SessionState } from '../session'
 import { tabTitle, type Tab } from '../tabs'
 import { checkOf } from '../review'
-import { liveVerb, tallyOf } from '../tally'
+import { backgroundWork, liveVerb, tallyOf } from '../tally'
 import { ticketKeyFromBranch } from '../../../shared/ticket'
 import './FleetBoard.css'
 
 const COLUMNS = ['Plan', 'Build', 'Test', 'Review', 'Ready'] as const
 type Column = (typeof COLUMNS)[number]
 
-const CARD_H = 64
+const CARD_H = 74
 const GAP = 8
 const HEAD_H = 28
 const GUTTER = 8
@@ -43,7 +43,12 @@ function markSeen(tabId: string) {
 function finishedAt(s: SessionState): number | null {
   for (let i = s.timeline.length - 1; i >= 0; i--) {
     const item = s.timeline[i]
-    if (item.kind === 'user') return null
+    if (item.kind === 'user') {
+      // A resumed session's history has no result lines: Claude replied after your last message and
+      // the session isn't working now, so that turn finished (when its last reply landed).
+      const after = s.timeline.slice(i + 1).filter((x) => x.kind === 'text')
+      return s.status === 'ready' && after.length ? after[after.length - 1].at : null
+    }
     if (item.kind === 'result') return item.at
   }
   return null
@@ -51,7 +56,8 @@ function finishedAt(s: SessionState): number | null {
 
 function columnOf(tabId: string, s: SessionState | undefined): Column {
   if (!s) return 'Plan'
-  const done = s.status !== 'running' ? finishedAt(s) : null
+  // Agents still working in the background mean the work isn't finished, whatever the last turn said.
+  const done = s.status !== 'running' && backgroundWork(s) === 0 ? finishedAt(s) : null
   // Waiting on you (a question, a check-in, a permission) is never Ready.
   if (done !== null) return tallyOf(s) === 'wait' || (seen[tabId] ?? 0) < done ? 'Review' : 'Ready'
   const running = Object.values(s.toolCalls)

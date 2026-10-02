@@ -26,7 +26,15 @@ export function BranchMenu() {
         title={busy ? 'Wait for Claude to finish before switching branch' : `${git.branch} @ ${git.head}${git.upstream ? `\ntracking ${git.upstream}` : ''}\nClick to switch branch`}
       >
         <Icon name="git-branch" /> {git.branch}
-        {!!git.dirty && <span className="chip-extra warn">●{git.dirty}</span>}
+        {/* The branch's changed files, the number the Changes panel shows; uncommitted ones are in the tooltip. */}
+        {(git.changed ?? git.dirty) ? (
+          <span
+            className={git.dirty ? 'chip-extra warn' : 'chip-extra'}
+            title={`${git.changed ?? git.dirty} file${(git.changed ?? git.dirty) === 1 ? '' : 's'} changed${git.base ? ` against ${git.base}` : ''}${git.dirty ? `, ${git.dirty} not committed yet` : ', all committed'}`}
+          >
+            ●{git.changed ?? git.dirty}
+          </span>
+        ) : null}
         {!!git.ahead && <span className="chip-extra">↑{git.ahead}</span>}
         {!!git.behind && <span className="chip-extra">↓{git.behind}</span>}
         <Icon name="chevron-down" className="sh-branch-caret" />
@@ -60,9 +68,12 @@ function Popover({ anchor, cwd, tabId, dirty, shared, onClose }: { anchor: HTMLE
     const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('mousedown', down, true)
     window.addEventListener('keydown', key)
+    // Its session went out of view (another tab, the dashboard): the menu goes too.
+    const gone = setInterval(() => anchor.offsetParent === null && onClose(), 400)
     return () => {
       window.removeEventListener('mousedown', down, true)
       window.removeEventListener('keydown', key)
+      clearInterval(gone)
     }
   }, [anchor, onClose])
 
@@ -119,7 +130,8 @@ Switch anyway?`)) return
           const current = b.name === list?.current
           return (
             <button key={b.name} className={current ? 'branch-row current' : 'branch-row'} disabled={current || !!switching} onClick={() => void go(b.name)}>
-              <Icon name={current ? 'check' : switching === b.name ? 'loading' : 'git-branch'} className={switching === b.name ? 'codicon-modifier-spin' : current ? 'accent' : 'muted'} />
+              {/* Only the branch you're on (or switching to) is marked; the rest keep the space, so names line up. */}
+              <span className="branch-mark">{current ? <Icon name="check" className="accent" /> : switching === b.name ? <Icon name="loading" className="codicon-modifier-spin" /> : null}</span>
               <span className="grow ellipsis">{b.name}</span>
               <span className="muted small">{b.when}</span>
             </button>
@@ -128,7 +140,7 @@ Switch anyway?`)) return
         {remote.length > 0 && <div className="branch-group">Remote, not checked out yet</div>}
         {remote.map((b) => (
           <button key={b} className="branch-row" disabled={!!switching} onClick={() => void go(b)} title={`Create a local branch tracking ${b} and switch to it`}>
-            <Icon name={switching === b ? 'loading' : 'cloud'} className={switching === b ? 'codicon-modifier-spin' : 'muted'} />
+            <span className="branch-mark">{switching === b ? <Icon name="loading" className="codicon-modifier-spin" /> : null}</span>
             <span className="grow ellipsis">{b}</span>
           </button>
         ))}

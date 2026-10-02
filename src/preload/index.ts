@@ -1,3 +1,4 @@
+import type { HeatModule, MapGroups } from '../main/mapGroups'
 import { contextBridge, ipcRenderer, webFrame, webUtils, type IpcRendererEvent } from 'electron'
 import type { AccountsResult, ArchDiff, ModuleExplain, ProjectDecision, Standup,
   DiffMode,
@@ -17,7 +18,8 @@ import type { AccountsResult, ArchDiff, ModuleExplain, ProjectDecision, Standup,
   ReviewModel,
   TicketActionResult,
   TicketResult,
-  TicketTransitionsResult
+  TicketTransitionsResult,
+  UpdateState
 } from '../shared/events'
 import type { GitHubSummary } from '../shared/github'
 import type { BranchPr, LaunchPr } from '../main/launcher'
@@ -45,6 +47,7 @@ const api = {
     setAutoCommit: (tabId: string, on: boolean): Promise<void> => invoke('session:autoCommit', tabId, on),
     commitNow: (tabId: string): Promise<void> => invoke('session:commitNow', tabId),
     interrupt: (tabId: string): Promise<void> => invoke('session:interrupt', tabId),
+    stopTask: (tabId: string, taskId: string): Promise<void> => invoke('session:stopTask', tabId, taskId),
     setMode: (tabId: string, mode: AccessMode): Promise<void> => invoke('session:setMode', tabId, mode),
     exitPlan: (tabId: string): Promise<void> => invoke('session:exitPlan', tabId),
     side: (tabId: string, spec: SideTaskSpec): Promise<string> => invoke('session:side', tabId, spec),
@@ -54,6 +57,8 @@ const api = {
     respondPermission: (tabId: string, id: string, decision: PermissionDecision, message?: string): Promise<void> =>
       invoke('session:permission', tabId, id, decision, message),
     refresh: (tabId: string): Promise<void> => invoke('session:refresh', tabId),
+    /** Answers to Claude's questions (keyed by question text), or null to close them unanswered. */
+    answerQuestions: (tabId: string, id: string, answers: Record<string, string> | null): Promise<void> => invoke('session:answerQuestions', tabId, id, answers),
     toggleMcp: (tabId: string, name: string, enabled: boolean): Promise<void> => invoke('session:toggleMcp', tabId, name, enabled),
     setRequirements: (tabId: string, req: Requirements): Promise<void> => invoke('session:requirements', tabId, req),
     showcase: (tabId: string, req: ShowcaseRequest, opts: SendOptions): Promise<void> => invoke('session:showcase', tabId, req, opts)
@@ -128,6 +133,15 @@ const api = {
     comment: (cwd: string, key: string, body: string): Promise<TicketActionResult> => invoke('ticket:comment', cwd, key, body)
   },
   handoff: (cwd: string, brief: string): Promise<{ text: string; prUrl?: string; prTitle?: string; error?: string }> => invoke('share:handoff', cwd, brief),
+  update: {
+    state: (): Promise<UpdateState> => invoke('update:state'),
+    install: (): Promise<void> => invoke('update:install'),
+    onChange(callback: (s: UpdateState) => void) {
+      const listener = (_e: IpcRendererEvent, s: UpdateState) => callback(s)
+      ipcRenderer.on('glassbox:update', listener)
+      return () => void ipcRenderer.off('glassbox:update', listener)
+    }
+  },
   voice: {
     prepare: (): Promise<void> => invoke('voice:prepare'),
     transcribe: (audio: Float32Array): Promise<string> => invoke('voice:transcribe', audio),
@@ -144,6 +158,8 @@ const api = {
     get: (cwd: string, force?: boolean): Promise<Architecture> => invoke('architecture:get', cwd, force),
     /** Why each of a module's connections exists (Haiku, in the background; cached until the code changes). */
     explain: (cwd: string, id: string): Promise<ModuleExplain> => invoke('architecture:explain', cwd, id),
+    /** Group this session's modules (from its heatmap) the way an engineer would want to see the work. */
+    group: (root: string, mods: HeatModule[], force?: boolean): Promise<MapGroups> => invoke('architecture:group', root, mods, force),
     /** Connections between modules the working tree adds or removes against a base; apiOnly flags imports past an api-only module's entry. */
     diff: (cwd: string, ref: string, mode: DiffMode, apiOnly?: string[]): Promise<ArchDiff> => invoke('architecture:diff', cwd, ref, mode, apiOnly),
     /** A project's map was redrawn in the background (new session, or Claude named its categories). */

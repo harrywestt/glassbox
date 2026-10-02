@@ -67,8 +67,9 @@ export function ChangesPanel() {
 
   const rows: Row[] = useMemo(() => {
     const list: Row[] = (diff?.files ?? []).map((f) => ({ ...f, claudeEdits: claude.get(f.path)?.edits ?? 0 }))
-    // Claude's edits that don't show in the branch diff (not a repo, or outside it) still belong here.
-    for (const [rel, c] of claude) if (!list.some((r) => r.path === rel)) list.push({ path: rel, status: 'M', claudeEdits: c.edits })
+    // Claude's edits that git can't show (not a repo, or a file outside it) still belong here. Inside the
+    // repo, an edit missing from the diff has no net change (made then undone, or created then deleted).
+    for (const [rel, c] of claude) if (!list.some((r) => r.path === rel) && (!diff || rel.startsWith('..') || /^[a-z]:/i.test(rel))) list.push({ path: rel, status: 'M', claudeEdits: c.edits })
     return list
       .filter((r) => showUntracked || !isStrayUntracked(r))
       .filter((r) => !onlyClaude || r.claudeEdits > 0)
@@ -86,10 +87,9 @@ export function ChangesPanel() {
     <div className="panel">
       {/* One row: what changed, against what (base branch and how, in one control), and refresh. */}
       <div className="changes-summary">
-        <span className="small">
+        <span className="small changes-count">
           <strong>{total} file{total === 1 ? '' : 's'}</strong>
           {diff && <> <span className="ok">+{adds}</span> <span className="err">−{dels}</span></>}
-          {claude.size > 0 && <span className="muted">, {claude.size} by Claude</span>}
         </span>
         <span className="spacer" />
         {repo && (
@@ -116,7 +116,7 @@ export function ChangesPanel() {
           onChange={(v) => setOnlyClaude(v === 'claude')}
           options={[
             { value: 'all', label: 'All changes' },
-            { value: 'claude', label: 'Claude’s changes' }
+            { value: 'claude', label: claude.size ? `Claude’s changes (${claude.size})` : 'Claude’s changes' }
           ]}
         />
         {/* Filtering only earns its space in a long list. */}
@@ -205,10 +205,10 @@ function ArchitectureChanges({ base, diffMode, diff }: { base: string; diffMode:
         <button className="section-toggle" aria-expanded={!folded} onClick={toggle}>
           <Icon name="chevron-down" className="section-chevron" />
           <strong>Architecture</strong>
+          <span className="muted arch-changes-meta" title={none ? 'No connections between modules were added or removed' : undefined}>
+            {result.error ? `couldn’t be compared: ${result.error}` : none ? 'no connections changed' : summary(result)}
+          </span>
         </button>
-        <span className="muted">
-          {result.error ? ` couldn’t be compared: ${result.error}` : none ? ' No connections between modules added or removed.' : ` ${summary(result)}`}
-        </span>
       </div>
       {!folded && (
         <>

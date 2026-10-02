@@ -13,9 +13,10 @@ export function GuardrailsPanel() {
   const [view, setView] = useState<View>('effects')
   return (
     <div className="panel">
-      <PanelHeader title="Guardrails">
+      <PanelHeader title="Guardrails" />
+      <div className="panel-toolbar">
         <Segmented<View> value={view} onChange={setView} options={[{ value: 'effects', label: 'Side effects' }, { value: 'rules', label: 'Rules' }]} />
-      </PanelHeader>
+      </div>
       {view === 'effects' ? <SideEffects /> : <Rules />}
     </div>
   )

@@ -59,6 +59,10 @@ export function describeTool(c: ToolCall): string {
       return 'Loaded extra tools'
     case 'ExitPlanMode':
       return 'Presented its plan'
+    case 'AskUserQuestion': {
+      const qs = (Array.isArray(i.questions) ? i.questions : []) as { question?: string }[]
+      return qs.length > 1 ? `Asked you ${qs.length} questions` : `Asked you: ${clip(str(qs[0]?.question), 70)}`
+    }
     case 'mcp__glassbox__show_diagram':
       return `Drew a diagram: ${clip(str(i.title), 60)}`
     case 'mcp__glassbox__show_flow':

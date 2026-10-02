@@ -45,13 +45,11 @@ export function SkillsPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Skills and commands">
-        <span className="muted small">{s.commands.length}</span>
-      </PanelHeader>
+      <PanelHeader title="Skills and commands" />
       <div className="panel-toolbar wrap">
         <div className="search grow">
           <Icon name="search" />
-          <input placeholder="Search skills" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <input placeholder={`Search ${s.commands.length} skills and commands`} value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
         <Segmented<Scope>
           value={scope}

@@ -56,9 +56,7 @@ export function ContextPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Context">
-        <IconButton icon="refresh" title="Refresh" onClick={() => void window.glassbox.session.refresh(tab.id)} />
-      </PanelHeader>
+      <PanelHeader title="Context" />
       <div className="panel-scroll">
         {!ctx ? (
           <Empty icon="layers" title="Context not loaded yet">The breakdown appears once the session has started.</Empty>
@@ -71,7 +69,11 @@ export function ContextPanel() {
                   <div className="muted small">of {formatTokens(ctx.maxTokens)} used</div>
                 </div>
                 <div className="right">
-                  <div className="big">{(100 - ctx.percentage).toFixed(0)}%</div>
+                  {/* On the summary's own row, so it's there whether or not the panel shows its heading. */}
+                  <div className="context-hero-top">
+                    <IconButton icon="refresh" title="Refresh the context breakdown" onClick={() => void window.glassbox.session.refresh(tab.id)} />
+                    <div className="big">{(100 - ctx.percentage).toFixed(0)}%</div>
+                  </div>
                   <div className="muted small">left{ctx.isAutoCompactEnabled && ctx.autoCompactThreshold ? `, compacts at ${formatTokens(ctx.autoCompactThreshold)}` : ''}</div>
                 </div>
               </div>

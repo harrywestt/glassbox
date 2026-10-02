@@ -153,8 +153,18 @@ function SelectList<T extends string>({ anchor, options, value, onPick, onClose 
             onClick={() => onPick(o.value)}
           >
             <Icon name="check" className="select-check" />
-            <span className="grow ellipsis">{o.label}</span>
-            {o.hint && <span className="muted small">{o.hint}</span>}
+            {/* A short hint (a status) sits on the right; a longer one is a description, under the name. */}
+            {o.hint && o.hint.length > 24 ? (
+              <span className="grow select-text">
+                <span className="select-text-label">{o.label}</span>
+                <span className="muted small">{o.hint}</span>
+              </span>
+            ) : (
+              <>
+                <span className="grow ellipsis">{o.label}</span>
+                {o.hint && <span className="muted small">{o.hint}</span>}
+              </>
+            )}
           </div>
         ))}
         {shown.length === 0 && <div className="muted small pad">No matches</div>}

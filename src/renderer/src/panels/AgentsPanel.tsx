@@ -8,7 +8,7 @@ import { Empty, Icon, PanelHeader } from '../components/ui'
 const DONE_SHOWN_MS = 2 * 60_000
 
 export function AgentsPanel() {
-  const { s, filter, setFilter } = useSession()
+  const { tab, s, filter, setFilter } = useSession()
   const agents = Object.values(s.agents)
   const mainTools = Object.values(s.toolCalls).filter((t) => t.agentId === null).length
   const running = agents.filter((a) => a.status === 'running').length
@@ -31,7 +31,17 @@ export function AgentsPanel() {
         <span className={`dot dot-${node.status}`} />
         <span className="agent-type">{node.type}</span>
         <span className="grow ellipsis">{node.description}</span>
-        <span className="muted small">{node.toolCalls} tools</span>
+        <span className="muted small">{node.stopped ? 'Stopped' : `${node.toolCalls} tools`}</span>
+        {node.status === 'running' && node.taskId && (
+          <button
+            className="icon-btn"
+            title="Stop this agent (Claude and the other agents carry on)"
+            aria-label="Stop this agent"
+            onClick={(e) => (e.stopPropagation(), void window.glassbox.session.stopTask(tab.id, node.taskId!))}
+          >
+            <Icon name="debug-stop" />
+          </button>
+        )}
       </div>
       {filter === node.id && (
         <div className="agent-detail">

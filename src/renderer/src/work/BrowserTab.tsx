@@ -3,11 +3,16 @@ import type { WebviewTag } from 'electron'
 import { useSession } from '../views/SessionView'
 import { useServices } from '../services'
 import { CHANGE_TOOLS } from '../session'
-import { Empty, Icon, IconButton, Toggle } from '../components/ui'
+import { Icon, IconButton, Toggle } from '../components/ui'
 import { Select } from '../components/Select'
 import { activateBrowserTab, closeBrowserTab, openInBrowser, updateBrowserTab, useBrowser, type BrowserTabState } from '../browser'
 
 const RELOAD_DELAY_MS = 1500
+/** What you typed, as an address: a URL as it is, a local host over http, a domain over https, anything else searched. */
+const toUrl = (raw: string) => {
+  const v = raw.trim()
+  return /^[a-z]+:/i.test(v) ? v : /^(localhost|127\.|\d+\.\d+\.\d+\.\d+)/.test(v) ? `http://${v}` : v.includes('.') && !v.includes(' ') ? `https://${v}` : `https://www.google.com/search?q=${encodeURIComponent(v)}`
+}
 const isLocal = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?/i.test(url) || url.startsWith('file:')
 
 /**
@@ -50,13 +55,27 @@ export function BrowserTab() {
           <Page key={t.id} t={t} visible={t.id === active?.id} follow={follow && isLocal(t.url)} edits={s.files.filter((f) => CHANGE_TOOLS.has(f.tool)).length} />
         ))}
         {!b.tabs.length && (
-          <Empty icon="globe" title="Nothing open yet">
-            Type an address in a new tab, or start the app from{' '}
-            <button className="link" onClick={() => showPanel('services')}>
-              Services
-            </button>
-            . Pages Claude opens show here too, and sign-ins are kept.
-          </Empty>
+          <div className="browser-start">
+            {/* Nothing open: the address box is right here rather than behind the + button. */}
+            <form
+              className="browser-start-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const v = new FormData(e.currentTarget).get('address')?.toString() ?? ''
+                if (v.trim()) openInBrowser(tab.id, toUrl(v))
+              }}
+            >
+              <Icon name="globe" />
+              <input name="address" className="grow" placeholder="Type an address or search, then press Enter" aria-label="Address" autoFocus />
+            </form>
+            <p className="muted small">
+              Or start the app from{' '}
+              <button className="link small" onClick={() => showPanel('services')}>
+                Services
+              </button>
+              . Pages Claude opens show here too, and sign-ins are kept.
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -69,9 +88,8 @@ function AddressBar({ t, web, follow, setFollow }: { t: BrowserTabState; web: { 
   useEffect(() => setAddress(t.url), [t.url])
   const wv = () => document.querySelector<WebviewTag>(`webview[data-browser-tab="${tab.id}:${t.id}"]`)
   const go = (raw: string) => {
-    const v = raw.trim()
-    if (!v) return
-    const url = /^[a-z]+:/i.test(v) ? v : /^(localhost|127\.|\d+\.\d+\.\d+\.\d+)/.test(v) ? `http://${v}` : v.includes('.') && !v.includes(' ') ? `https://${v}` : `https://www.google.com/search?q=${encodeURIComponent(v)}`
+    if (!raw.trim()) return
+    const url = toUrl(raw)
     // The page picks up the new address and loads it (the same path Claude's browser_open uses).
     updateBrowserTab(tab.id, t.id, { url, loading: true })
   }

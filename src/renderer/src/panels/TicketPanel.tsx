@@ -2,28 +2,34 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSession } from '../views/SessionView'
 import type { Ticket, TicketTransition } from '../../../shared/events'
 import { ticketKeyFromBranch } from '../../../shared/ticket'
-import { IconButton, PanelHeader } from '../components/ui'
+import { IconButton } from '../components/ui'
 import { Select, type SelectOption } from '../components/Select'
 import { renderMarkdown, timeAgo } from '../lib'
 
-const overrideKey = (tabId: string) => `glassbox.ticketKey.${tabId}`
+// A ticket key you set, per project and branch, so it's still there when the session is reopened.
+const overrideKey = (cwd: string, branch?: string) => `glassbox.ticketKey.${cwd.replace(/\\/g, '/').toLowerCase()}#${branch ?? ''}`
 
-function readOverride(tabId: string): string | null {
+function readOverride(cwd: string, branch?: string): string | null {
   try {
-    return localStorage.getItem(overrideKey(tabId))
+    return localStorage.getItem(overrideKey(cwd, branch))
   } catch {
     return null
   }
 }
 
-function writeOverride(tabId: string, key: string | null) {
+export const hasTicketOverride = (cwd: string, branch?: string) => !!readOverride(cwd, branch)
+
+function writeOverride(cwd: string, branch: string | undefined, key: string | null) {
   try {
-    if (key) localStorage.setItem(overrideKey(tabId), key)
-    else localStorage.removeItem(overrideKey(tabId))
+    if (key) localStorage.setItem(overrideKey(cwd, branch), key)
+    else localStorage.removeItem(overrideKey(cwd, branch))
   } catch {
     /* storage unavailable; the override lasts until the panel closes */
   }
 }
+
+// Tickets already fetched this run: shown straight away when you come back, refreshed quietly.
+const seen = new Map<string, Ticket>()
 
 const ago = (iso?: string) => {
   const t = iso ? Date.parse(iso) : NaN
@@ -36,10 +42,10 @@ type Load = { state: 'idle' } | { state: 'loading' } | { state: 'error'; error: 
 export function TicketPanel() {
   const { tab, s } = useSession()
   const branchKey = ticketKeyFromBranch(s.git?.branch)
-  const [override, setOverride] = useState<string | null>(() => readOverride(tab.id))
+  const [override, setOverride] = useState<string | null>(() => readOverride(tab.cwd, s.git?.branch))
   const key = override ?? branchKey
   const [editing, setEditing] = useState(false)
-  const [load, setLoad] = useState<Load>({ state: 'idle' })
+  const [load, setLoad] = useState<Load>(() => (key && seen.get(key) ? { state: 'ready', ticket: seen.get(key)! } : { state: 'idle' }))
   const [transitions, setTransitions] = useState<TicketTransition[] | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
@@ -47,7 +53,7 @@ export function TicketPanel() {
   const current = useRef(key)
   current.current = key
 
-  useEffect(() => setOverride(readOverride(tab.id)), [tab.id])
+  useEffect(() => setOverride(readOverride(tab.cwd, s.git?.branch)), [tab.cwd, s.git?.branch])
 
   const fetchTransitions = useCallback(
     async (k: string) => {
@@ -60,11 +66,14 @@ export function TicketPanel() {
 
   const fetchTicket = useCallback(
     async (k: string, force = false, quiet = false) => {
-      if (!quiet) setLoad({ state: 'loading' })
+      if (!quiet && !seen.has(k)) setLoad({ state: 'loading' })
       const r = await window.glassbox.ticket.get(tab.cwd, k, force)
       if (current.current !== k) return
       if (r.ticket) {
+        seen.set(k, r.ticket)
         setLoad({ state: 'ready', ticket: r.ticket })
+        // A saved copy: the fresh one is loading in the background, so pick it up when it lands.
+        if (r.stale && !quiet) setTimeout(() => current.current === k && void fetchTicket(k, false, true), 20_000)
       } else setLoad({ state: 'error', error: r.error })
     },
     [tab.cwd]
@@ -93,7 +102,7 @@ export function TicketPanel() {
   const setKey = (next: string) => {
     const k = next.trim().toUpperCase()
     const value = k && k !== branchKey ? k : null
-    writeOverride(tab.id, value)
+    writeOverride(tab.cwd, s.git?.branch, value)
     setOverride(value)
     setEditing(false)
   }
@@ -109,16 +118,9 @@ export function TicketPanel() {
     await Promise.all([fetchTicket(key, true, true), fetchTransitions(key)])
   }
 
-  const header = (
-    <PanelHeader title="Ticket">
-      <IconButton icon="refresh" title="Refresh" onClick={() => refresh(true)} disabled={!key || load.state === 'loading'} />
-    </PanelHeader>
-  )
-
   if (!key || editing) {
     return (
       <div className="ticket">
-        {header}
         <div className="ticket-empty">
           {!key && <p>No ticket in this branch name.</p>}
           <KeyForm initial={key ?? ''} onSave={setKey} onCancel={key ? () => setEditing(false) : undefined} branchKey={branchKey} />
@@ -129,7 +131,6 @@ export function TicketPanel() {
 
   return (
     <div className="ticket">
-      {header}
       <div className="ticket-head">
         <span className="ticket-key">{load.state === 'ready' ? load.ticket.key : key}</span>
         {load.state === 'ready' && load.ticket.url && (
@@ -138,10 +139,13 @@ export function TicketPanel() {
         <button className="btn quiet" onClick={() => setEditing(true)}>
           Change
         </button>
+        <IconButton icon="refresh" title="Refresh" onClick={() => refresh(true)} disabled={load.state === 'loading'} />
       </div>
 
       {load.state === 'loading' && (
         <div className="ticket-skeleton" aria-busy="true" aria-label="Loading">
+          {/* Jira answers through the Claude connector, which takes ten seconds or so the first time. */}
+          <div className="muted small">Getting {key} from Jira…</div>
           <span style={{ width: '70%' }} />
           <span style={{ width: '45%' }} />
           <span style={{ width: '55%' }} />

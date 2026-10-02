@@ -177,7 +177,7 @@ export function ErdTab({ entities: initial, query: initialQuery }: { entities?: 
             </>
           ) : (
             <span className="muted">
-              {erd.entities.length} tables in {new Set(erd.entities.map((e) => e.group)).size} modules, from {erd.source === 'ef' ? 'the EF Core model' : erd.source === 'prisma' ? 'the Prisma schema' : 'the SQL migrations'}. Pick a module or ask for an area.
+              {erd.entities.length} {erd.entities.length === 1 ? 'table' : 'tables'} in {((n) => `${n} ${n === 1 ? 'module' : 'modules'}`)(new Set(erd.entities.map((e) => e.group)).size)}, from {erd.source === 'ef' ? 'the EF Core model' : erd.source === 'prisma' ? 'the Prisma schema' : 'the SQL migrations'}. Pick a module or ask for an area.
             </span>
           )}
           <span className="spacer" />

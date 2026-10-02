@@ -6,6 +6,9 @@ import { Icon } from '../components/ui'
 import { AskDock, answerTargets, useAnswerAll, usePendingAsks } from './AskDock'
 import { useVoice } from '../voice'
 import { Loaders } from './Loaders'
+import { QuestionsCard } from './QuestionsCard'
+import { StopButton } from './StopButton'
+import { stoppableTasks } from '../tally'
 
 const MARK_LABEL = { read: 'must read', edit: 'must edit', avoid: "don't touch", ask: 'ask first', api: 'public API only' } as const
 const MARK_ICON = { read: 'eye', edit: 'edit', avoid: 'lock', ask: 'question', api: 'shield' } as const
@@ -190,6 +193,7 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
 
   return (
     <div className="composer">
+      <QuestionsCard />
       <Loaders />
       <AskDock asks={asks} index={askIndex} onIndex={setAskIndex} answering={answering} onAnswering={setAnswering} compact={compact} />
       {hasReq ? (
@@ -366,11 +370,9 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
             <Icon name={voice.state === 'listening' || voice.state === 'starting' ? 'debug-stop' : 'mic'} />
           </button>
           {s.status === 'running' && text.trim() && <span className="hint">Sends when Claude finishes this step</span>}
-          {/* While Claude works and the box is empty, Send becomes Stop; typing turns it back into Send (queued). */}
-          {s.status === 'running' && !text.trim() ? (
-            <button className="send stop" onClick={stop} title="Stop Claude (Esc)" aria-label="Stop Claude">
-              <span className="stop-square" />
-            </button>
+          {/* While Claude or its agents work and the box is empty, Send becomes Stop; typing turns it back into Send (queued). */}
+          {(s.status === 'running' || stoppableTasks(s).length > 0) && !text.trim() && !attached.length ? (
+            <StopButton />
           ) : (
             <button className="primary send" disabled={!canSend || (!text.trim() && !attached.length)} onClick={() => void submit()} title="Send">
               <Icon name="send" />

@@ -34,6 +34,10 @@ const MAX_EXTERNALS = 3
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'bin', 'obj', 'out', 'dist', 'build', '.next', '.nuxt', '.svelte-kit', 'coverage', '.venv', 'venv', '__pycache__', '.terraform', 'target', 'vendor', '.turbo', '.cache'])
 const TEST_DIRS = new Set(['test', 'tests', '__tests__', 'spec', 'specs', 'e2e', 'cypress', '__mocks__', 'fixtures', 'testing'])
+// Generated code and tool output (API clients, protobuf, designer files, brag-output/, …) aren't parts
+// of the system, so they never become modules on the map.
+const GENERATED_DIR = /^(__)?(generated|gen|autogen|auto-generated|codegen|openapi-gen)(__)?$|[-_.]generated$|^generated[-_.]|[-_]output$/i
+const GENERATED_FILE = /\.(g|g\.i|designer|generated|gen)\.[a-z]+$|\.pb(\.gw)?\.go$|_pb2(_grpc)?\.py$|\.pb\.(cc|h)$|_grpc_pb\.(js|ts)$|(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/i
 /** Top-level folders that aren't application code when the repo root is the source root. */
 const NON_CODE_TOP = new Set(['docs', 'doc', 'scripts', 'script', 'tools', 'examples', 'example', 'public', 'static', 'assets', 'resources', 'third_party', 'terraform', 'infra', 'deploy', 'config', 'benchmarks'])
 const SOURCE_ROOTS = ['src', 'app', 'lib', 'server', 'client', 'web', 'api', 'frontend', 'backend']
@@ -751,7 +755,7 @@ async function build(root: string): Promise<Architecture> {
   const started = Date.now()
   const listed = ((await gitListFiles(root)) ?? (await listProjectFiles(root))).map((f) => f.replace(/\\/g, '/'))
   // Generated code and tool output (api clients, brag-output/, …) aren't parts of the system.
-  const visible = listed.filter((f) => !f.split('/').slice(0, -1).some((s) => SKIP_DIRS.has(s) || (s.startsWith('.') && s !== '.glassbox') || /^generated$|[-_]output$/i.test(s)))
+  const visible = listed.filter((f) => !f.split('/').slice(0, -1).some((s) => SKIP_DIRS.has(s) || (s.startsWith('.') && s !== '.glassbox') || GENERATED_DIR.test(s)) && !GENERATED_FILE.test(f))
   const allSource = visible.filter(isSource).slice(0, MAX_FILES)
   const testFiles = allSource.filter((f) => isTestFile(f) || inTestDir(f))
   const testSet = new Set(testFiles)

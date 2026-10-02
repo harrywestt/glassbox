@@ -35,12 +35,24 @@ export async function gitInfo(cwd: string): Promise<GitInfo> {
     const counts = await tryGit(cwd, ['rev-list', '--left-right', '--count', '@{u}...HEAD'])
     if (counts) [behind, ahead] = counts.split(/\s+/).map(Number)
   }
+  // The same count the Changes panel shows by default (against the default branch, since branching;
+  // untracked files hidden), so the header and the panel agree.
+  const refs = (await tryGit(cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes'])) ?? ''
+  const base = ['origin/main', 'main', 'origin/master', 'master'].find((b) => refs.split('\n').includes(b))
+  let changed: number | undefined
+  if (base) {
+    const mb = await tryGit(cwd, ['merge-base', base, 'HEAD'])
+    const names = mb ? await tryGit(cwd, ['diff', '--name-only', mb]) : null
+    if (names !== null) changed = names.split('\n').filter(Boolean).length
+  }
   return {
     isRepo: true,
     root,
     branch: branch ?? undefined,
     head: head ?? undefined,
     dirty: status ? status.split('\n').filter(Boolean).length : 0,
+    changed,
+    base,
     upstream: upstream ?? undefined,
     ahead,
     behind

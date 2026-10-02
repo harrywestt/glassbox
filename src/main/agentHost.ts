@@ -5,6 +5,8 @@ import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import {
   getSessionMessages,
+  getSubagentMessages,
+  type SessionMessage,
   query,
   type CanUseTool,
   type HookCallback,
@@ -23,7 +25,7 @@ import { Reviewer } from './reviewer'
 import { autoCommit } from './autocommit'
 import { runElevated } from './elevate'
 import { DEFAULT_GUARDRAILS } from '../shared/guardrails'
-import {
+import { type UserQuestion,
   emptyRequirements,
   type GuardHit,
   type GuardRule,
@@ -142,6 +144,50 @@ async function treeSnapshot(cwd: string): Promise<Map<string, string> | null> {
 }
 
 /** When each message in a saved session happened, by uuid, read from its transcript file. */
+/**
+ * A resumed session's subagents: the main transcript only holds each agent's start and its report,
+ * so each agent's own steps are read from its transcript (subagents/agent-<id>.jsonl) and tagged with
+ * the tool call that started it (from its .meta.json), the way they arrive live.
+ */
+async function subagentHistory(sessionId: string, cwd: string): Promise<(SessionMessage & { timestamp?: number })[]> {
+  const projects = join(homedir(), '.claude', 'projects')
+  let folder: string | undefined
+  try {
+    for (const dir of readdirSync(projects)) {
+      const f = join(projects, dir, sessionId, 'subagents')
+      if (existsSync(f)) {
+        folder = f
+        break
+      }
+    }
+  } catch {
+    return []
+  }
+  if (!folder) return []
+  const out: (SessionMessage & { timestamp?: number })[] = []
+  for (const file of readdirSync(folder).filter((f) => f.endsWith('.meta.json'))) {
+    try {
+      const meta = JSON.parse(readFileSync(join(folder, file), 'utf8')) as { toolUseId?: string }
+      const agentId = file.replace(/^agent-/, '').replace(/\.meta\.json$/, '')
+      if (!meta.toolUseId) continue
+      const times = new Map<string, number>()
+      const jsonl = join(folder, `agent-${agentId}.jsonl`)
+      if (existsSync(jsonl))
+        for (const line of readFileSync(jsonl, 'utf8').split('\n')) {
+          const uuid = line.match(/"uuid":"([^"]+)"/)?.[1]
+          const ts = line.match(/"timestamp":"([^"]+)"/)?.[1]
+          if (uuid && ts) times.set(uuid, Date.parse(ts))
+        }
+      const msgs = await getSubagentMessages(sessionId, agentId, { dir: cwd }).catch(() => [] as SessionMessage[])
+      // Its first message is the brief the main thread already shows; the rest are its steps.
+      for (const m of msgs.slice(1)) out.push({ ...m, parent_tool_use_id: meta.toolUseId, timestamp: times.get(m.uuid) })
+    } catch {
+      /* skip an agent we can't read */
+    }
+  }
+  return out.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
+}
+
 function transcriptTimes(sessionId: string): Map<string, number> {
   const times = new Map<string, number>()
   const projects = join(homedir(), '.claude', 'projects')
@@ -241,7 +287,18 @@ export class AgentHost {
     if (resume) {
       const messages = await getSessionMessages(resume, { dir: this.cwd }).catch(() => [])
       const times = transcriptTimes(resume)
-      this.emit({ kind: 'history', messages: messages.map((m) => ({ ...m, timestamp: times.get(m.uuid) })) })
+      const main = messages.map((m) => ({ ...m, timestamp: times.get(m.uuid) }))
+      // Each agent's steps go right after the main-thread message that started it, so they replay in order.
+      const agentSteps = await subagentHistory(resume, this.cwd)
+      const merged: (SessionMessage & { timestamp?: number })[] = []
+      for (const m of main) {
+        merged.push(m)
+        const started = Array.isArray((m as { message?: { content?: unknown } }).message?.content)
+          ? ((m as { message: { content: { type?: string; id?: string }[] } }).message.content.filter((b) => b.type === 'tool_use').map((b) => b.id) as string[])
+          : []
+        for (const id of started) merged.push(...agentSteps.filter((s) => s.parent_tool_use_id === id))
+      }
+      this.emit({ kind: 'history', messages: merged })
       this.sid = resume
       const extras = await loadExtras(resume)
       if (extras) {
@@ -300,6 +357,8 @@ export class AgentHost {
         promptSuggestions: true,
         thinking: { type: 'adaptive', display: 'summarized' },
         enableFileCheckpointing: true,
+        // Glassbox can stop agents one at a time, so Stop ends only Claude's reply and background agents keep going.
+        perTaskStopAffordance: true,
         stderr: (text) => this.emit({ kind: 'stderr', text })
       }
     })
@@ -339,6 +398,11 @@ export class AgentHost {
     await this.q?.interrupt()
   }
 
+  /** Stop one agent or background task; Claude's reply and the other agents carry on. */
+  async stopTask(taskId: string) {
+    await this.q?.stopTask(taskId)
+  }
+
   async rewind(userMessageId: string, dryRun: boolean): Promise<RewindResult> {
     if (!this.q) throw new Error('Session is not running')
     const result = await this.q.rewindFiles(userMessageId, { dryRun })
@@ -356,6 +420,7 @@ export class AgentHost {
       p.resolve({ behavior: 'deny', message: 'Session closed' })
       this.emit({ kind: 'permission-cancelled', id })
     }
+    for (const id of [...this.questions.keys()]) this.answerQuestions(id, null)
     this.pending.clear()
     for (const [id, resolve] of this.checkins) {
       resolve('The session was closed.')
@@ -716,8 +781,33 @@ export class AgentHost {
   }
 
   /** Guardrails run before every tool call, whatever the permission mode or settings allow. */
+  /** Questions Claude asked (AskUserQuestion) that wait for your answers, by id. */
+  private questions = new Map<string, (answers: Record<string, string> | null) => void>()
+
+  /** Your answers to Claude's questions; null means you dismissed them without answering. */
+  answerQuestions(id: string, answers: Record<string, string> | null) {
+    const done = this.questions.get(id)
+    if (!done) return
+    this.questions.delete(id)
+    this.emit({ kind: 'user-questions-done', id })
+    done(answers)
+  }
+
   private onPreToolUse: HookCallback = async (input, toolUseId) => {
     if (input.hook_event_name !== 'PreToolUse') return {}
+    // Claude's own questions (AskUserQuestion): asked in the box under the conversation, in every
+    // permission mode, and the answers go back with the tool call the way the CLI's prompt sends them.
+    if (input.tool_name === 'AskUserQuestion') {
+      const toolInput = (input.tool_input ?? {}) as { questions?: UserQuestion[] }
+      const id = (toolUseId ?? input.tool_use_id ?? randomUUID()) as string
+      const answers = await new Promise<Record<string, string> | null>((resolve) => {
+        this.questions.set(id, resolve)
+        this.emit({ kind: 'user-questions', id, questions: toolInput.questions ?? [] })
+      })
+      if (!answers)
+        return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The user closed your questions without answering. Carry on with your best judgement, and say what you assumed.' } }
+      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput: { ...toolInput, answers } } }
+    }
     if ((input.tool_name === 'Bash' || input.tool_name === 'PowerShell') && input.tool_use_id) {
       this.shellSnaps.set(input.tool_use_id, treeSnapshot(this.cwd))
       this.shellStarts.set(input.tool_use_id, Date.now())

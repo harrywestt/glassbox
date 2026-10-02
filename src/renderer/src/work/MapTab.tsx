@@ -9,7 +9,9 @@ import { baseName } from '../lib'
 const basename = (p: string) => p.split('/').filter(Boolean).pop() ?? p
 import type { SessionState } from '../session'
 import type { FileMark, PlanMap } from '../../../shared/events'
-import { IconButton, Segmented } from '../components/ui'
+import type { MapGroups } from '../../../main/mapGroups'
+import { searchHits } from '../session'
+import { Icon, IconButton, Segmented } from '../components/ui'
 import './MapTab.css'
 
 const LABEL_W = 112
@@ -98,6 +100,8 @@ const elapsed = (ms: number) => {
 }
 
 const MAX_CONTEXT = 8
+/** Claude's grouping of each session's map, kept while the tab is open (the map remounts on switching). */
+const groupedFor = new Map<string, { sig: string; groups: MapGroups }>()
 /** Whole project: a group with more modules than this starts folded (unless the conversation is in it). */
 const AUTO_FOLD = 12
 /** The last show_on_map request each session's map has acted on. */
@@ -283,13 +287,76 @@ export function MapTab() {
     setPointed(new Set(ids))
     if (ids[0]) setSel(ids[0])
   }, [arch, s.open, tab.id])
+  // This session's heat per module (what it read, edited and searched), for Claude to group.
+  const heat = useMemo(() => {
+    if (!arch || !scope) return []
+    const per = new Map<string, { reads: number; edits: number; searches: number; files: Map<string, number> }>()
+    const bump = (path: string, kind: 'reads' | 'edits' | 'searches') => {
+      const m = moduleOf(arch, path.includes(':') || path.startsWith('/') ? path : `${arch.root}/${path}`)
+      if (!m) return
+      const h = per.get(m.id) ?? { reads: 0, edits: 0, searches: 0, files: new Map() }
+      h[kind]++
+      const name = basename(path.replace(/\\/g, '/'))
+      h.files.set(name, (h.files.get(name) ?? 0) + 1)
+      per.set(m.id, h)
+    }
+    for (const f of s.files) bump(f.path, isEditTouch(f, s) ? 'edits' : 'reads')
+    for (const c of Object.values(s.toolCalls)) if (c.name === 'Grep' || c.name === 'Glob') for (const p of searchHits(c).slice(0, 20)) bump(p, 'searches')
+    const out = [...per].map(([id, h]) => {
+      const m = arch.modules.find((x) => x.id === id)!
+      return { id, name: m.name, path: m.path, files: m.files, reads: h.reads, edits: h.edits, searches: h.searches, top: [...h.files].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n]) => n) }
+    })
+    for (const id of scope.context) {
+      const m = arch.modules.find((x) => x.id === id)
+      if (m && !per.has(id)) out.push({ id, name: m.name, path: m.path, files: m.files, reads: 0, edits: 0, searches: 0, top: [], context: true } as (typeof out)[number] & { context: boolean })
+    }
+    return out.filter((m) => !arch.modules.find((x) => x.id === m.id)?.external)
+  }, [arch, scope, s.files, s.toolCalls])
+  // Ask Claude to group it once a turn has finished (not on every step while it works).
+  const heatSig = heat.map((m) => `${m.id}:${m.reads}:${m.edits}:${m.searches}`).sort().join('|')
+  const [grouping, setGrouping] = useState<{ sig: string; groups: MapGroups } | null>(() => groupedFor.get(tab.id) ?? null)
+  const [regroupN, setRegroupN] = useState(0)
+  const [busyGrouping, setBusyGrouping] = useState(false)
+  useEffect(() => {
+    if (!arch || whole || heat.length < 2 || s.status === 'running') return
+    if (grouping?.sig === heatSig && !regroupN) return
+    let live = true
+    setBusyGrouping(true)
+    const t = setTimeout(() => {
+      void window.glassbox.architecture.group(arch.root, heat, regroupN > 0).then((g) => {
+        if (!live) return
+        setBusyGrouping(false)
+        if (g.error || !g.groups.length) return
+        const next = { sig: heatSig, groups: g }
+        groupedFor.set(tab.id, next)
+        setGrouping(next)
+        setRegroupN(0)
+      }, () => live && setBusyGrouping(false))
+    }, 600)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [arch, whole, heatSig, s.status, regroupN])
+  const groups = !whole && grouping && grouping.groups.groups.length ? grouping.groups : null
+
   const shown = useMemo(() => {
     if (!arch || !scope) return null
     const modules = [...arch.modules, ...(plan?.ghosts ?? [])]
     if (whole) return { ...arch, modules }
+    // Claude's grouping: its groups become the bands, and what it left out stays off the map.
+    if (groups) {
+      const layerOf = new Map<string, string>()
+      for (const g of groups.groups) for (const id of g.modules) layerOf.set(id, g.name)
+      const ghosts = (plan?.ghosts ?? []).map((m) => ({ ...m, layer: layerOf.get(m.id) ?? 'Planned' }))
+      const mods = [...arch.modules.filter((m) => layerOf.has(m.id)).map((m) => ({ ...m, layer: layerOf.get(m.id)! })), ...ghosts]
+      const ids = new Set(mods.map((m) => m.id))
+      const layers = [...groups.groups.map((g) => g.name), ...(ghosts.some((g) => g.layer === 'Planned') ? ['Planned'] : [])]
+      return { ...arch, layers, modules: mods, edges: arch.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) }
+    }
     const ids = new Set([...scope.focus, ...scope.context])
     return { ...arch, modules: modules.filter((m) => ids.has(m.id)), edges: arch.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) }
-  }, [arch, scope, whole, plan])
+  }, [arch, scope, whole, plan, groups])
   // Search (whole project): modules whose name or folder matches.
   const found = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -493,6 +560,17 @@ export function MapTab() {
             if (e.key === 'Escape') setQuery('')
           }}
         />
+      )}
+      {!whole && (groups || busyGrouping) && (
+        <span className="map-grouped" title={groups ? 'Claude grouped these from what this session read, edited and searched, and left out generated code and other noise' : undefined}>
+          <Icon name={busyGrouping ? 'loading' : 'sparkle'} className={busyGrouping ? 'codicon-modifier-spin' : undefined} />
+          {busyGrouping ? 'Grouping…' : 'Grouped by Claude'}
+          {groups && !busyGrouping && (
+            <button className="link small" onClick={() => setRegroupN((n) => n + 1)}>
+              Regroup
+            </button>
+          )}
+        </span>
       )}
       <span className="map-bar-note">
         {whole && found

@@ -56,7 +56,7 @@ export function StandupButton() {
                 <strong>Stand-up</strong>
                 {data?.label && <span className="muted">{data.label}</span>}
               </div>
-              <IconButton icon={busy ? 'loading' : 'refresh'} title="Write it again" onClick={() => !busy && load(true)} disabled={busy} />
+              <IconButton icon="refresh" title="Write it again" onClick={() => !busy && load(true)} disabled={busy} />
               <IconButton icon="close" title="Close (Esc)" onClick={() => setOpen(false)} />
             </div>
 
