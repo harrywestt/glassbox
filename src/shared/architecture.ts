@@ -39,7 +39,7 @@ export type ArchEdge = { from: string; to: string; weight: number; http?: boolea
 export type ArchLink = { from: string; to: string; fromModule: string; toModule: string; names: string[]; http?: boolean; weak?: boolean }
 
 /** Bumped when the map's shape changes, so maps saved by older builds are rebuilt. */
-export const ARCH_VERSION = 4
+export const ARCH_VERSION = 5
 
 export type Architecture = {
   /** Absolute repo (or project) root the paths are relative to, forward slashes. */

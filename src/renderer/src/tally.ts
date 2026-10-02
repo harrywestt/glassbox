@@ -13,9 +13,19 @@ export function backgroundWork(s: SessionState): number {
   return Math.max(Object.values(s.agents).filter((a) => a.status === 'running').length, s.backgroundAgents ?? 0)
 }
 
+/** Agents and background tasks you can stop one at a time: the agents Glassbox tracks, then any other background task (a long command, say). */
+export function stoppableTasks(s: SessionState): { id: string; label: string; agentId?: string }[] {
+  const agents = Object.values(s.agents).filter((a) => a.status === 'running' && a.taskId)
+  const seen = new Set(agents.map((a) => a.taskId))
+  return [
+    ...agents.sort((a, b) => a.at - b.at).map((a) => ({ id: a.taskId!, label: a.description || a.type, agentId: a.id })),
+    ...(s.backgroundTasks ?? []).filter((t) => !seen.has(t.id)).map((t) => ({ id: t.id, label: t.description || (t.type === 'local_bash' ? 'A background command' : 'A background task') }))
+  ]
+}
+
 export function tallyOf(s: SessionState | undefined): Tally {
   if (!s) return 'idle'
-  if (s.permissions.length || s.checkins.some((c) => c.answer === undefined) || s.decisions.some((d) => d.kind === 'question' && !d.challenged)) return 'wait'
+  if (s.permissions.length || s.userQuestions?.length || s.checkins.some((c) => c.answer === undefined) || s.decisions.some((d) => d.kind === 'question' && !d.challenged)) return 'wait'
   if (s.status === 'stopped') return 'err'
   if (s.status === 'running' || (s.status === 'ready' && backgroundWork(s) > 0)) return 'live'
   if (s.status === 'ready') return 'ok'
@@ -42,12 +52,15 @@ const file = (i: Record<string, unknown>) => baseName(String(i.file_path ?? i.no
 
 /** What the session is doing right now, in a few words, for the label under its monitor. */
 export function liveVerb(s: SessionState | undefined): string {
-  if (!s) return 'Starting'
+  // A restored tab's session starts the first time you open it.
+  if (!s) return 'Opens when you switch to it'
+  if (s.userQuestions?.length) return s.userQuestions[0].questions.length > 1 ? `Asked you ${s.userQuestions[0].questions.length} questions` : 'Asked you a question'
   if (s.permissions.length) return 'Needs your approval'
   if (s.checkins.some((c) => c.answer === undefined)) return 'Paused to ask you'
   if (s.decisions.some((d) => d.kind === 'question' && !d.challenged)) return 'Asked you a question'
   switch (s.status) {
     case 'new':
+      return 'Opens when you switch to it'
     case 'starting':
       return 'Starting'
     case 'stopped':

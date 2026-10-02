@@ -184,3 +184,8 @@ button.map-conn-file:hover:not(:disabled) { background: none; text-decoration: u
 .map-search { width: 220px; height: var(--h-ctl); padding: 0 var(--s-2); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
 .map-search:focus { outline: none; border-color: var(--accent); }
 .map-band-chevron { fill: none; stroke: var(--subtle); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* "Grouped by Claude": the conversation view's bands come from Claude's reading of the session. */
+.map-grouped { display: inline-flex; align-items: center; gap: var(--s-1); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.map-grouped .codicon { font-size: 14px; color: var(--accent); }
+.map-grouped .link { margin-left: var(--s-1); }

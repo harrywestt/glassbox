@@ -31,6 +31,27 @@ type Site = { cloudId: string; url?: string }
 let connector: Promise<Connector> | null = null
 let site: Site | null = null
 const cache = new Map<string, { at: number; ticket: Ticket }>()
+// Tickets are kept on disk too, so a reopened session shows its ticket at once (refreshed behind it).
+let diskLoaded = false
+const ticketsFile = async () => (await import('node:path')).join((await import('electron')).app.getPath('userData'), 'tickets.json')
+async function loadDisk() {
+  if (diskLoaded) return
+  diskLoaded = true
+  try {
+    const saved = JSON.parse(await (await import('node:fs/promises')).readFile(await ticketsFile(), 'utf8')) as Record<string, { at: number; ticket: Ticket }>
+    for (const [k, v] of Object.entries(saved)) if (!cache.has(k)) cache.set(k, v)
+  } catch {
+    /* nothing saved yet */
+  }
+}
+async function saveDisk() {
+  try {
+    const recent = [...cache].sort((a, b) => b[1].at - a[1].at).slice(0, 100)
+    await (await import('node:fs/promises')).writeFile(await ticketsFile(), JSON.stringify(Object.fromEntries(recent)))
+  } catch {
+    /* kept in memory */
+  }
+}
 const inflight = new Map<string, Promise<TicketResult>>()
 
 class JiraError extends Error {}
@@ -276,10 +297,15 @@ function toTicket(text: string, key: string): Ticket {
 const fail = (err: unknown): { error: string } => ({ error: err instanceof Error ? err.message : String(err) })
 const normKey = (key: string) => key.trim().toUpperCase()
 
-export function getTicket(cwd: string, rawKey: string, force = false): Promise<TicketResult> {
+export async function getTicket(cwd: string, rawKey: string, force = false): Promise<TicketResult> {
   const key = normKey(rawKey)
+  await loadDisk()
   const hit = cache.get(key)
-  if (!force && hit && Date.now() - hit.at < CACHE_MS) return Promise.resolve({ ticket: hit.ticket })
+  if (!force && hit) {
+    // Fresh enough, or older but shown straight away while a fresh copy loads for next time.
+    if (Date.now() - hit.at >= CACHE_MS && !inflight.has(key)) void getTicket(cwd, rawKey, true)
+    return { ticket: hit.ticket, stale: Date.now() - hit.at >= CACHE_MS }
+  }
   const running = inflight.get(key)
   if (running) return running
   const p = (async (): Promise<TicketResult> => {
@@ -289,6 +315,7 @@ export function getTicket(cwd: string, rawKey: string, force = false): Promise<T
       const { outputs, reply } = await run(cwd, [GET_ISSUE], `Then call ${GET_ISSUE} with cloudId and these arguments: ${JSON.stringify(args)}`)
       const ticket = toTicket(outputOf(outputs, reply, GET_ISSUE, key), key)
       cache.set(key, { at: Date.now(), ticket })
+      void saveDisk()
       return { ticket }
     } catch (err) {
       return fail(err)

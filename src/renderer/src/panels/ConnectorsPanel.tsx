@@ -45,14 +45,13 @@ export function ConnectorsPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Connectors">
-        <IconButton icon="refresh" title="Refresh" onClick={() => void window.glassbox.session.refresh(tab.id)} />
-      </PanelHeader>
+      <PanelHeader title="Connectors" />
       <div className="panel-toolbar">
         <div className="search grow">
           <Icon name="search" />
           <input placeholder="Filter connectors" value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
+        <IconButton icon="refresh" title="Refresh connectors" onClick={() => void window.glassbox.session.refresh(tab.id)} />
       </div>
       <div className="hint small muted">
         <Icon name="pin" /> <strong>Require</strong> tells Claude to use a connector for this session. The switch turns a connector on or off for this session only.

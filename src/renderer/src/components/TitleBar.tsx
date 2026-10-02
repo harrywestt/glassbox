@@ -1,4 +1,5 @@
-import { useState, type Dispatch } from 'react'
+import { useEffect, useState, type Dispatch } from 'react'
+import type { UpdateState } from '../../../shared/events'
 import { useActions } from '../App'
 import { DASHBOARD, tabTitle, type AppAction, type AppState } from '../tabs'
 import type { ThemePreference } from '../theme'
@@ -73,10 +74,37 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
         </button>
       </div>
       <div className="titlebar-drag" />
+      <UpdateButton />
       <button className="icon-btn titlebar-btn" title={`Switch to ${themeBase === 'dark' ? 'light' : 'dark'} mode${themePref === 'system' ? ' (currently following the system)' : ''}`} onClick={onToggleTheme}>
         <Icon name={themeBase === 'dark' ? 'sun' : 'moon'} />
       </button>
       <div className="window-controls-space" />
     </header>
+  )
+}
+
+/** A newer Glassbox: quietly downloading, then a button to restart into it (or, on a Mac, to download it). */
+function UpdateButton() {
+  const [u, setU] = useState<UpdateState>({ status: 'idle' })
+  useEffect(() => {
+    void window.glassbox.update.state().then(setU)
+    return window.glassbox.update.onChange(setU)
+  }, [])
+  if (u.status === 'idle') return null
+  if (u.status === 'downloading')
+    return (
+      <span className="update-chip muted" title={`Downloading Glassbox ${u.version} in the background`}>
+        <Icon name="cloud-download" /> Updating {u.percent}%
+      </span>
+    )
+  const ready = u.status === 'ready'
+  return (
+    <button
+      className="update-chip ready"
+      onClick={() => void window.glassbox.update.install()}
+      title={ready ? `Glassbox ${u.version} is downloaded. Restart to use it; your tabs reopen. It also installs next time you quit.` : `Glassbox ${u.version} is out. Opens the download page.`}
+    >
+      <Icon name={ready ? 'debug-restart' : 'cloud-download'} /> {ready ? `Restart to update` : `Get ${u.version}`}
+    </button>
   )
 }

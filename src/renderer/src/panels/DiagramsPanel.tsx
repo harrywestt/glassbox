@@ -90,7 +90,33 @@ function MermaidView({ diagram }: { diagram: Diagram }) {
   useEffect(() => {
     let cancelled = false
     setError(null)
-    mermaid.initialize({ startOnLoad: false, theme: theme.base === 'dark' ? 'dark' : 'default', securityLevel: 'strict', fontFamily: 'inherit' })
+    // Glassbox's own colours on Mermaid's classic look (its newer default adds heavy drop shadows).
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      fontFamily: 'inherit',
+      look: 'classic',
+      theme: 'base',
+      themeVariables: {
+        darkMode: theme.base === 'dark',
+        background: theme.bg,
+        primaryColor: theme.surface,
+        primaryTextColor: theme.fg,
+        primaryBorderColor: theme.border,
+        secondaryColor: theme.elevated,
+        tertiaryColor: theme.surface2,
+        lineColor: theme.muted,
+        textColor: theme.fg,
+        mainBkg: theme.surface,
+        nodeBorder: theme.border,
+        clusterBkg: theme.surface2,
+        clusterBorder: theme.border,
+        edgeLabelBackground: theme.bg,
+        noteBkgColor: theme.elevated,
+        noteTextColor: theme.fg,
+        noteBorderColor: theme.border
+      }
+    })
     mermaid
       .render(`m${baseId}${diagram.at}${theme.base}`, diagram.mermaid)
       // Render at natural size; PanZoom handles fitting and zooming.

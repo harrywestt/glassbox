@@ -693,7 +693,7 @@ function PlanStep({ call, s }: { call: ToolCall; s: SessionState }) {
 
 /** An agent Claude started: what it's doing, how far it's got, and a way to follow just its work. */
 function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
-  const { setFilter } = useSession()
+  const { tab, setFilter } = useSession()
   const a = s.agents[call.id]
   if (!a) return null
   const running = a.status === 'running'
@@ -706,10 +706,16 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
           {' '}
           ({a.toolCalls} step{a.toolCalls === 1 ? '' : 's'}
           {running ? ' so far' : ''}
-          {running && a.background ? ', in the background' : ''})
+          {running && a.background ? ', in the background' : ''}
+          {a.stopped ? ', stopped' : ''})
         </span>
         {running && a.progress && <span className="agent-step-now">{a.progress}</span>}
       </span>
+      {running && a.taskId && (
+        <button className="btn quiet" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title="Stop just this agent. Claude and the other agents carry on">
+          Stop
+        </button>
+      )}
       <button className="btn quiet" onClick={() => setFilter(a.id)} title="Show only this agent's work">
         {running ? 'Follow it' : 'See its work'}
       </button>
@@ -914,12 +920,20 @@ function ServiceErrorCard({ item }: { item: Extract<TimelineItem, { kind: 'servi
   const { send, showPanel, s } = useSession()
   const secs = item.after ? Math.max(1, Math.round((item.at - item.after.at) / 1000)) : 0
   const canSend = s.status === 'ready' || s.status === 'running'
+  // An error soon after one of Claude's edits may be its doing, so it shows open; otherwise (a service
+  // that was already failing, say) it stays folded to one line until you open it.
+  const [open, setOpen] = useState(!!item.after)
+  const times = item.count ?? 1
   return (
-    <div className="service-error">
+    <div className={open ? 'service-error' : 'service-error folded'}>
       <div className="service-error-head">
+        <button className="icon-btn" aria-expanded={open} title={open ? 'Hide the error' : 'Show the error'} onClick={() => setOpen(!open)}>
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} />
+        </button>
         <Icon name="bug" className="err" />
-        <span className="grow">
+        <span className="grow ellipsis">
           <strong>{item.service}</strong> logged an error
+          {times > 1 && <span className="muted"> {times} times</span>}
           {item.after && (
             <span className="muted">
               {' '}
@@ -943,7 +957,7 @@ function ServiceErrorCard({ item }: { item: Extract<TimelineItem, { kind: 'servi
           <Icon name="comment" /> Ask Claude
         </button>
       </div>
-      <pre className="service-error-text">{item.text}</pre>
+      {open && <pre className="service-error-text">{item.text}</pre>}
     </div>
   )
 }

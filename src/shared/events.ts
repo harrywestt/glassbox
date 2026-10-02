@@ -49,7 +49,13 @@ export type GitInfo = {
   root?: string
   branch?: string
   head?: string
+  /** Files git shows as uncommitted (including untracked ones). */
   dirty?: number
+  /** Files changed on this branch, as the Changes panel counts them by default: the working tree
+   *  against the default branch where this branch left it, untracked files left out. */
+  changed?: number
+  /** The branch that's compared against (e.g. origin/main). */
+  base?: string
   upstream?: string
   ahead?: number
   behind?: number
@@ -72,12 +78,18 @@ export type Requirements = {
 export const emptyRequirements: Requirements = { connectors: [], skills: [], files: [] }
 
 /** Everything a session host streams to the renderer. */
+/** One of Claude's AskUserQuestion questions. */
+export type UserQuestion = { question: string; header?: string; multiSelect?: boolean; options: { label: string; description?: string }[] }
+
 export type SessionEvent =
   | { kind: 'sdk'; msg: SDKMessage }
   /** `timestamp` (ms) comes from the transcript on disk, so resumed activity keeps its real times. */
   | { kind: 'history'; messages: (SessionMessage & { timestamp?: number })[] }
   | { kind: 'hook'; input: HookInput }
   | { kind: 'permission'; id: string; toolName: string; input: Record<string, unknown>; canAlwaysAllow: boolean; guard?: string }
+  /** Claude asked you questions (AskUserQuestion); answered from the box under the conversation. */
+  | { kind: 'user-questions'; id: string; questions: UserQuestion[] }
+  | { kind: 'user-questions-done'; id: string }
   | { kind: 'permission-cancelled'; id: string } // answered, aborted or session closed
   | { kind: 'glassbox'; signal: GlassboxSignal }
   | { kind: 'capabilities'; commands: SlashCommand[]; models: ModelInfo[]; account?: AccountInfo }
@@ -238,7 +250,8 @@ export type Ticket = {
 export type TicketComment = { id?: string; author: string; /** ISO timestamp. */ created: string; /** Markdown. */ body: string }
 export type TicketTransition = { id: string; name: string; /** Status the transition moves to. */ to?: string }
 
-export type TicketResult = { ticket: Ticket; error?: undefined } | { ticket?: undefined; error: string }
+/** `stale`: a saved copy, shown at once while a fresh one loads (ask again shortly for it). */
+export type TicketResult = { ticket: Ticket; error?: undefined; stale?: boolean } | { ticket?: undefined; error: string }
 export type TicketTransitionsResult = { transitions: TicketTransition[]; error?: undefined } | { transitions?: undefined; error: string }
 export type TicketActionResult = { ok: true; error?: undefined } | { ok?: false; error: string }
 
@@ -267,3 +280,6 @@ export type ProjectDecision = { id: string; kind: 'decision' | 'assumption'; tit
 
 /** Why each of a map module's connections exists, keyed "out:<module>" / "in:<module>". */
 export type ModuleExplain = { why: Record<string, string>; error?: string }
+
+/** A newer Glassbox: downloading (Windows), ready to restart into (Windows), or out to download (Mac). */
+export type UpdateState = { status: 'idle' } | { status: 'downloading'; version: string; percent: number } | { status: 'ready'; version: string } | { status: 'available'; version: string }

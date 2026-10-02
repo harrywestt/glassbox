@@ -8,6 +8,7 @@ import { baseName, mediaKind } from '../lib'
 import { fileKind, filesToPaths, sessionAttachments } from '../attachments'
 import { moduleOf } from '../../../shared/architecture'
 import { ticketKeyFromBranch } from '../../../shared/ticket'
+import { hasTicketOverride } from '../panels/TicketPanel'
 import { AttachmentsTab } from '../work/AttachmentsTab'
 import { ErdTab } from '../work/ErdTab'
 import { TerminalTab } from '../work/TerminalTab'
@@ -54,16 +55,38 @@ export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' |
 
 /** The side panel: five tabs you use all the time, and the rest one click away in More. */
 type SideTab = 'route' | 'decisions' | 'changes' | 'ticket' | 'git' | 'context' | 'heatmap' | 'safety' | 'connectors' | 'skills' | 'raw'
+// Changes holds git too (the branch's commits, what's uncommitted); Context holds the heatmap.
 const SIDE_TABS: { id: SideTab; label: string }[] = [
   { id: 'route', label: 'Route' },
   { id: 'decisions', label: 'Decisions' },
   { id: 'changes', label: 'Changes' },
-  { id: 'ticket', label: 'Ticket' },
-  { id: 'git', label: 'Git' }
+  { id: 'context', label: 'Context' },
+  { id: 'ticket', label: 'Ticket' }
 ]
+/** Older names for tabs that were merged into another. */
+const MERGED: Partial<Record<SideTab, SideTab>> = { git: 'changes', heatmap: 'context' }
+// The side tab you picked, per project, so it's still there when you come back or reopen the session.
+const SIDE_KEY = 'glassbox.sideTab'
+function savedSide(cwd: string): SideTab {
+  try {
+    const v = (JSON.parse(localStorage.getItem(SIDE_KEY) ?? '{}') as Record<string, SideTab>)[projectKey(cwd)]
+    return v ? (MERGED[v] ?? v) : 'route'
+  } catch {
+    return 'route'
+  }
+}
+function saveSide(cwd: string, tab: SideTab) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SIDE_KEY) ?? '{}') as Record<string, SideTab>
+    all[projectKey(cwd)] = tab
+    localStorage.setItem(SIDE_KEY, JSON.stringify(all))
+  } catch {
+    /* this run only */
+  }
+}
 type MoreItem = { side: SideTab; label: string } | { work: 'ripple' | 'flows' | 'diagrams' | 'showcase' | 'replay' | 'preview' | 'live' | 'attachments'; label: string }
 const MORE: { group: string; items: MoreItem[] }[] = [
-  { group: 'Look closer', items: [{ side: 'context', label: 'What Claude has read' }, { side: 'heatmap', label: 'Project heatmap' }, { side: 'safety', label: 'Safety and side effects' }, { side: 'raw', label: 'Raw events' }] },
+  { group: 'Look closer', items: [{ side: 'safety', label: 'Safety and side effects' }, { side: 'raw', label: 'Raw events' }] },
   { group: 'Set up', items: [{ side: 'connectors', label: 'Connectors' }, { side: 'skills', label: 'Skills' }] }
 ]
 /** What the More tab says while one of its panels is showing: short, so the tab row still fits. */
@@ -78,9 +101,9 @@ const ROUTES: Partial<Record<PanelId, SideTab>> = {
   decisions: 'decisions',
   ticket: 'ticket',
   guardrails: 'safety',
-  explorer: 'heatmap',
+  explorer: 'context',
   context: 'context',
-  git: 'git',
+  git: 'changes',
   connectors: 'connectors',
   skills: 'skills',
   raw: 'raw'
@@ -213,7 +236,12 @@ function setKept(cwd: string, kind: ViewKind, on: boolean) {
 export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; session: SessionState; active: boolean; peers?: { tab: Tab; s: SessionState }[] }) {
   const appearance = useAppearance()
   const actions = useActions()
-  const [side, setSide] = useState<SideTab>('route')
+  const [side, setSideState] = useState<SideTab>(() => savedSide(tab.cwd))
+  const setSide = useCallback((next: SideTab) => {
+    const t = MERGED[next] ?? next
+    setSideState(t)
+    saveSide(tab.cwd, t)
+  }, [tab.cwd])
   const [sideOpen, setSideOpen] = useState(true)
   const [moreOpen, setMoreOpen] = useState(false)
   // The conversation, plus any views you keep open for this project.
@@ -234,6 +262,11 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
   const composerRef = useRef<{ insert: (text: string) => void; attach: (paths: string[]) => void } | null>(null)
   // Everyday or Engineering: chosen per session; unset, the one you last picked (Engineering to begin with).
   const everyday = (tab.view ?? defaultView()) === 'everyday'
+  // Everyday doesn't offer every side tab: one it hides (picked in Engineering) shows Route instead,
+  // without changing what Engineering remembers.
+  useEffect(() => {
+    if (everyday && !EVERYDAY_SIDE.has(side)) setSideState('route')
+  }, [everyday, side])
   const [dragging, setDragging] = useState(false)
   // The view's area, for full screen.
   const workContent = useRef<HTMLDivElement>(null)
@@ -523,7 +556,8 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
   if (openFindings) count.changes = { n: openFindings }
   const waiting = session.checkins.filter((c) => c.answer === undefined).length
   if (waiting) count.route = { n: waiting, urgent: true }
-  const sideApplies = (id: SideTab) => (id === 'ticket' ? !!ticketKeyFromBranch(session.git?.branch) : id === 'git' ? session.git?.isRepo !== false : true)
+  // Ticket shows once the branch names one (or you set a key); until the git info arrives it stays put rather than vanishing.
+  const sideApplies = (id: SideTab) => (id === 'ticket' ? !!ticketKeyFromBranch(session.git?.branch) || hasTicketOverride(tab.cwd, session.git?.branch) || (side === 'ticket' && !session.git) : true)
   const inMore = !SIDE_TABS.some((x) => x.id === side && (!everyday || EVERYDAY_SIDE.has(x.id)) && sideApplies(x.id))
   // Whether each view has anything to show yet (the + list greys out the empty ones).
   const viewHas = (kind: ViewKind): boolean => {
@@ -712,12 +746,14 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
     case 'decisions':
       return <DecisionsPanel />
     case 'changes':
-      // The files, then what the review found in them.
+    case 'git':
+      // The files, then what the review found in them, then the branch's commits.
       return (
         <PanelActionsContext.Provider value="stacked">
           <div className="panel stack">
             <ChangesPanel />
             <ReviewPanel compact />
+            {s.git?.isRepo !== false && <GitPanel />}
           </div>
         </PanelActionsContext.Provider>
       )
@@ -734,12 +770,17 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
           </div>
         </PanelActionsContext.Provider>
       )
-    case 'git':
-      return <GitPanel />
     case 'context':
-      return <ContextPanel />
     case 'heatmap':
-      return <ExplorerPanel />
+      // What Claude has in its context, then the files it gave attention to.
+      return (
+        <PanelActionsContext.Provider value="stacked">
+          <div className="panel stack">
+            <ContextPanel />
+            <ExplorerPanel />
+          </div>
+        </PanelActionsContext.Provider>
+      )
     case 'safety':
       return <GuardrailsPanel />
     case 'connectors':

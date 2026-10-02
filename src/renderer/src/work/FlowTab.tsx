@@ -81,7 +81,7 @@ export function FlowTab() {
           <CountRow tone="warn" label="Changed" n={stats.changed} />
           <CountRow tone="err" label="Removed" n={stats.removed} />
         </div>
-        {stats.added + stats.changed + stats.removed === 0 && <div className="flow-summary">{stats.sentence}</div>}
+        {(stats.added + stats.changed + stats.removed === 0 || !current.before?.length) && <div className="flow-summary">{stats.sentence}</div>}
         <button className="btn" onClick={() => composerRef.current?.insert(`About the "${current.title}" flow you showed (${shown} your change): `)}>
           Ask Claude about this flow
         </button>
@@ -220,7 +220,8 @@ function summarise(flow: Flow) {
   const key = (h: FlowHop) => `${h.from}\u0000${h.to}\u0000${h.label}`
   const removedMap = new Map<string, FlowHop>()
   for (const h of [...(flow.before ?? []), ...flow.after]) if (h.kind === 'removed') removedMap.set(key(h), h)
-  const added = flow.after.filter((h) => h.kind === 'new')
+  // A flow with no "before" is new, so every hop in it is new, marked or not.
+  const added = flow.after.filter((h) => h.kind === 'new' || (!flow.before?.length && h.kind !== 'changed' && h.kind !== 'removed'))
   const changed = flow.after.filter((h) => h.kind === 'changed')
   const removed = [...removedMap.values()]
 

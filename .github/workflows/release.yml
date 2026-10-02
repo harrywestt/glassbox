@@ -34,7 +34,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: release/Glassbox-Setup-${{ env.VERSION }}.exe
+          # latest.yml and the blockmap are what installed copies read to update themselves.
+          path: |
+            release/Glassbox-Setup-${{ env.VERSION }}.exe
+            release/Glassbox-Setup-${{ env.VERSION }}.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
 
   mac:
@@ -89,8 +93,8 @@ jobs:
           body: |
             Built from ${{ github.sha }}.
 
-            **Windows:** download `Glassbox-Setup-${{ env.VERSION }}.exe` and run it. It installs for your user only (no admin needed), adds Start menu and desktop shortcuts, and is removed from Settings > Apps. It isn't code-signed yet, so if SmartScreen warns about an unknown publisher, choose **More info**, then **Run anyway**.
+            **Windows:** download `Glassbox-Setup-${{ env.VERSION }}.exe` and run it. It installs for your user only (no admin needed), adds Start menu and desktop shortcuts, and is removed from Settings > Apps. Once installed, it updates itself: new versions download in the background and a **Restart to update** button appears in the title bar. It isn't code-signed yet, so if SmartScreen warns about an unknown publisher, choose **More info**, then **Run anyway**.
 
-            **macOS:** download `Glassbox-${{ env.VERSION }}-arm64.dmg` (Apple Silicon: M1 and later), open it and drag Glassbox to Applications. It isn't notarized yet, so the first time, right-click Glassbox in Applications and choose **Open**. If macOS says it's damaged, run `xattr -dr com.apple.quarantine /Applications/Glassbox.app` in Terminal and open it again.
+            **macOS:** download `Glassbox-${{ env.VERSION }}-arm64.dmg` (Apple Silicon: M1 and later), open it and drag Glassbox to Applications. It isn't notarized yet, so the first time, right-click Glassbox in Applications and choose **Open**. If macOS says it's damaged, run `xattr -dr com.apple.quarantine /Applications/Glassbox.app` in Terminal and open it again. Glassbox tells you when a newer version is out (the Mac build can't replace itself until it's signed with an Apple certificate).
 
             You need Claude Code signed in on the machine (`claude auth login`). Git is needed for the git features; the GitHub CLI is optional.

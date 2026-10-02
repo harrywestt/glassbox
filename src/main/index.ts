@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, protocol, shell } from 'electron'
+import { Updater } from './updater'
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
@@ -7,6 +8,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { listSessions, type SDKSessionInfo } from '@anthropic-ai/claude-agent-sdk'
 import { adoptLoginShellPath } from './shellPath'
+import { groupSessionMap, type HeatModule } from './mapGroups'
 import { runBang, stopBang, stopAllBangs } from './bang'
 import { pinSession, pinnedSessions, refreshPinned, restorePinned, unpinSession } from './pinned'
 import { AgentHost } from './agentHost'
@@ -75,6 +77,7 @@ const toRenderer = (channel: string, payload: unknown) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
 const send = (payload: TabEvent) => toRenderer('glassbox:event', payload)
+const updates = new Updater((s) => toRenderer('glassbox:update', s))
 const services = new ServiceRegistry((e: ServicesEvent) => {
   toRenderer('glassbox:services', e)
   // Errors also land in the session's conversation, next to what Claude just changed.
@@ -111,8 +114,8 @@ function trackTray(tabId: string, cwd: string, event: SessionEvent) {
   if (event.kind === 'status' && event.status === 'running') turnOver.delete(tabId)
   if (event.kind === 'sdk' && event.msg.type === 'result') turnOver.add(tabId)
   const busyBehind = (backgroundAgents.get(tabId) ?? 0) > 0
-  if (event.kind === 'permission' || event.kind === 'checkin') next = 'needs-you'
-  else if (event.kind === 'permission-cancelled' || event.kind === 'checkin-resolved') next = 'working'
+  if (event.kind === 'permission' || event.kind === 'checkin' || event.kind === 'user-questions') next = 'needs-you'
+  else if (event.kind === 'permission-cancelled' || event.kind === 'checkin-resolved' || event.kind === 'user-questions-done') next = 'working'
   else if (event.kind === 'status') next = event.status === 'running' ? 'working' : event.status === 'ready' ? (prev === 'error' ? 'error' : busyBehind ? 'working' : 'waiting') : event.status === 'stopped' ? 'idle' : prev
   else if (event.kind === 'sdk' && event.msg.type === 'result') next = event.msg.is_error ? 'error' : busyBehind ? 'working' : 'waiting'
   else if (event.kind === 'error') next = 'error'
@@ -131,7 +134,8 @@ ipcMain.handle('settings:notifications', (_e, on: boolean) => {
 function notifyFor(tabId: string, cwd: string, event: SessionEvent) {
   if (!notificationsOn || !win || win.isDestroyed() || win.isFocused()) return
   let body: string | undefined
-  if (event.kind === 'permission') body = event.toolName === 'ExitPlanMode' ? 'Claude has a plan ready for your review.' : `Claude wants to use ${event.toolName}.`
+  if (event.kind === 'user-questions') body = event.questions.length > 1 ? `Claude has ${event.questions.length} questions for you.` : `Claude asks: ${event.questions[0]?.question ?? 'a question'}`
+  else if (event.kind === 'permission') body = event.toolName === 'ExitPlanMode' ? 'Claude has a plan ready for your review.' : `Claude wants to use ${event.toolName}.`
   else if (event.kind === 'checkin') body = `Claude is checking in: ${event.checkin.about}`
   else if (event.kind === 'alert') body = event.text
   else if (event.kind === 'guard' && event.hit.action === 'block') body = `Blocked: ${event.hit.label}`
@@ -140,7 +144,7 @@ function notifyFor(tabId: string, cwd: string, event: SessionEvent) {
   else if (backgroundCount(event) === 0 && turnOver.has(tabId) && (backgroundAgents.get(tabId) ?? 0) > 0) body = 'Claude’s background agents finished; it’s waiting for you.'
   else if (event.kind === 'error') body = event.message
   if (!body) return
-  if (event.kind === 'permission') win.flashFrame(true)
+  if (event.kind === 'permission' || event.kind === 'user-questions') win.flashFrame(true)
   // The Glassbox name and icon come from the toast header (see registerShortcut); the title names the project.
   const n = new Notification({ title: basename(cwd), body, icon: APP_ICON(), silent: event.kind === 'sdk' })
   n.on('click', () => {
@@ -341,7 +345,10 @@ ipcMain.handle('session:sideShowcase', (_e, tabId: string, req: ShowcaseRequest,
   host(tabId).runSide({ kind: 'showcase', title: 'Build a showcase', prompt: `${showcasePrompt(req)}\n\n## What happened in the main session\n${context}`, tools: ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'Edit', 'Artifact', 'Skill'] })
 )
 ipcMain.handle('session:exitPlan', (_e, tabId: string) => host(tabId).exitPlan())
+ipcMain.handle('update:state', () => updates.state)
+ipcMain.handle('update:install', () => updates.install())
 ipcMain.handle('session:interrupt', (_e, tabId: string) => host(tabId).interrupt())
+ipcMain.handle('session:stopTask', (_e, tabId: string, taskId: string) => host(tabId).stopTask(taskId))
 ipcMain.handle('session:close', (_e, tabId: string) => {
   closeTerminals(tabId)
   hosts.get(tabId)?.close()
@@ -356,6 +363,8 @@ ipcMain.handle('watch:unshare', (_e, tabId: string) => watch.unshare(tabId))
 ipcMain.handle('deps:find', (_e, cwd: string, files: string[]) => findDependents(cwd, files))
 onArchitectureChanged((root) => toRenderer('glassbox:architecture', root))
 ipcMain.handle('architecture:explain', (_e, cwd: string, id: string) => explainModule(cwd, id))
+// The map's "This conversation" view, grouped by Claude from the session's heatmap.
+ipcMain.handle('architecture:group', (_e, root: string, mods: HeatModule[], force?: boolean) => groupSessionMap(root, mods, force))
 ipcMain.handle('architecture:get', (_e, cwd: string, force?: boolean) => getArchitecture(cwd, force))
 ipcMain.handle('architecture:diff', (_e, cwd: string, ref: string, mode: DiffMode, apiOnly?: string[]) => architectureDiff(cwd, ref, mode, apiOnly))
 ipcMain.handle('decisions:list', (_e, cwd: string) => listDecisions(cwd))
@@ -372,6 +381,7 @@ ipcMain.handle('standup:get', (_e, force?: boolean) => getStandup(app.getPath('u
 ipcMain.handle('session:permission', (_e, tabId: string, id: string, decision: PermissionDecision, message?: string) =>
   host(tabId).respondPermission(id, decision, message)
 )
+ipcMain.handle('session:answerQuestions', (_e, tabId: string, id: string, answers: Record<string, string> | null) => host(tabId).answerQuestions(id, answers))
 ipcMain.handle('session:refresh', async (_e, tabId: string) => {
   const h = host(tabId)
   await Promise.all([h.refreshContext(), h.refreshMcp(), h.refreshGit()])
@@ -591,6 +601,7 @@ app.whenReady().then(async () => {
     })
   })
   createWindow()
+  updates.start()
   tray = new StatusTray({
     onOpen: (tabId) => {
       win?.show()

@@ -225,13 +225,13 @@ export function ExplorerPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Explorer">
+      <PanelHeader title="Heatmap">
+        {/* Stacked, the heading row is shown, so the clear link sits on it; the toolbar keeps search and icons. */}
         {s.requirements.files.length > 0 && (
-          <button className="link" onClick={() => updateRequirements((r) => ({ ...r, files: [] }))}>
+          <button className="link small" onClick={() => updateRequirements((r) => ({ ...r, files: [] }))}>
             Clear {s.requirements.files.length} mark{s.requirements.files.length > 1 ? 's' : ''}
           </button>
         )}
-        <IconButton icon="refresh" title="Reload file list" onClick={load} />
       </PanelHeader>
       <div className="panel-toolbar">
         <div className="search">
@@ -239,6 +239,7 @@ export function ExplorerPanel() {
           <input placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
         <IconButton icon="flame" title={heatOn ? 'Hide attention heatmap' : 'Show attention heatmap: how much Claude read, edited and searched each file'} active={heatOn} onClick={toggleHeat} />
+        <IconButton icon="refresh" title="Reload file list" onClick={load} />
       </div>
       <div className="hint small muted">
         Hover a file to mark it <Icon name="eye" /> must read, <Icon name="edit" /> must edit or <Icon name="lock" /> don’t touch. Claude sees your marks with every message.

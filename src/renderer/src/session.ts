@@ -1,5 +1,5 @@
 import type { SDKMessage, SDKRateLimitInfo } from '@anthropic-ai/claude-agent-sdk'
-import {
+import { type UserQuestion,
   emptyRequirements,
   type AcceptanceCriterion,
   type CheckIn,
@@ -53,6 +53,8 @@ export type AgentNode = {
   /** The SDK's id for it as a task, and its latest one-line progress. */
   taskId?: string
   progress?: string
+  /** You stopped it (rather than it failing). */
+  stopped?: boolean
 }
 
 /** What a review comment points at. */
@@ -98,7 +100,8 @@ export type TimelineItem =
   | { kind: 'result'; costUsd: number; durationMs: number; turns: number; isError: boolean; at: number }
   | { kind: 'commits'; commits: GlassboxCommit[]; skipped?: string; error?: string; at: number }
   /** A running service logged an error; `after` is Claude's most recent edit before it. */
-  | { kind: 'service-error'; service: string; text: string; at: number; after?: { path: string; at: number } }
+  /** `count`: how many times it logged since your last message (one card, not one each); `lastAt`: the latest. */
+  | { kind: 'service-error'; service: string; text: string; at: number; after?: { path: string; at: number }; count?: number; lastAt?: number }
   /** A command you ran yourself ("! command"); its output is in `bangs`. */
   | { kind: 'bang'; id: string; at: number }
 
@@ -184,6 +187,8 @@ export interface SessionState {
   usage: { contextTokens: number; outputTokens: number; costUsd: number; turns: number; costBase?: number }
   rateLimits: Record<string, SDKRateLimitInfo>
   permissions: PermissionRequest[]
+  /** Questions Claude asked (AskUserQuestion) that wait for your answers. */
+  userQuestions?: { id: string; questions: UserQuestion[] }[]
   raw: { at: number; event: SessionEvent }[]
   stderr: string[]
   busySince?: number
@@ -329,6 +334,10 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       if (event.toolName === 'ExitPlanMode' && typeof event.input.plan === 'string') next.plan = { text: event.input.plan, status: 'proposed', at }
       return next
     }
+    case 'user-questions':
+      return { ...state, userQuestions: [...(state.userQuestions ?? []).filter((q) => q.id !== event.id), { id: event.id, questions: event.questions }] }
+    case 'user-questions-done':
+      return { ...state, userQuestions: (state.userQuestions ?? []).filter((q) => q.id !== event.id) }
     case 'permission-cancelled':
       return { ...state, permissions: state.permissions.filter((p) => p.id !== event.id) }
     case 'capabilities':
@@ -372,6 +381,16 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
     }
     case 'service-error': {
       const last = [...state.files].reverse().find((f) => CHANGE_TOOLS.has(f.tool) && f.at <= event.at && event.at - f.at < 10 * 60_000)
+      // A service that keeps logging errors gets one card per turn, with a count, not a card each time.
+      let since = state.timeline.length - 1
+      while (since >= 0 && state.timeline[since].kind !== 'user') since--
+      const prev = state.timeline.findIndex((x, i) => i > since && x.kind === 'service-error' && x.service === event.service)
+      if (prev >= 0) {
+        const old = state.timeline[prev] as Extract<TimelineItem, { kind: 'service-error' }>
+        const timeline = state.timeline.slice()
+        timeline[prev] = { ...old, text: event.text, count: (old.count ?? 1) + 1, lastAt: event.at, after: old.after ?? (last ? { path: last.path, at: last.at } : undefined) }
+        return { ...state, timeline }
+      }
       const item: TimelineItem = { kind: 'service-error', service: event.service, text: event.text, at: event.at, after: last ? { path: last.path, at: last.at } : undefined }
       return { ...state, timeline: [...state.timeline, item] }
     }
@@ -409,6 +428,9 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
         case 'PostCompact':
           return note(state, 'Context compacted', 'warn')
         case 'Notification':
+          // "Claude needs your permission to use X" and "waiting for your input" are already the dialog
+          // or the question box in front of you; as notes they only linger after you've answered.
+          if (/needs your permission|waiting for your input/i.test(h.message)) return state
           return note(state, h.message, 'info')
         default:
           return state
@@ -477,11 +499,12 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
           if (m.patch?.is_backgrounded) next.background = true
           const st = m.patch?.status
           if (st === 'completed') (next.status = 'done'), (next.endedAt = at)
-          else if (st === 'failed' || st === 'killed') (next.status = 'error'), (next.endedAt = at)
+          else if (st === 'failed' || st === 'killed') (next.status = 'error'), (next.endedAt = at), (next.stopped = st === 'killed')
           else if (st === 'running' && !fromHistory) next.status = 'running'
         }
         if (m.subtype === 'task_notification') {
           next.status = m.status === 'completed' ? 'done' : 'error'
+          if (m.status === 'stopped') next.stopped = true
           next.endedAt = at
           if (m.summary) next.result = m.summary
           next.progress = undefined

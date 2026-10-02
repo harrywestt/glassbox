@@ -28,12 +28,14 @@ Download from the [latest release](https://github.com/harrywestt/glassbox/releas
 
 - It installs for your user only (no admin rights needed) into `%LOCALAPPDATA%\Programs\Glassbox`, adds Start menu and desktop shortcuts, and is removed like any other app from **Settings > Apps**.
 - The installer isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher. Choose **More info**, then **Run anyway**.
+- After that it keeps itself up to date: a new version downloads in the background, and a **Restart to update** button appears in the title bar (it also installs the next time you quit).
 
 **macOS** (Apple Silicon, M1 and later): download `Glassbox-<version>-arm64.dmg`, open it and drag Glassbox to Applications. Intel Macs aren't supported by the packaged build, because the on-device speech engine no longer ships for them.
 
 - It isn't notarized by Apple yet, so the first time, right-click Glassbox in Applications and choose **Open**, then **Open** again.
 - If macOS says the app "is damaged and can't be opened", that's the download quarantine. Run `xattr -dr com.apple.quarantine /Applications/Glassbox.app` in Terminal, then open it again.
 - The first time you hold Space to dictate, macOS asks for microphone access.
+- When a newer version is out, a **Get <version>** button appears in the title bar and opens the download page. The Mac app can't update itself until it's signed with an Apple Developer certificate.
 
 **You'll also need:**
 

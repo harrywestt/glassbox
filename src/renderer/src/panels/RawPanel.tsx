@@ -11,7 +11,9 @@ export function RawPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Raw">
+      <PanelHeader title="Raw" />
+      <div className="panel-toolbar">
+        {view === 'events' ? <input className="grow" placeholder="Filter events (any text)…" value={filter} onChange={(e) => setFilter(e.target.value)} /> : <span className="grow" />}
         <Segmented
           value={view}
           onChange={setView}
@@ -20,12 +22,7 @@ export function RawPanel() {
             { value: 'stderr', label: `stderr (${s.stderr.length})` }
           ]}
         />
-      </PanelHeader>
-      {view === 'events' && (
-        <div className="panel-toolbar">
-          <input className="grow" placeholder="Filter events (any text)…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        </div>
-      )}
+      </div>
       <div className="panel-scroll raw">
         {view === 'stderr' ? (
           <pre>{s.stderr.join('')}</pre>

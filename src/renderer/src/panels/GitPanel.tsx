@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '../views/SessionView'
-import { Empty, Icon, IconButton, Section, Toggle } from '../components/ui'
+import { PanelHeader, Empty, Icon, IconButton, Section, Toggle } from '../components/ui'
 import { CHANGE_TOOLS } from '../session'
 import type { CommitEntry } from '../../../main/git'
 import type { BranchPr } from '../../../main/launcher'
@@ -75,6 +75,7 @@ export function GitPanel() {
 
   return (
     <div className="panel">
+      <PanelHeader title="Git" />
       <div className="panel-scroll">
         <PrCard />
         <section className="card">
