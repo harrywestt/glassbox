@@ -83,7 +83,7 @@ jobs:
         run: npm run dist:mac
       - name: Check the app has this Mac's native parts
         run: |
-          APP="$(ls -d release/mac*/Glassbox.app | head -1)/Contents/Resources/app/node_modules"
+          APP="$(ls -d release/mac*/Glassbox.app | head -1)/Contents/Resources/app.asar.unpacked/node_modules"
           ls "$APP/@anthropic-ai/claude-agent-sdk-darwin-${{ matrix.arch }}/claude"
           ls "$APP/node-pty/prebuilds/darwin-${{ matrix.arch }}"
           ls "$APP/onnxruntime-node/bin/napi-v6/darwin/${{ matrix.arch }}"

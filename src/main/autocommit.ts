@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { promisify } from 'node:util'
 import { app } from 'electron'
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 import type { GlassboxCommit } from '../shared/events'
 
 const exec = promisify(execFile)

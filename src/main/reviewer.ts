@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 import type { Finding, FindingSeverity, ReviewModel } from '../shared/events'
 
 type PendingEdit = { toolUseId: string; tool: string; path: string; before?: string; after: string }

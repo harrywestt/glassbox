@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 
 const exec = promisify(execFile)
 

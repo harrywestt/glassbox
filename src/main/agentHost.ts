@@ -3,21 +3,8 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import {
-  getSessionMessages,
-  getSubagentMessages,
-  type SessionMessage,
-  query,
-  type CanUseTool,
-  type HookCallback,
-  type HookCallbackMatcher,
-  type HookEvent,
-  type PermissionMode,
-  type PermissionResult,
-  type PermissionUpdate,
-  type Query,
-  type SDKUserMessage
-} from '@anthropic-ai/claude-agent-sdk'
+import { getSessionMessages, getSubagentMessages, type SessionMessage, type CanUseTool, type HookCallback, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 import { GLASSBOX_INSTRUCTIONS, GLASSBOX_TOOLS, createGlassboxServer } from './glassboxMcp'
 import { gitInfo } from './git'
 import { SERVICES_INSTRUCTIONS, type ProjectServices } from './services'

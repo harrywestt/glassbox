@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 import { gitListFiles } from './git'
 import type { Erd, ErdColumn, ErdEntity, ErdFocus, ErdRelation } from '../shared/erd'
 

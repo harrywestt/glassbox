@@ -83,28 +83,23 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
   )
 }
 
-/** A newer Glassbox: quietly downloading, then a button to restart into it (or, on a Mac, to download it). */
+/** A newer Glassbox, VS Code style: it downloads quietly and installs when you close the app; this just says so, and can restart now. */
 function UpdateButton() {
   const [u, setU] = useState<UpdateState>({ status: 'idle' })
   useEffect(() => {
     void window.glassbox.update.state().then(setU)
     return window.glassbox.update.onChange(setU)
   }, [])
-  if (u.status === 'idle') return null
-  if (u.status === 'downloading')
-    return (
-      <span className="update-chip muted" title={`Downloading Glassbox ${u.version} in the background`}>
-        <Icon name="cloud-download" /> Updating {u.percent}%
-      </span>
-    )
+  // Downloading happens quietly; there's only something to show once it's ready.
+  if (u.status === 'idle' || u.status === 'downloading') return null
   const ready = u.status === 'ready'
   return (
     <button
       className="update-chip ready"
       onClick={() => void window.glassbox.update.install()}
-      title={ready ? `Glassbox ${u.version} is downloaded. Restart to use it; your tabs reopen. It also installs next time you quit.` : `Glassbox ${u.version} is out. Opens the download page.`}
+      title={ready ? `Glassbox ${u.version} installs by itself when you close Glassbox. Click to restart into it now; your tabs reopen.` : `Glassbox ${u.version} is out. Opens the download page.`}
     >
-      <Icon name={ready ? 'debug-restart' : 'cloud-download'} /> {ready ? `Restart to update` : `Get ${u.version}`}
+      <Icon name={ready ? 'check' : 'cloud-download'} /> {ready ? 'Update ready' : `Get ${u.version}`}
     </button>
   )
 }

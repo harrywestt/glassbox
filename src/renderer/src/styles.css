@@ -1678,8 +1678,9 @@ button.user-option.on { border-color: var(--accent); background: var(--accent-so
 
 /* A newer Glassbox, in the title bar. */
 .update-chip { -webkit-app-region: no-drag; display: inline-flex; align-items: center; gap: var(--s-1); height: 24px; margin-right: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-md); font-size: 12px; white-space: nowrap; }
-button.update-chip.ready { border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--accent-soft); color: var(--fg); font-weight: 500; }
-button.update-chip.ready:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+button.update-chip.ready { border: 1px solid var(--border); background: transparent; color: var(--muted); font-weight: 400; }
+button.update-chip.ready .codicon { color: var(--ok, var(--accent)); }
+button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: var(--surface); }
 
 /* When a step started and how long it took, at the right of its row. */
 .step-time { display: inline-flex; align-items: baseline; gap: var(--s-2); flex-shrink: 0; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }

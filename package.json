@@ -66,7 +66,15 @@
       "!node_modules/onnxruntime-node/bin/napi-v6/*/!(${arch})/**",
       "!node_modules/node-pty/prebuilds/!(${platform}-${arch})/**"
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@anthropic-ai/claude-agent-sdk-*/**",
+      "node_modules/node-pty/**",
+      "node_modules/onnxruntime-node/**",
+      "node_modules/sharp/**",
+      "node_modules/@img/**",
+      "resources/**"
+    ],
     "publish": [
       {
         "provider": "github",

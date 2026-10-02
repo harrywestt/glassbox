@@ -2,7 +2,8 @@ import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, shell } from 'electron'
-import { query, type Query } from '@anthropic-ai/claude-agent-sdk'
+import { type Query } from '@anthropic-ai/claude-agent-sdk'
+import { claudeExecutable, query } from './claude'
 import type { AccountItem, AccountsResult } from '../shared/events'
 
 /**
@@ -18,8 +19,7 @@ let inflight: Promise<AccountsResult> | null = null
 
 /** The Claude CLI bundled with the SDK, or `claude` on PATH. */
 function claudeExe(): string {
-  const bundled = join(app.getAppPath(), 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude')
-  return existsSync(bundled) ? bundled : 'claude'
+  return claudeExecutable() ?? 'claude'
 }
 
 const run = (file: string, args: string[], timeout = 15_000) =>
