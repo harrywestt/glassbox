@@ -1690,3 +1690,6 @@ button.update-chip.ready:hover:not(:disabled) { background: color-mix(in srgb, v
 .agent-feed { display: flex; flex-direction: column; margin: 0 0 var(--s-1) 7px; padding-left: var(--s-4); border-left: 1px solid var(--border); }
 .agent-feed-row { display: flex; align-items: center; gap: var(--s-2); min-height: 24px; font-size: 12px; color: var(--muted); animation: pop-in .12s var(--ease); }
 .agent-feed-row .codicon { font-size: 13px; }
+
+/* Raw events, held still while you read one. */
+.raw-held { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: var(--s-2); justify-content: space-between; padding: var(--s-2) var(--s-3); background: var(--elevated); border-bottom: 1px solid var(--border); }
