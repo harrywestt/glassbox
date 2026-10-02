@@ -1,3 +1,4 @@
+import { tr } from '../shared/i18n'
 /** Known vulnerabilities (OSV) and licences (npm) for dependencies Claude added. */
 export type DepCheck = { name: string; version: string; ecosystem: string; license?: string; vulns: { id: string; summary?: string }[]; error?: string }
 
@@ -18,7 +19,7 @@ export async function checkDependencies(deps: { name: string; version: string; e
       const body = (await res.json()) as { results?: { vulns?: { id: string; summary?: string }[] }[] }
       vulns = todo.map((_, i) => body.results?.[i]?.vulns ?? [])
     } catch (e) {
-      error = `Couldn't reach the vulnerability database: ${String(e)}`
+      error = tr('mainRadar.couldNotReachVulnDb', { error: String(e) })
     }
     await Promise.all(
       todo.map(async (d, i) => {

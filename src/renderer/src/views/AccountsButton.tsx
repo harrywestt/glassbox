@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AccountItem, AccountsResult } from '../../../shared/events'
 import { Icon } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 const needsYou = (a: AccountItem) => a.status !== 'ok'
 
@@ -41,27 +42,27 @@ export function AccountsButton() {
 
   return (
     <div className="accounts">
-      <button className={open ? 'btn accounts-btn open' : 'btn accounts-btn'} onClick={() => setOpen(!open)} aria-expanded={open} title={waiting.length ? `${waiting.length} account${waiting.length > 1 ? 's' : ''} need${waiting.length > 1 ? '' : 's'} signing in` : 'Signed in everywhere Glassbox needs'}>
+      <button className={open ? 'btn accounts-btn open' : 'btn accounts-btn'} onClick={() => setOpen(!open)} aria-expanded={open} title={waiting.length ? tr('accountsButton.needSigningIn', { count: waiting.length }) : tr('accountsButton.signedInEverywhere')}>
         {/* The lamp only lights when something needs signing in: amber is "needs you". */}
         {data && waiting.length > 0 && <span className="tally-lamp tally-wait" aria-hidden />}
-        Accounts
+        {tr('accountsButton.accounts')}
       </button>
       {open && (
         <>
           <div className="menu-scrim" onMouseDown={() => setOpen(false)} />
-          <div className="popover accounts-pop" role="dialog" aria-label="Accounts">
+          <div className="popover accounts-pop" role="dialog" aria-label={tr('accountsButton.accounts')}>
             {!data ? (
-              <div className="accounts-row muted">Checking…</div>
+              <div className="accounts-row muted">{tr('accountsButton.checking')}</div>
             ) : (
               <>
                 {core.map((a) => <Row key={a.id} a={a} />)}
                 {others.length > 0 && (
                   <>
-                    <div className="accounts-heading">Other connectors</div>
+                    <div className="accounts-heading">{tr('accountsButton.otherConnectors')}</div>
                     {connected.map((a) => <Row key={a.id} a={a} />)}
                     {available.length > 0 && !allConnectors && (
                       <button className="btn quiet accounts-more" onClick={() => setAllConnectors(true)}>
-                        Show {available.length} not connected
+                        {tr('accountsButton.showNotConnected', { count: available.length })}
                       </button>
                     )}
                     {allConnectors && available.map((a) => <Row key={a.id} a={a} quiet />)}
@@ -71,7 +72,7 @@ export function AccountsButton() {
             )}
             <div className="accounts-foot">
               <button className="btn quiet" onClick={() => load(true)} disabled={checking}>
-                <Icon name={checking ? 'loading' : 'refresh'} className={checking ? 'codicon-modifier-spin' : ''} /> Check again
+                <Icon name={checking ? 'loading' : 'refresh'} className={checking ? 'codicon-modifier-spin' : ''} /> {tr('accountsButton.checkAgain')}
               </button>
             </div>
           </div>
@@ -83,7 +84,7 @@ export function AccountsButton() {
 
 function Row({ a, quiet }: { a: AccountItem; quiet?: boolean }) {
   const action =
-    a.status === 'ok' ? (a.kind === 'connector' ? 'Manage' : null) : a.status === 'missing' ? 'Install' : a.kind === 'connector' ? 'Connect' : 'Sign in'
+    a.status === 'ok' ? (a.kind === 'connector' ? tr('accountsButton.manage') : null) : a.status === 'missing' ? tr('accountsButton.install') : a.kind === 'connector' ? tr('accountsButton.connect') : tr('accountsButton.signIn')
   return (
     <div className="accounts-row">
       {/* A connector you've never used isn't a warning: just an empty lamp. */}

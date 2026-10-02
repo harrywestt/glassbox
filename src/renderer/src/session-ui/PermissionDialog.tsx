@@ -3,6 +3,7 @@ import type { PermissionRequest } from '../session'
 import { useSession } from '../views/SessionView'
 import { Icon } from '../components/ui'
 import { toolIcon, toolLabel } from './Timeline'
+import { tr } from '../../../shared/i18n'
 
 export function PermissionDialog({ request, queued }: { request: PermissionRequest; queued: number }) {
   const { tab } = useSession()
@@ -17,12 +18,12 @@ export function PermissionDialog({ request, queued }: { request: PermissionReque
         <div className="dialog-title">
           <Icon name={toolIcon(request.toolName)} />
           <span>
-            Claude wants to use <strong>{toolLabel(request.toolName)}</strong>
+            {tr('permissionDialog.wantsToUse')} <strong>{toolLabel(request.toolName)}</strong>
           </span>
         </div>
         {guard && (
           <div className="callout callout-warn">
-            <Icon name="shield" /> Your guardrail “{guard}” asked for approval.
+            <Icon name="shield" /> {tr('permissionDialog.guardrailAsked', { guard })}
           </div>
         )}
         {typeof input.description === 'string' && <div className="muted">{input.description}</div>}
@@ -37,18 +38,18 @@ export function PermissionDialog({ request, queued }: { request: PermissionReque
           <pre className="json">{JSON.stringify(input, null, 2)}</pre>
         ) : null}
         <div className="dialog-actions">
-          {queued > 0 && <span className="muted small">{queued} more waiting</span>}
+          {queued > 0 && <span className="muted small">{tr('permissionDialog.moreWaiting', { n: queued })}</span>}
           <span className="spacer" />
-          <button className="danger" onClick={() => respond('deny')}>Deny</button>
+          <button className="danger" onClick={() => respond('deny')}>{tr('permissionDialog.deny')}</button>
           {/* Shell commands one by one get tiring: allow them all for this session (guardrails still stop risky ones). */}
           {!guard && (request.toolName === 'Bash' || request.toolName === 'PowerShell') ? (
-            <button onClick={() => respond('shell')} title="Claude runs shell commands without asking for the rest of this session. Your guardrails still stop or ask about risky ones.">
-              Allow shell for this session
+            <button onClick={() => respond('shell')} title={tr('permissionDialog.allowShellHint')}>
+              {tr('permissionDialog.allowShell')}
             </button>
           ) : (
-            request.canAlwaysAllow && !guard && <button onClick={() => respond('always')}>Always allow</button>
+            request.canAlwaysAllow && !guard && <button onClick={() => respond('always')}>{tr('permissionDialog.alwaysAllow')}</button>
           )}
-          <button className="primary" autoFocus onClick={() => respond('allow')}>Allow</button>
+          <button className="primary" autoFocus onClick={() => respond('allow')}>{tr('permissionDialog.allow')}</button>
         </div>
       </div>
     </div>

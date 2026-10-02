@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 type AdminState = { supported: boolean; elevated: boolean; runAsAdmin: boolean; asked: boolean; adminAccount: boolean }
 
@@ -41,8 +42,8 @@ export function AdminChip() {
   const s = useAdmin()
   if (!s?.supported) return null
   return (
-    <button className={s.elevated ? 'admin-chip on' : 'admin-chip'} onClick={openAdminPrompt} title="Change whether Glassbox runs as administrator">
-      <Icon name="shield" /> {s.elevated ? 'Administrator' : s.adminAccount ? 'Standard rights' : 'Admin per command'}
+    <button className={s.elevated ? 'admin-chip on' : 'admin-chip'} onClick={openAdminPrompt} title={tr('adminCard.chipTitle')}>
+      <Icon name="shield" /> {s.elevated ? tr('adminCard.chipAdministrator') : s.adminAccount ? tr('adminCard.chipStandardRights') : tr('adminCard.chipAdminPerCommand')}
     </button>
   )
 }
@@ -72,7 +73,7 @@ export function AdminPrompt() {
     setNote(null)
     try {
       const ok = await window.glassbox.admin.set(on)
-      setNote(ok ? 'Restarting Glassbox…' : 'Windows didn’t grant administrator rights (the prompt was cancelled), so nothing changed.')
+      setNote(ok ? tr('adminCard.restarting') : tr('adminCard.notGranted'))
       if (ok) cached = { ...s, runAsAdmin: on, asked: true }
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*(Error invoking remote method '[^']+':\s*)?(Error:\s*)?/, ''))
@@ -90,17 +91,16 @@ export function AdminPrompt() {
           <div className="admin-modal-icon">
             <Icon name="shield" />
           </div>
-          <h2 id="admin-title">Administrator commands</h2>
+          <h2 id="admin-title">{tr('adminCard.standardTitle')}</h2>
           <p>
-            Your Windows account isn’t an administrator, so Glassbox runs as you, signed in to Claude, GitHub and git. When a command needs administrator rights, Claude runs just
-            that command elevated: Windows asks for the administrator’s password, and the command runs as that account.
+            {tr('adminCard.standardBody')}
           </p>
           <p className="admin-warning">
             <Icon name="warning" />
-            <span>Read each Windows prompt before approving it. An elevated command can change anything on this machine.</span>
+            <span>{tr('adminCard.standardWarning')}</span>
           </p>
           <div className="dialog-actions">
-            <button className="primary" onClick={() => void close()}>Got it</button>
+            <button className="primary" onClick={() => void close()}>{tr('adminCard.gotIt')}</button>
           </div>
         </div>
       </div>
@@ -112,31 +112,29 @@ export function AdminPrompt() {
         <div className="admin-modal-icon">
           <Icon name="shield" />
         </div>
-        <h2 id="admin-title">{s.elevated ? 'Glassbox is running as administrator' : 'Run Glassbox as administrator?'}</h2>
+        <h2 id="admin-title">{s.elevated ? tr('adminCard.elevatedTitle') : tr('adminCard.askTitle')}</h2>
         <p>
-          With administrator rights, Claude’s commands and the services you start run elevated, like an elevated terminal. That lets it install tools, change system
-          settings and work with protected folders.
+          {tr('adminCard.body')}
         </p>
         <p className="admin-warning">
           <Icon name="warning" />
           <span>
-            An elevated command can change anything on this machine. Guardrails still apply, but keep <strong>Ask</strong> or <strong>Auto-edit</strong> on for work you
-            haven’t checked.
+            {tr('adminCard.warningBefore')}<strong>{tr('adminCard.warningAsk')}</strong>{tr('adminCard.warningOr')}<strong>{tr('adminCard.warningAutoEdit')}</strong>{tr('adminCard.warningAfter')}
           </span>
         </p>
-        <p className="muted small">Windows asks for permission each time Glassbox starts elevated. You can change this later from the dashboard.</p>
+        <p className="muted small">{tr('adminCard.permissionNote')}</p>
         {note && <div className="note">{note}</div>}
         <div className="dialog-actions">
           {s.elevated ? (
             <>
-              <button disabled={busy} onClick={() => void choose(false)}>Restart with standard rights</button>
-              <button className="primary" disabled={busy} onClick={() => void close()}>Keep administrator</button>
+              <button disabled={busy} onClick={() => void choose(false)}>{tr('adminCard.restartStandard')}</button>
+              <button className="primary" disabled={busy} onClick={() => void close()}>{tr('adminCard.keepAdministrator')}</button>
             </>
           ) : (
             <>
-              <button disabled={busy} onClick={() => void close()}>Not now</button>
+              <button disabled={busy} onClick={() => void close()}>{tr('adminCard.notNow')}</button>
               <button className="primary" disabled={busy} onClick={() => void choose(true)}>
-                <Icon name="shield" /> Run as administrator
+                <Icon name="shield" /> {tr('adminCard.runAsAdministrator')}
               </button>
             </>
           )}

@@ -6,6 +6,7 @@ import { toolLabel } from '../session-ui/Timeline'
 import { Empty, Icon, PanelHeader, Segmented } from '../components/ui'
 import type { GuardAction, GuardRule, GuardScope } from '../../../shared/events'
 import { Select } from '../components/Select'
+import { tr } from '../../../shared/i18n'
 
 type View = 'effects' | 'rules'
 
@@ -13,9 +14,9 @@ export function GuardrailsPanel() {
   const [view, setView] = useState<View>('effects')
   return (
     <div className="panel">
-      <PanelHeader title="Guardrails" />
+      <PanelHeader title={tr('guardrailsPanel.title')} />
       <div className="panel-toolbar">
-        <Segmented<View> value={view} onChange={setView} options={[{ value: 'effects', label: 'Side effects' }, { value: 'rules', label: 'Rules' }]} />
+        <Segmented<View> value={view} onChange={setView} options={[{ value: 'effects', label: tr('guardrailsPanel.sideEffects') }, { value: 'rules', label: tr('guardrailsPanel.rules') }]} />
       </div>
       {view === 'effects' ? <SideEffects /> : <Rules />}
     </div>
@@ -41,13 +42,13 @@ function SideEffects() {
     <div className="panel-scroll">
       {s.guardHits.length > 0 && (
         <section className="card">
-          <div className="card-title">Stopped by guardrails</div>
+          <div className="card-title">{tr('guardrailsPanel.stoppedBy')}</div>
           {[...s.guardHits].reverse().map((h) => (
             <div key={h.toolUseId + h.at} className="effect">
               <Icon name="shield" className={h.action === 'block' ? 'err' : 'warn'} />
               <div className="grow">
                 <div>
-                  {h.action === 'block' ? 'Blocked' : 'Asked you'}: {h.label} <span className="muted small">{timeAgo(h.at)}</span>
+                  {h.action === 'block' ? tr('guardrailsPanel.blocked', { label: h.label }) : tr('guardrailsPanel.askedYou', { label: h.label })} <span className="muted small">{timeAgo(h.at)}</span>
                 </div>
                 <div className="mono small muted ellipsis" title={h.detail}>{h.detail}</div>
               </div>
@@ -57,29 +58,29 @@ function SideEffects() {
       )}
       <section className="card">
         <div className="card-title">
-          What Claude has done outside the conversation
+          {tr('guardrailsPanel.outsideConversation')}
           <span className="spacer" />
           <Segmented
             value={risk}
             onChange={setRisk}
             options={[
-              { value: 'all', label: 'All' },
-              { value: 'high', label: 'High' },
-              { value: 'medium', label: 'Medium' },
-              { value: 'low', label: 'Low' }
+              { value: 'all', label: tr('guardrailsPanel.riskAll') },
+              { value: 'high', label: tr('guardrailsPanel.riskHigh') },
+              { value: 'medium', label: tr('guardrailsPanel.riskMedium') },
+              { value: 'low', label: tr('guardrailsPanel.riskLow') }
             ]}
           />
         </div>
         {shown.length === 0 ? (
-          <Empty icon="shield" title="No side effects yet">Commands that touch git, packages, the network, infrastructure, databases, connectors or files outside the project appear here as they happen.</Empty>
+          <Empty icon="shield" title={tr('guardrailsPanel.emptyTitle')}>{tr('guardrailsPanel.emptyBody')}</Empty>
         ) : (
           shown.map((e) => (
             <div key={e.call.id} className="effect">
-              <span className={`risk risk-${e.risk}`} title={`${e.risk} risk`} />
+              <span className={`risk risk-${e.risk}`} title={tr(`guardrailsPanel.riskTitle.${e.risk}`)} />
               <div className="grow">
                 <div>
                   {e.category} <span className="muted small">{toolLabel(e.call.name)}, {timeAgo(e.call.at)}</span>
-                  {e.call.status === 'error' && <span className="tag">failed</span>}
+                  {e.call.status === 'error' && <span className="tag">{tr('guardrailsPanel.failed')}</span>}
                 </div>
                 <div className="mono small muted ellipsis" title={e.detail}>{e.detail}</div>
               </div>
@@ -92,9 +93,9 @@ function SideEffects() {
 }
 
 const ACTIONS: { value: GuardAction; label: string }[] = [
-  { value: 'block', label: 'Block' },
-  { value: 'ask', label: 'Ask' },
-  { value: 'off', label: 'Off' }
+  { value: 'block', label: tr('guardrailsPanel.actionBlock') },
+  { value: 'ask', label: tr('guardrailsPanel.actionAsk') },
+  { value: 'off', label: tr('guardrailsPanel.actionOff') }
 ]
 
 function Rules() {
@@ -108,9 +109,9 @@ function Rules() {
     try {
       new RegExp(draft.pattern)
     } catch {
-      return setError('That pattern isn’t a valid regular expression.')
+      return setError(tr('guardrailsPanel.invalidPattern'))
     }
-    if (!draft.label.trim() || !draft.pattern.trim()) return setError('Give the rule a name and a pattern.')
+    if (!draft.label.trim() || !draft.pattern.trim()) return setError(tr('guardrailsPanel.needNameAndPattern'))
     saveGuardrails([...rules, { id: `custom-${crypto.randomUUID().slice(0, 8)}`, ...draft, label: draft.label.trim() }])
     setDraft({ label: '', scope: 'shell', pattern: '', action: 'ask' })
     setAdding(false)
@@ -120,20 +121,20 @@ function Rules() {
   return (
     <div className="panel-scroll">
       <div className="hint small muted">
-        Rules run before every tool call, whatever your permission settings allow. <strong>Block</strong> stops the call and tells Claude why; <strong>Ask</strong> pauses for your approval.
+        {tr('guardrailsPanel.hintIntro')} <strong>{tr('guardrailsPanel.hintBlock')}</strong> {tr('guardrailsPanel.hintBlockBody')} <strong>{tr('guardrailsPanel.hintAsk')}</strong> {tr('guardrailsPanel.hintAskBody')}
       </div>
       {rules.map((r) => (
         <div key={r.id} className="rule">
           <div className="grow">
             <div className="rule-label">{r.label}</div>
             <div className="muted small">
-              {r.scope === 'shell' ? 'Shell commands' : r.scope === 'edit' ? 'File edits' : 'Connector tools'}
+              {r.scope === 'shell' ? tr('guardrailsPanel.scopeShell') : r.scope === 'edit' ? tr('guardrailsPanel.scopeEdit') : tr('guardrailsPanel.scopeMcp')}
               {r.pattern && !r.id.startsWith(':') && <span className="mono"> /{r.pattern.length > 48 ? r.pattern.slice(0, 46) + '…' : r.pattern}/</span>}
             </div>
           </div>
           <Segmented<GuardAction> value={r.action} onChange={(action) => update(r.id, { action })} options={ACTIONS} />
           {!r.builtin && (
-            <button className="icon-btn" title="Delete rule" onClick={() => saveGuardrails(rules.filter((x) => x.id !== r.id))}>
+            <button className="icon-btn" title={tr('guardrailsPanel.deleteRule')} onClick={() => saveGuardrails(rules.filter((x) => x.id !== r.id))}>
               <Icon name="trash" />
             </button>
           )}
@@ -142,30 +143,30 @@ function Rules() {
       <div className="pad-x">
         {adding ? (
           <div className="rule-form">
-            <input placeholder="Name, e.g. Don't touch migrations" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
+            <input placeholder={tr('guardrailsPanel.namePlaceholder')} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
             <div className="form-row">
               <Select<GuardScope>
                 value={draft.scope}
                 onChange={(scope) => setDraft({ ...draft, scope })}
-                aria-label="What the rule checks"
+                aria-label={tr('guardrailsPanel.whatRuleChecks')}
                 options={[
-                  { value: 'shell', label: 'Shell command matches' },
-                  { value: 'edit', label: 'Edited file path matches' },
-                  { value: 'mcp', label: 'Connector tool name matches' }
+                  { value: 'shell', label: tr('guardrailsPanel.matchShell') },
+                  { value: 'edit', label: tr('guardrailsPanel.matchEdit') },
+                  { value: 'mcp', label: tr('guardrailsPanel.matchMcp') }
                 ]}
               />
               <Segmented<GuardAction> value={draft.action} onChange={(action) => setDraft({ ...draft, action })} options={ACTIONS.slice(0, 2)} />
             </div>
-            <input className="mono" placeholder="Regular expression, e.g. migrations/" value={draft.pattern} onChange={(e) => setDraft({ ...draft, pattern: e.target.value })} />
+            <input className="mono" placeholder={tr('guardrailsPanel.patternPlaceholder')} value={draft.pattern} onChange={(e) => setDraft({ ...draft, pattern: e.target.value })} />
             {error && <div className="err small">{error}</div>}
             <div className="row-actions">
-              <button onClick={() => (setAdding(false), setError(null))}>Cancel</button>
-              <button className="primary" onClick={add}>Add rule</button>
+              <button onClick={() => (setAdding(false), setError(null))}>{tr('guardrailsPanel.cancel')}</button>
+              <button className="primary" onClick={add}>{tr('guardrailsPanel.addRule')}</button>
             </div>
           </div>
         ) : (
           <button className="chip-btn" onClick={() => setAdding(true)}>
-            <Icon name="add" /> Add a rule
+            <Icon name="add" /> {tr('guardrailsPanel.addARule')}
           </button>
         )}
       </div>

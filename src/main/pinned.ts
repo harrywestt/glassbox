@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { SDKSessionInfo } from '@anthropic-ai/claude-agent-sdk'
+import { tr } from '../shared/i18n'
 
 /**
  * Pinned sessions: kept for good. Claude Code clears old transcripts on its own (after 30 days by
@@ -59,7 +60,7 @@ export function pinnedSessions(): PinnedSession[] {
 
 export function pinSession(info: SDKSessionInfo): { ok: boolean; error?: string } {
   const transcript = findTranscript(info.sessionId)
-  if (!transcript) return { ok: false, error: 'Claude Code no longer has this session’s history' }
+  if (!transcript) return { ok: false, error: tr('mainPinned.noHistory') }
   const all = load()
   all[info.sessionId] = { ...info, pinnedAt: Date.now(), transcript }
   backUp(all[info.sessionId])

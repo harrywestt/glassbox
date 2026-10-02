@@ -9,15 +9,16 @@ import type { ArchDiff, ArchDiffEdge, DiffMode, DiffResult } from '../../../shar
 import { Select } from '../components/Select'
 import { useArchitecture } from '../architecture'
 import type { Architecture } from '../../../shared/architecture'
+import { tr } from '../../../shared/i18n'
 
 type Row = { path: string; status: string; oldPath?: string; additions?: number; deletions?: number; claudeEdits: number }
 
 const STATUS: Record<string, { label: string; cls: string; title: string }> = {
-  A: { label: 'A', cls: 'ok', title: 'Added' },
-  M: { label: 'M', cls: 'warn', title: 'Modified' },
-  D: { label: 'D', cls: 'err', title: 'Deleted' },
-  R: { label: 'R', cls: 'info', title: 'Renamed' },
-  '?': { label: 'U', cls: 'ok', title: 'New, not yet tracked by git' }
+  A: { label: 'A', cls: 'ok', title: tr('changesPanel.statusAdded') },
+  M: { label: 'M', cls: 'warn', title: tr('changesPanel.statusModified') },
+  D: { label: 'D', cls: 'err', title: tr('changesPanel.statusDeleted') },
+  R: { label: 'R', cls: 'info', title: tr('changesPanel.statusRenamed') },
+  '?': { label: 'U', cls: 'ok', title: tr('changesPanel.statusUntracked') }
 }
 
 /**
@@ -88,7 +89,7 @@ export function ChangesPanel() {
       {/* One row: what changed, against what (base branch and how, in one control), and refresh. */}
       <div className="changes-summary">
         <span className="small changes-count">
-          <strong>{total} file{total === 1 ? '' : 's'}</strong>
+          <strong>{tr('changesPanel.files', { count: total })}</strong>
           {diff && <> <span className="ok">+{adds}</span> <span className="err">−{dels}</span></>}
         </span>
         <span className="spacer" />
@@ -100,30 +101,30 @@ export function ChangesPanel() {
               setDiffMode(mode as DiffMode)
               setBase(rest.join('|'))
             }}
-            aria-label="Compare against"
+            aria-label={tr('changesPanel.compareAgainst')}
             options={branches.flatMap((b) => [
-              { value: `merge-base|${b}`, label: `vs ${b}, since branching` },
-              { value: `direct|${b}`, label: `vs ${b}, direct` }
+              { value: `merge-base|${b}`, label: tr('changesPanel.vsSinceBranching', { branch: b }) },
+              { value: `direct|${b}`, label: tr('changesPanel.vsDirect', { branch: b }) }
             ])}
           />
         )}
-        {total > 0 && <IconButton icon="radio-tower" title="What these changes could affect (Ripple)" onClick={() => openRipple()} />}
-        {repo && <IconButton icon="refresh" title="Refresh" onClick={load} />}
+        {total > 0 && <IconButton icon="radio-tower" title={tr('changesPanel.rippleTitle')} onClick={() => openRipple()} />}
+        {repo && <IconButton icon="refresh" title={tr('changesPanel.refresh')} onClick={load} />}
       </div>
       <div className="changes-filters">
         <Segmented<'all' | 'claude'>
           value={onlyClaude ? 'claude' : 'all'}
           onChange={(v) => setOnlyClaude(v === 'claude')}
           options={[
-            { value: 'all', label: 'All changes' },
-            { value: 'claude', label: claude.size ? `Claude’s changes (${claude.size})` : 'Claude’s changes' }
+            { value: 'all', label: tr('changesPanel.allChanges') },
+            { value: 'claude', label: claude.size ? tr('changesPanel.claudesChangesCount', { n: claude.size }) : tr('changesPanel.claudesChanges') }
           ]}
         />
         {/* Filtering only earns its space in a long list. */}
         {(total > 10 || filter) && (
           <div className="search grow">
             <Icon name="search" />
-            <input placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <input placeholder={tr('changesPanel.filterFiles')} value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
         )}
       </div>
@@ -131,17 +132,17 @@ export function ChangesPanel() {
       {strays > 0 && (
         <div className="changes-untracked small muted">
           {showUntracked
-            ? `Showing ${strays} untracked file${strays > 1 ? 's' : ''}.`
-            : `${strays} untracked file${strays > 1 ? 's' : ''} hidden.`}{' '}
-          <button className="link small" onClick={() => setShowUntracked(!showUntracked)}>{showUntracked ? 'Hide them' : 'Show them'}</button>
+            ? tr('changesPanel.showingUntracked', { count: strays })
+            : tr('changesPanel.untrackedHidden', { count: strays })}{' '}
+          <button className="link small" onClick={() => setShowUntracked(!showUntracked)}>{showUntracked ? tr('changesPanel.hideThem') : tr('changesPanel.showThem')}</button>
         </div>
       )}
       {repo && base && diff && <ArchitectureChanges base={base} diffMode={diffMode} diff={diff} />}
       <div className="file-list full">
-        {repo && !diff && !error && <div className="muted pad">Comparing…</div>}
+        {repo && !diff && !error && <div className="muted pad">{tr('changesPanel.comparing')}</div>}
         {(diff || !repo) && rows.length === 0 && (
-          <Empty icon={onlyClaude ? 'edit' : 'check'} title={onlyClaude ? 'Claude hasn’t changed anything yet' : base ? `No differences from ${base}` : 'No changes yet'}>
-            Click a file to open its diff next to the conversation.
+          <Empty icon={onlyClaude ? 'edit' : 'check'} title={onlyClaude ? tr('changesPanel.claudeNoChanges') : base ? tr('changesPanel.noDifferencesFrom', { base }) : tr('changesPanel.noChanges')}>
+            {tr('changesPanel.emptyBody')}
           </Empty>
         )}
         {rows.map((r) => {
@@ -204,28 +205,28 @@ function ArchitectureChanges({ base, diffMode, diff }: { base: string; diffMode:
       <div className="arch-changes-head small">
         <button className="section-toggle" aria-expanded={!folded} onClick={toggle}>
           <Icon name="chevron-down" className="section-chevron" />
-          <strong>Architecture</strong>
-          <span className="muted arch-changes-meta" title={none ? 'No connections between modules were added or removed' : undefined}>
-            {result.error ? `couldn’t be compared: ${result.error}` : none ? 'no connections changed' : summary(result)}
+          <strong>{tr('changesPanel.architecture')}</strong>
+          <span className="muted arch-changes-meta" title={none ? tr('changesPanel.noConnectionsTitle') : undefined}>
+            {result.error ? tr('changesPanel.couldntCompare', { error: result.error }) : none ? tr('changesPanel.noConnectionsChanged') : summary(result)}
           </span>
         </button>
       </div>
       {!folded && (
         <>
       {result.breaches.map((b, i) => (
-        <button key={`b${i}`} className="arch-change breach" onClick={() => show([moduleIdOf(arch, b.from), b.module].filter(Boolean) as string[], `Reaches into ${name(b.module)}'s internals`)} title={`${b.from} imports ${b.to}`}>
+        <button key={`b${i}`} className="arch-change breach" onClick={() => show([moduleIdOf(arch, b.from), b.module].filter(Boolean) as string[], tr('changesPanel.reachesIntoWhy', { module: name(b.module) }))} title={tr('changesPanel.imports', { from: b.from, to: b.to })}>
           <Icon name="shield" />
           <span className="grow">
-            Reaches into {name(b.module)}’s internals <span className="muted mono">{baseName(b.from)} imports {b.to.replace(/\/$/, '')}</span>
+            {tr('changesPanel.reachesInto', { module: name(b.module) })} <span className="muted mono">{tr('changesPanel.imports', { from: baseName(b.from), to: b.to.replace(/\/$/, '') })}</span>
           </span>
         </button>
       ))}
       {[...result.added.map((e) => ({ e, sign: '+' as const })), ...result.removed.map((e) => ({ e, sign: '−' as const }))].map(({ e, sign }) => (
-        <button key={`${sign}${e.from}>${e.to}`} className={sign === '+' ? 'arch-change added' : 'arch-change removed'} onClick={() => show([e.from, e.to], `${sign === '+' ? 'New' : 'Removed'} connection: ${name(e.from)} → ${name(e.to)}`)} title={edgeTip(e)}>
+        <button key={`${sign}${e.from}>${e.to}`} className={sign === '+' ? 'arch-change added' : 'arch-change removed'} onClick={() => show([e.from, e.to], tr(sign === '+' ? 'changesPanel.newConnectionWhy' : 'changesPanel.removedConnectionWhy', { from: name(e.from), to: name(e.to) }))} title={edgeTip(e)}>
           <span className={sign === '+' ? 'arch-change-sign ok' : 'arch-change-sign err'}>{sign}</span>
           <span className="grow ellipsis">
             {name(e.from)} → {name(e.to)}
-            {e.http && <span className="muted"> over HTTP</span>}
+            {e.http && <span className="muted"> {tr('changesPanel.overHttp')}</span>}
             {e.names.length > 0 && <span className="muted">: {e.names.slice(0, 3).join(', ')}{e.names.length > 3 ? ` +${e.names.length - 3}` : ''}</span>}
           </span>
         </button>
@@ -248,12 +249,11 @@ const moduleIdOf = (arch: Architecture, rel: string) => {
 }
 
 function summary(r: ArchDiff): string {
-  const n = (k: number, w: string) => `${k} ${w}${k === 1 ? '' : 's'}`
-  const parts = [r.added.length && `${n(r.added.length, 'new connection')}`, r.removed.length && `${r.removed.length} removed`, r.breaches.length && `${n(r.breaches.length, 'boundary break')}`].filter(Boolean)
+  const parts = [r.added.length && tr('changesPanel.newConnections', { count: r.added.length }), r.removed.length && tr('changesPanel.removedCount', { n: r.removed.length }), r.breaches.length && tr('changesPanel.boundaryBreaks', { count: r.breaches.length })].filter(Boolean)
   return parts.join(', ') + '.'
 }
 
-const edgeTip = (e: ArchDiffEdge) => `${e.files.slice(0, 6).join('\n')}${e.files.length > 6 ? `\nand ${e.files.length - 6} more` : ''}\nOpen on the map`
+const edgeTip = (e: ArchDiffEdge) => `${e.files.slice(0, 6).join('\n')}${e.files.length > 6 ? `\n${tr('changesPanel.andMore', { n: e.files.length - 6 })}` : ''}\n${tr('changesPanel.openOnMap')}`
 
 /** Untracked and not touched by Claude this session: leftovers in the folder, not branch changes. */
 const isStrayUntracked = (r: Row) => r.status === '?' && r.claudeEdits === 0
@@ -298,7 +298,7 @@ export function GitFileDiff({ path, base, diffMode, onEditor, version }: { path:
     }
   }, [key, tab.cwd, version])
   if (error) return <div className="note note-error">{error}</div>
-  if (!pair || pair.key !== key) return <div className="muted pad">Loading diff…</div>
+  if (!pair || pair.key !== key) return <div className="muted pad">{tr('changesPanel.loadingDiff')}</div>
   return <DiffView key={path} path={path} original={pair.original} modified={pair.modified} inline onEditor={onEditor} />
 }
 

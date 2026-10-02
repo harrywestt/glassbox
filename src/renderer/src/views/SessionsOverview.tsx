@@ -6,10 +6,20 @@ import { tabTitle, type Tab } from '../tabs'
 import { checkOf } from '../review'
 import { backgroundWork, liveVerb, tallyOf } from '../tally'
 import { ticketKeyFromBranch } from '../../../shared/ticket'
+import { tr } from '../../../shared/i18n'
 import './FleetBoard.css'
 
 const COLUMNS = ['Plan', 'Build', 'Test', 'Review', 'Ready'] as const
 type Column = (typeof COLUMNS)[number]
+/** The column names as shown (the values above are identifiers). */
+const columnLabel = (c: Column) =>
+  ({
+    Plan: tr('sessionsOverview.columnPlan'),
+    Build: tr('sessionsOverview.columnBuild'),
+    Test: tr('sessionsOverview.columnTest'),
+    Review: tr('sessionsOverview.columnReview'),
+    Ready: tr('sessionsOverview.columnReady')
+  })[c]
 
 const CARD_H = 74
 const GAP = 8
@@ -163,14 +173,14 @@ export function SessionsOverview({ tabs, sessions, active }: { tabs: Tab[]; sess
 
   return (
     <section className="card sessions-overview fleet">
-      <div className="fleet-title">Sessions</div>
+      <div className="fleet-title">{tr('sessionsOverview.sessions')}</div>
       {!tabs.length ? (
-        <div className="fleet-empty">No sessions open. Start one with New session.</div>
+        <div className="fleet-empty">{tr('sessionsOverview.empty')}</div>
       ) : (
         <div className="fleet-board" ref={boardRef} style={{ height }}>
           {COLUMNS.map((c, i) => (
             <div key={c} className="fleet-col" style={{ left: `${(i * 100) / COLUMNS.length}%`, width: `${100 / COLUMNS.length}%` }}>
-              <div className="fleet-col-head">{c}</div>
+              <div className="fleet-col-head">{columnLabel(c)}</div>
             </div>
           ))}
           {width > 0 &&
@@ -186,7 +196,7 @@ export function SessionsOverview({ tabs, sessions, active }: { tabs: Tab[]; sess
                   className={`fleet-card${tally === 'wait' ? ' fleet-wait' : ''}`}
                   style={{ width: cardW, transform: `translate(${x}px, ${y}px)` }}
                   onClick={() => open(t.id)}
-                  title={`${t.cwd}\nClick to open`}
+                  title={tr('sessionsOverview.cardTitle', { cwd: t.cwd })}
                 >
                   <span className="fleet-card-head">
                     <span className={`tally-lamp tally-${tally}`} />
@@ -196,7 +206,7 @@ export function SessionsOverview({ tabs, sessions, active }: { tabs: Tab[]; sess
                   <span className="fleet-card-foot">
                     {steps.length > 0 && (
                       <span>
-                        {doneSteps} of {steps.length} steps
+                        {tr('sessionsOverview.steps', { done: doneSteps, count: steps.length })}
                       </span>
                     )}
                     {ticket && <span>{ticket}</span>}
@@ -230,7 +240,7 @@ export function SessionsOverview({ tabs, sessions, active }: { tabs: Tab[]; sess
                   <g key={`${a}|${b}`}>
                     <path className="fleet-line" style={{ d: same ? `path("M${x1},${y1} C${x1 + bulge},${y1} ${x2 + bulge},${y2} ${x2},${y2}")` : `path("M${x1},${y1} C${x1 + bulge},${y1} ${x2 - bulge},${y2} ${x2},${y2}")` } as CSSProperties} />
                     <text className="fleet-line-label" textAnchor={flip ? 'end' : 'start'} style={{ transform: `translate(${flip ? mx - 6 : mx + 6}px, ${my + 4}px)` }}>
-                      both in {folder}
+                      {tr('sessionsOverview.bothIn', { folder })}
                     </text>
                   </g>
                 )

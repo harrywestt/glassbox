@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import { tr } from '../../shared/i18n'
 
 marked.setOptions({ gfm: true, breaks: false })
 
@@ -58,20 +59,20 @@ export function formatTokens(n: number): string {
 export function timeUntil(iso: string | null | undefined): string {
   if (!iso) return ''
   const ms = Date.parse(iso) - Date.now()
-  if (ms <= 0) return 'now'
+  if (ms <= 0) return tr('lib.now')
   const mins = Math.round(ms / 60000)
-  if (mins < 60) return `${mins}m`
+  if (mins < 60) return tr('lib.minutes', { n: mins })
   const hours = Math.floor(mins / 60)
-  if (hours < 48) return `${hours}h ${mins % 60}m`
-  return `${Math.floor(hours / 24)}d ${hours % 24}h`
+  if (hours < 48) return tr('lib.hoursMinutes', { h: hours, m: mins % 60 })
+  return tr('lib.daysHours', { d: Math.floor(hours / 24), h: hours % 24 })
 }
 
 export function timeAgo(ms: number): string {
   const s = Math.round((Date.now() - ms) / 1000)
-  if (s < 60) return 'just now'
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
-  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`
+  if (s < 60) return tr('lib.justNow')
+  if (s < 3600) return tr('lib.minutesAgo', { n: Math.floor(s / 60) })
+  if (s < 86400) return tr('lib.hoursAgo', { n: Math.floor(s / 3600) })
+  if (s < 7 * 86400) return tr('lib.daysAgo', { n: Math.floor(s / 86400) })
   // Older than a week: a short date, in the same compact style ("18 Sep").
   return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(new Date(ms).getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })
 }
@@ -79,12 +80,12 @@ export function timeAgo(ms: number): string {
 /** A duration people can read at a glance: 4.2s, 2m 14s, 1h 05m, 1d 14h. */
 export function formatDuration(ms: number): string {
   const n = Math.max(0, ms / 1000)
-  if (n < 10) return `${n.toFixed(1)}s`
+  if (n < 10) return tr('lib.seconds', { n: n.toFixed(1) })
   const sec = Math.round(n)
-  if (sec < 60) return `${sec}s`
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`
-  if (sec < 86_400) return `${Math.floor(sec / 3600)}h ${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}m`
-  return `${Math.floor(sec / 86_400)}d ${Math.floor((sec % 86_400) / 3600)}h`
+  if (sec < 60) return tr('lib.seconds', { n: sec })
+  if (sec < 3600) return tr('lib.minutesSeconds', { m: Math.floor(sec / 60), s: String(sec % 60).padStart(2, '0') })
+  if (sec < 86_400) return tr('lib.hoursMinutesPadded', { h: Math.floor(sec / 3600), m: String(Math.floor((sec % 3600) / 60)).padStart(2, '0') })
+  return tr('lib.daysHours', { d: Math.floor(sec / 86_400), h: Math.floor((sec % 86_400) / 3600) })
 }
 
 export const baseName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p

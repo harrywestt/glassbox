@@ -3,6 +3,7 @@ import { useSession } from '../views/SessionView'
 import { baseName } from '../lib'
 import { changeRadar, radarCount, type RadarItem } from '../radar'
 import { Icon, Section } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 type DepCheck = { name: string; version: string; ecosystem: string; license?: string; vulns: { id: string; summary?: string }[]; error?: string }
 
@@ -29,15 +30,15 @@ export function RadarCard() {
   // looks like a secret show up here; with none, the section isn't shown.
   if (count === 0) return null
   return (
-    <Section id="risky" title="Risky changes" meta={<span className="count">{count}</span>}>
+    <Section id="risky" title={tr('radarCard.title')} meta={<span className="count">{count}</span>}>
 
       {radar.secrets.length > 0 && (
-        <Group icon="key" tone="err" title="Possible secrets in the code">
+        <Group icon="key" tone="err" title={tr('radarCard.secrets')}>
           {radar.secrets.map((x, i) => <Row key={i} x={x} onOpen={open} />)}
         </Group>
       )}
       {radar.dependencies.length > 0 && (
-        <Group icon="package" title="New dependencies">
+        <Group icon="package" title={tr('radarCard.dependencies')}>
           {radar.dependencies.map((d) => {
             const c = checks.find((x) => x.name === d.name && x.ecosystem === d.ecosystem)
             return (
@@ -49,14 +50,14 @@ export function RadarCard() {
                 {c?.license && <span className="tag">{c.license}</span>}
                 {c ? (
                   c.vulns.length ? (
-                    <span className="tag warn-tag">{c.vulns.length} known vulnerabilit{c.vulns.length > 1 ? 'ies' : 'y'}</span>
+                    <span className="tag warn-tag">{tr('radarCard.vulnerabilities', { count: c.vulns.length })}</span>
                   ) : c.error ? (
-                    <span className="muted small" title={c.error}>not checked</span>
+                    <span className="muted small" title={c.error}>{tr('radarCard.notChecked')}</span>
                   ) : (
-                    <span className="small ok">no known issues</span>
+                    <span className="small ok">{tr('radarCard.noKnownIssues')}</span>
                   )
                 ) : (
-                  <span className="muted small">checking…</span>
+                  <span className="muted small">{tr('radarCard.checking')}</span>
                 )}
               </div>
             )
@@ -64,22 +65,22 @@ export function RadarCard() {
         </Group>
       )}
       {radar.envVars.length > 0 && (
-        <Group icon="symbol-variable" title="New environment variables to set">
+        <Group icon="symbol-variable" title={tr('radarCard.envVars')}>
           {radar.envVars.map((x, i) => <Row key={i} x={x} onOpen={open} mono />)}
         </Group>
       )}
       {radar.migrations.length > 0 && (
-        <Group icon="database" tone="warn" title="Database migrations">
+        <Group icon="database" tone="warn" title={tr('radarCard.migrations')}>
           {radar.migrations.map((x, i) => <Row key={i} x={x} onOpen={open} />)}
         </Group>
       )}
       {radar.contracts.length > 0 && (
-        <Group icon="symbol-interface" tone="warn" title="Contracts and public APIs">
+        <Group icon="symbol-interface" tone="warn" title={tr('radarCard.contracts')}>
           {radar.contracts.map((x, i) => <Row key={i} x={x} onOpen={open} />)}
         </Group>
       )}
       {radar.config.length > 0 && (
-        <Group icon="settings-gear" title="Config">
+        <Group icon="settings-gear" title={tr('radarCard.config')}>
           {radar.config.map((x, i) => <Row key={i} x={x} onOpen={open} />)}
         </Group>
       )}

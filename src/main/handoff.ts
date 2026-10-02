@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { query } from './claude'
+import { tr } from '../shared/i18n'
 
 const exec = promisify(execFile)
 
@@ -41,7 +42,7 @@ ${sessionBrief.slice(0, 6000)}`
       if (msg.type === 'result' && msg.subtype === 'success') summary = msg.result.trim()
     }
   } catch (err) {
-    return { text: '', error: `Couldn't write the message: ${String(err)}` }
+    return { text: '', error: tr('mainHandoff.couldNotWrite', { error: String(err) }) }
   }
   // Tidy what a model sometimes adds anyway: wrapping quotes, a pasted link, dashes.
   summary = summary
@@ -50,7 +51,7 @@ ${sessionBrief.slice(0, 6000)}`
     .replace(/\s*—\s*/g, ', ')
     .replace(/\s{2,}/g, ' ')
     .trim()
-  if (!summary) return { text: '', error: 'Couldn’t write the message. Try again.' }
+  if (!summary) return { text: '', error: tr('mainHandoff.couldNotWriteRetry') }
   const text = pr ? `${summary}\n${pr.url}` : summary
   return { text, prUrl: pr?.url, prTitle: pr?.title }
 }

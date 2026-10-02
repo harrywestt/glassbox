@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { tr } from '../../shared/i18n'
 
 /** 'starting': the mic is opening (about half a second on Windows), so nothing is recorded yet. */
 export type VoiceState = 'idle' | 'starting' | 'listening' | 'transcribing'
@@ -70,12 +71,12 @@ export function useVoice() {
         // Load (or first-time download) the model while the user is speaking. Only now: loading it
         // ties up the main process, which opening the mic goes through, so doing it first made the
         // first hold after launch take seconds to start recording.
-        void window.glassbox.voice.prepare().catch((e) => setError(`Couldn't load the speech model: ${String(e)}`))
+        void window.glassbox.voice.prepare().catch((e) => setError(tr('voice.couldNotLoadModel', { error: String(e) })))
       }
     } catch (e) {
       release()
       setState('idle')
-      setError(e instanceof DOMException && e.name === 'NotAllowedError' ? 'Microphone access is blocked. Allow desktop apps to use the microphone in Windows privacy settings.' : `Couldn't open the microphone: ${String(e)}`)
+      setError(e instanceof DOMException && e.name === 'NotAllowedError' ? tr('voice.micBlocked') : tr('voice.couldNotOpenMic', { error: String(e) }))
     } finally {
       opening.current = null
       done()
@@ -104,7 +105,7 @@ export function useVoice() {
       return await window.glassbox.voice.transcribe(audio.getChannelData(0))
     } catch (e) {
       if (e instanceof DOMException && e.name === 'EncodingError') return '' // too short to hold any audio
-      setError(`Couldn't transcribe that: ${String(e)}`)
+      setError(tr('voice.couldNotTranscribe', { error: String(e) }))
       return ''
     } finally {
       setState('idle')

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { tr } from '../../shared/i18n'
 
 /** Currency Glassbox shows money in. Source amounts are converted from whatever they're reported in. */
 export const DISPLAY_CURRENCY = 'GBP'
@@ -27,6 +28,6 @@ export function money(amount: number, currency: string, rates: Rates): { text: s
   const original = fmt(amount, code)
   if (code === DISPLAY_CURRENCY) return { text: original, title: original }
   const rate = rates?.perUnit[code]
-  if (!rate) return { text: original, title: `${original} (no GBP exchange rate available yet)` }
-  return { text: fmt(amount * rate, DISPLAY_CURRENCY), title: `${original} converted at ${rate.toFixed(4)} (ECB rate, ${rates!.date})` }
+  if (!rate) return { text: original, title: tr('money.noRate', { original }) }
+  return { text: fmt(amount * rate, DISPLAY_CURRENCY), title: tr('money.converted', { original, rate: rate.toFixed(4), date: rates!.date }) }
 }

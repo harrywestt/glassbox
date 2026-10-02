@@ -15,6 +15,7 @@ import { isTestCall } from '../tests'
 import { FileCard } from '../components/FileCard'
 import { Select } from '../components/Select'
 import { fileKind, KIND_ICON, splitAttachments } from '../attachments'
+import { tr } from '../../../shared/i18n'
 
 const TOOL_ICONS: Record<string, string> = {
   Read: 'file', Write: 'new-file', Edit: 'edit', MultiEdit: 'edit', NotebookEdit: 'notebook', Bash: 'terminal', PowerShell: 'terminal-powershell',
@@ -163,7 +164,7 @@ export function Timeline() {
             return (
               <Fragment key={i}>
                 {agent && (
-                  <button className="agent-run" onClick={() => setFilter(agent.id)} title="Show only this agent">
+                  <button className="agent-run" onClick={() => setFilter(agent.id)} title={tr('timeline.showOnlyThisAgent')}>
                     <Icon name="organization" /> {agent.type}
                     {agent.description && <span className="agent-run-what">{agent.description}</span>}
                   </button>
@@ -185,7 +186,7 @@ export function Timeline() {
           <div key={key} className="row">
             {d.kind === 'thinking' ? (
               <div className="thinking live">
-                <div className="live-label"><Icon name="lightbulb" /> Thinking</div>
+                <div className="live-label"><Icon name="lightbulb" /> {tr('timeline.thinking')}</div>
                 <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, tab.cwd) }} />
               </div>
             ) : (
@@ -199,13 +200,13 @@ export function Timeline() {
       {(jump.latest || jump.sent) && (
         <div className="timeline-jump">
           {jump.sent && (
-            <button className="jump-btn" onClick={toSent} title="Scroll to the last message you sent">
-              <Icon name={jump.sent === 'above' ? 'arrow-up' : 'arrow-down'} /> Your last message
+            <button className="jump-btn" onClick={toSent} title={tr('timeline.scrollToSentHint')}>
+              <Icon name={jump.sent === 'above' ? 'arrow-up' : 'arrow-down'} /> {tr('timeline.yourLastMessage')}
             </button>
           )}
           {jump.latest && (
-            <button className="jump-btn" onClick={toLatest} title="Scroll to the bottom and follow Claude again">
-              <Icon name="arrow-down" /> Jump to latest
+            <button className="jump-btn" onClick={toLatest} title={tr('timeline.jumpToLatestHint')}>
+              <Icon name="arrow-down" /> {tr('timeline.jumpToLatest')}
             </button>
           )}
         </div>
@@ -215,7 +216,8 @@ export function Timeline() {
 }
 
 // Said in turn while Claude works, like the CLI does, so a long run never looks stuck.
-const WORKING_WORDS = ['Working', 'Thinking', 'Pondering', 'Mulling it over', 'Tinkering', 'Crunching', 'Figuring it out', 'Piecing it together', 'Checking', 'Brewing', 'Noodling', 'Getting there']
+// Keys under timeline.workingWords.
+const WORKING_WORDS = ['working', 'thinking', 'pondering', 'mullingItOver', 'tinkering', 'crunching', 'figuringItOut', 'piecingItTogether', 'checking', 'brewing', 'noodling', 'gettingThere']
 
 /**
  * The line at the bottom while Claude is working: a turning spark, a word that changes every few
@@ -238,8 +240,8 @@ function Working() {
   const took = Math.max(0, Math.floor((now - since) / 1000))
   const last = Math.max(since, s.timeline.at(-1)?.at ?? 0, ...Object.values(s.toolCalls).map((c) => c.endedAt ?? c.at))
   const quiet = Math.floor((now - last) / 1000)
-  const word = WORKING_WORDS[Math.floor(took / 6) % WORKING_WORDS.length]
-  const clock = (n: number) => (n < 60 ? `${n}s` : formatDuration(n * 1000))
+  const word = tr(`timeline.workingWords.${WORKING_WORDS[Math.floor(took / 6) % WORKING_WORDS.length]}`)
+  const clock = (n: number) => (n < 60 ? tr('timeline.seconds', { n }) : formatDuration(n * 1000))
   const running = Object.values(s.toolCalls).filter((c) => c.status === 'running').length
   return (
     <div className="row">
@@ -250,13 +252,17 @@ function Working() {
             <line key={a} x1="7" y1="1.5" x2="7" y2="12.5" transform={`rotate(${a} 7 7)`} />
           ))}
         </svg>
-        <span className="working-word">{word}…</span>
+        <span className="working-word">{tr('timeline.workingWord', { word })}</span>
         <span className="working-meta">
           {clock(took)}
           {s.status !== 'running'
-            ? `, ${background.length === 1 ? `${background[0].type} working in the background${background[0].progress ? `: ${background[0].progress}` : ''}` : `${background.length} agents working in the background`}`
+            ? background.length === 1
+              ? background[0].progress
+                ? tr('timeline.backgroundOneProgress', { type: background[0].type, progress: background[0].progress })
+                : tr('timeline.backgroundOne', { type: background[0].type })
+              : tr('timeline.backgroundMany', { n: background.length })
             : quiet >= 45
-              ? `, still going (${running ? `${running} step${running > 1 ? 's' : ''} running` : 'thinking'}, nothing new for ${clock(quiet)})`
+              ? tr('timeline.stillGoing', { what: running ? tr('timeline.stepsRunning', { count: running }) : tr('timeline.stillThinking'), time: clock(quiet) })
               : ''}
         </span>
       </div>
@@ -269,14 +275,14 @@ function Welcome() {
   return (
     <div className="welcome">
       <span className="welcome-icon"><Logo size={44} /></span>
-      <h2>New session</h2>
+      <h2>{tr('timeline.newSession')}</h2>
       <p className="muted">
-        in <span className="mono">{tab.cwd}</span>
+        {tr('timeline.in')} <span className="mono">{tab.cwd}</span>
       </p>
       <p className="muted small">
         {s.status === 'ready'
-          ? `${s.commands.length} skills and ${s.mcp.filter((m) => m.status === 'connected').length} connectors ready.`
-          : 'Starting Claude Code…'}
+          ? tr('timeline.ready', { skills: s.commands.length, connectors: s.mcp.filter((m) => m.status === 'connected').length })
+          : tr('timeline.startingClaude')}
       </p>
     </div>
   )
@@ -305,21 +311,21 @@ function AgentSwitcher() {
   const listed = agents.filter((a) => a.status === 'running' || a.id === value)
   return (
     <div className="agent-switch">
-      <span className="agent-switch-label small">Showing</span>
+      <span className="agent-switch-label small">{tr('timeline.showing')}</span>
       <Select<string>
         value={value}
         onChange={setFilter}
-        aria-label="Which agent's work to show"
+        aria-label={tr('timeline.whichAgent')}
         options={[
-          { value: 'main', label: 'Main conversation' },
-          ...listed.map((a) => ({ value: a.id, label: `${a.type}: ${a.description || 'agent'}`, hint: a.status === 'running' ? 'running' : 'finished' })),
-          { value: 'all', label: 'Everything, interleaved' }
+          { value: 'main', label: tr('timeline.mainConversation') },
+          ...listed.map((a) => ({ value: a.id, label: tr('timeline.agentOption', { type: a.type, description: a.description || tr('timeline.agentFallback') }), hint: a.status === 'running' ? tr('timeline.running') : tr('timeline.finished') })),
+          { value: 'all', label: tr('timeline.everything') }
         ]}
       />
-      {running.length > 0 && <span className="agent-switch-meta small">{running.length} running</span>}
+      {running.length > 0 && <span className="agent-switch-meta small">{tr('timeline.runningCount', { n: running.length })}</span>}
       {value !== 'main' && (
         <button className="link small" onClick={() => setFilter('main')}>
-          Back to the main conversation
+          {tr('timeline.backToMain')}
         </button>
       )}
     </div>
@@ -345,7 +351,7 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
         <div className="reply">
           <div className="reply-to small">
             <Icon name={question ? 'question' : 'reply'} />
-            <span className="reply-verb">{question ? 'Answering' : 'Replying to'}</span>
+            <span className="reply-verb">{question ? tr('timeline.answering') : tr('timeline.replyingTo')}</span>
             <span className="reply-target">{targetLabel(target)}</span>
           </div>
           <div className="msg user">{item.text}</div>
@@ -358,7 +364,7 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
       return (
         <details className="thinking">
           <summary>
-            <Icon name="lightbulb" /> Thinking
+            <Icon name="lightbulb" /> {tr('timeline.thinking')}
           </summary>
           <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.text) }} />
         </details>
@@ -372,8 +378,8 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
         return (
           <div className="decision-pending">
             <span className="tally-lamp tally-wait" aria-hidden />
-            <span className="grow">Asked you: {d.title}</span>
-            <span className="muted small">Answer it below</span>
+            <span className="grow">{tr('timeline.askedYou', { title: d.title })}</span>
+            <span className="muted small">{tr('timeline.answerBelow')}</span>
           </div>
         )
       return <DecisionCard d={d} />
@@ -387,7 +393,7 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
         <div className={`guard-note guard-${item.hit.action}`}>
           <Icon name={item.hit.action === 'block' ? 'shield' : 'question'} />
           <span className="grow">
-            <strong>{item.hit.action === 'block' ? 'Blocked' : 'Needs your approval'}:</strong> {item.hit.label}
+            <strong>{item.hit.action === 'block' ? tr('timeline.guardBlocked') : tr('timeline.guardNeedsApproval')}</strong> {item.hit.label}
             <span className="guard-detail mono">{item.hit.detail}</span>
           </span>
         </div>
@@ -407,11 +413,10 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
     case 'result':
       return (
         <div className={item.isError && !item.stopped ? 'turn-end error' : 'turn-end'}>
-          <span title={`Finished ${new Date(item.at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}. The time includes any wait for your answers or approvals.`}>
-            {item.stopped ? 'You stopped it after ' : item.isError ? 'Stopped with an error after ' : 'Done in '}
-            {formatDuration(item.durationMs)}
+          <span title={tr('timeline.finishedHint', { time: new Date(item.at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) })}>
+            {tr(item.stopped ? 'timeline.stoppedAfter' : item.isError ? 'timeline.errorAfter' : 'timeline.doneIn', { time: formatDuration(item.durationMs) })}
             {/* Past a minute, the clock time says more than the length alone. */}
-            {item.durationMs >= 60_000 && <span className="turn-end-at">, at {new Date(item.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
+            {item.durationMs >= 60_000 && <span className="turn-end-at">{tr('timeline.atTime', { time: new Date(item.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) })}</span>}
           </span>
         </div>
       )
@@ -436,7 +441,7 @@ function UserMessage({ text: sent, uuid, turn }: { text: string; uuid?: string; 
       {uuid && (
         <button
           className="icon-btn hover-action"
-          title="Rewind files to before this message"
+          title={tr('timeline.rewindHint')}
           onClick={() => {
             setCheckpoint(uuid)
             showPanel('review')
@@ -480,19 +485,19 @@ function WaitingOnAgent({ at, s }: { at: number; s: SessionState }) {
   const busy = Object.values(s.agents).filter((a) => a.status === 'running' && a.at < at && !a.background)
   if (!busy.length) return null
   const a = busy[busy.length - 1]
-  const name = `${a.type ? a.type[0].toUpperCase() + a.type.slice(1) : 'An'} agent`
+  const name = a.type ? tr('timeline.agentName', { type: a.type[0].toUpperCase() + a.type.slice(1) }) : tr('timeline.anAgent')
   return (
     <div className="waiting-on-agent small">
       <Icon name="info" className="muted" />
       <span className="grow">
-        Claude is waiting for the {name} ({a.description}), so it reads this when that agent finishes. The agent sees your message too.
+        {tr('timeline.waitingOnAgent', { name, description: a.description })}
       </span>
       <button className="link small" onClick={() => setFilter(a.id)}>
-        Follow the agent
+        {tr('timeline.followTheAgent')}
       </button>
       {a.taskId && (
-        <button className="link small" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title="Stop the agent so Claude reads your message now">
-          Stop it
+        <button className="link small" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title={tr('timeline.stopAgentHint')}>
+          {tr('timeline.stopIt')}
         </button>
       )}
     </div>
@@ -507,7 +512,7 @@ function QuickAnswer({ a }: { a: { status: 'running' | 'done' | 'failed'; text?:
     <div className="quick-answer">
       <div className="quick-answer-head small muted">
         {a.status === 'running' ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name="zap" className="accent" />}
-        {a.status === 'running' ? 'Claude is busy with a long step, so getting you a quick answer…' : 'Quick answer while Claude finishes its current step. It has your message and acts on it next.'}
+        {a.status === 'running' ? tr('timeline.quickAnswerBusy') : tr('timeline.quickAnswerDone')}
       </div>
       {a.text && <div className="msg assistant markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(a.text, tab.cwd) }} />}
     </div>
@@ -523,7 +528,7 @@ function AssistantMessage({ text }: { text: string }) {
       {commenting === null ? (
         <button
           className="icon-btn hover-action"
-          title="Comment on this (select text first to quote part of it)"
+          title={tr('timeline.commentOnMessage')}
           onClick={() => setCommenting(window.getSelection()?.toString().trim() || text.slice(0, 280))}
         >
           <Icon name="comment" />
@@ -536,9 +541,9 @@ function AssistantMessage({ text }: { text: string }) {
 }
 
 const DECISION_META = {
-  decision: { icon: 'milestone', label: 'Decided' },
-  assumption: { icon: 'warning', label: 'Assumed' },
-  question: { icon: 'question', label: 'Question' }
+  decision: { icon: 'milestone', label: 'timeline.decided' },
+  assumption: { icon: 'warning', label: 'timeline.assumed' },
+  question: { icon: 'question', label: 'timeline.question' }
 } as const
 
 export function DecisionCard({ d }: { d: DecisionEntry }) {
@@ -559,16 +564,16 @@ export function DecisionCard({ d }: { d: DecisionEntry }) {
         <div className="decision-main">
           <span className="decision-title">{d.title}</span>
           <span className="decision-meta">
-            <span className="decision-kind">{d.kind === 'question' && d.dismissed ? 'Dismissed' : d.kind === 'question' && d.challenged ? 'Answered' : meta.label}</span>
+            <span className="decision-kind">{d.kind === 'question' && d.dismissed ? tr('timeline.dismissed') : d.kind === 'question' && d.challenged ? tr('timeline.answered') : tr(meta.label)}</span>
             <span className="decision-time" title={new Date(d.at).toLocaleString()}>
               {new Date(d.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
             </span>
-            {d.challenged && d.kind !== 'question' && <span>You commented</span>}
+            {d.challenged && d.kind !== 'question' && <span>{tr('timeline.youCommented')}</span>}
           </span>
         </div>
         {!commenting && !awaiting && (
           <button className="btn quiet decision-action" onClick={(e) => (e.stopPropagation(), setCommenting(true))}>
-            {d.kind === 'question' ? (d.challenged ? 'Reply' : 'Answer') : 'Challenge'}
+            {d.kind === 'question' ? (d.challenged ? tr('timeline.reply') : tr('timeline.answer')) : tr('timeline.challenge')}
           </button>
         )}
       </div>
@@ -577,13 +582,13 @@ export function DecisionCard({ d }: { d: DecisionEntry }) {
           {d.detail && <p>{d.detail}</p>}
           {d.reply && (
             <p className="decision-reply">
-              <span className="muted">{d.kind === 'question' ? 'You answered: ' : 'You said: '}</span>
+              <span className="muted">{d.kind === 'question' ? tr('timeline.youAnswered') : tr('timeline.youSaid')}</span>
               {d.reply}
             </p>
           )}
           {d.alternatives?.length && d.kind !== 'question' ? (
             <p className="muted">
-              Considered: {d.alternatives.join('; ')}
+              {tr('timeline.considered', { list: d.alternatives.join('; ') })}
             </p>
           ) : null}
           {d.files?.length ? <p className="muted mono">{d.files.map((f) => baseName(f)).join(', ')}</p> : null}
@@ -592,7 +597,7 @@ export function DecisionCard({ d }: { d: DecisionEntry }) {
       {commenting && (
         <CommentBox
           target={{ kind: 'decision', id: d.id, title: d.title }}
-          placeholder={d.kind === 'question' ? 'Your answer' : 'Why this might be wrong, or what to do instead'}
+          placeholder={d.kind === 'question' ? tr('timeline.yourAnswer') : tr('timeline.challengePlaceholder')}
           onDone={() => setCommenting(false)}
         />
       )}
@@ -652,12 +657,12 @@ function MediaStrip({ items, s, seen }: { items: ToolItem[]; s: SessionState; se
         return kind === 'audio' || kind === 'video' ? (
           <div key={p} className={`media-thumb ${kind}`}>
             {kind === 'video' ? <video src={src} controls preload="metadata" /> : <audio src={src} controls preload="metadata" />}
-            <button className="media-thumb-open" onClick={() => openFile(p)} title={`${relPath(tab.cwd, p)} (open full size)`}>
+            <button className="media-thumb-open" onClick={() => openFile(p)} title={tr('timeline.openFullSize', { path: relPath(tab.cwd, p) })}>
               {baseName(p)}
             </button>
           </div>
         ) : (
-          <button key={p} className="media-thumb" onClick={() => openFile(p)} title={`${relPath(tab.cwd, p)} (open full size)`}>
+          <button key={p} className="media-thumb" onClick={() => openFile(p)} title={tr('timeline.openFullSize', { path: relPath(tab.cwd, p) })}>
             <img src={src} alt={baseName(p)} loading="lazy" />
             <span className="media-thumb-name">{baseName(p)}</span>
           </button>
@@ -736,11 +741,11 @@ function PlanStep({ call, s }: { call: ToolCall; s: SessionState }) {
     <div className="plan-step">
       <Icon name="checklist" className={waiting ? 'accent' : 'muted'} />
       <span className="grow ellipsis">
-        <strong>Plan</strong> {title}
+        <strong>{tr('timeline.plan')}</strong> {title}
       </span>
-      <span className="muted small">{waiting ? 'waiting for you' : status === 'approved' ? 'approved' : status === 'changes-requested' ? 'changes requested' : ''}</span>
+      <span className="muted small">{waiting ? tr('timeline.planWaiting') : status === 'approved' ? tr('timeline.planApproved') : status === 'changes-requested' ? tr('timeline.planChangesRequested') : ''}</span>
       <button className="btn quiet small" onClick={() => (waiting ? openPlan() : openPlan({ text, status }))}>
-        Open plan
+        {tr('timeline.openPlan')}
       </button>
     </div>
   )
@@ -772,30 +777,35 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
         <span className="agent-step-type">{a.type}</span> {a.description}
         <span className="muted">
           {' '}
-          ({a.toolCalls} step{a.toolCalls === 1 ? '' : 's'}
-          {running ? ' so far' : ''}
-          {running && a.background ? ', in the background' : ''}
-          {a.stopped ? ', stopped' : ''})
+          {tr('timeline.agentStepMeta', {
+            detail: [
+              tr(running ? 'timeline.stepsSoFar' : 'timeline.steps', { count: a.toolCalls }),
+              running && a.background ? tr('timeline.inBackground') : '',
+              a.stopped ? tr('timeline.agentStopped') : ''
+            ]
+              .filter(Boolean)
+              .join(', ')
+          })}
         </span>
         {running && a.progress && <span className="agent-step-now">{a.progress}</span>}
       </span>
       {running && a.taskId && (
-        <button className="btn quiet" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title="Stop just this agent. Claude and the other agents carry on">
-          Stop
+        <button className="btn quiet" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title={tr('timeline.stopAgentOnlyHint')}>
+          {tr('timeline.stop')}
         </button>
       )}
-      <button className="btn quiet" onClick={() => setFilter(a.id)} title="Show only this agent's work">
-        {running ? 'Follow it' : 'See its work'}
+      <button className="btn quiet" onClick={() => setFilter(a.id)} title={tr('timeline.showOnlyAgentWork')}>
+        {running ? tr('timeline.followIt') : tr('timeline.seeItsWork')}
       </button>
       <StepTime at={a.at} endedAt={a.endedAt} running={running} />
     </div>
     {recent.length > 0 && (
-      <div className="agent-feed" aria-label={`What ${a.type} is doing`}>
+      <div className="agent-feed" aria-label={tr('timeline.agentFeed', { type: a.type })}>
         {recent.map((r) =>
           r.kind === 'said' ? (
             <div key={`said:${r.at}`} className="agent-feed-row said" title={r.text}>
               <Icon name="comment" className="muted" />
-              <span className="grow ellipsis">“{r.text.replace(/\s+/g, ' ').trim()}”</span>
+              <span className="grow ellipsis">{tr('timeline.saidQuote', { text: r.text.replace(/\s+/g, ' ').trim() })}</span>
               <StepTime at={r.at} running={false} />
             </div>
           ) : (
@@ -821,12 +831,12 @@ function ShellEditCard({ call, s }: { call: ToolCall; s: SessionState }) {
       <div className="edit-head-row">
         <span className="edit-head static">
           <Icon name="terminal" className="warn" />
-          <span className="edit-verb">Changed {files.length} file{files.length > 1 ? 's' : ''} with a command:</span>
+          <span className="edit-verb">{tr('timeline.changedWithCommand', { count: files.length })}</span>
           <span className="muted small mono ellipsis" title={String(call.input.command ?? '')}>{String(call.input.description ?? call.input.command ?? '').split('\n')[0]}</span>
         </span>
       </div>
       {files.map((p) => (
-        <button key={p} className="commit-card-row" onClick={() => openDiff({ path: p, base: null, diffMode: 'merge-base', source: 'branch' })} title={`${p}\nOpen the diff`}>
+        <button key={p} className="commit-card-row" onClick={() => openDiff({ path: p, base: null, diffMode: 'merge-base', source: 'branch' })} title={tr('timeline.openTheDiff', { path: p })}>
           <Icon name="edit" className="muted" />
           <span className="edit-file">{baseName(p)}</span>
           <span className="muted small ellipsis grow">{relPath(tab.cwd, p).split('/').slice(0, -1).join('/')}</span>
@@ -845,13 +855,13 @@ function Steps({ calls, s }: { calls: ToolCall[]; s: SessionState }) {
   const failed = calls.filter((c) => c.status === 'error').length
   return (
     <div className={open ? 'steps open' : 'steps'}>
-      <div className="tool-summary-row" onClick={() => setOpen(!open)} title={open ? 'Hide the steps' : 'Show each step'}>
+      <div className="tool-summary-row" onClick={() => setOpen(!open)} title={open ? tr('timeline.hideSteps') : tr('timeline.showSteps')}>
         {running ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name={failed ? 'warning' : 'list-flat'} className={failed ? 'warn' : 'muted'} />}
         <span className="grow ellipsis">
-          {running ? <>{describeTool(running)}<span className="muted"> ({calls.length} steps so far)</span></> : summarizeTools(calls)}
-          {failed > 0 && <span className="err"> {failed} failed</span>}
+          {running ? <>{describeTool(running)}<span className="muted"> {tr('timeline.stepsSoFarParen', { n: calls.length })}</span></> : summarizeTools(calls)}
+          {failed > 0 && <span className="err"> {tr('timeline.failedCount', { n: failed })}</span>}
         </span>
-        <span className="muted small">{calls.length} steps</span>
+        <span className="muted small">{tr('timeline.stepCount', { n: calls.length })}</span>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />
         <StepTime at={calls[0].at} endedAt={running ? undefined : Math.max(...calls.map((c) => c.endedAt ?? 0)) || undefined} running={!!running} />
       </div>
@@ -886,7 +896,7 @@ function StepTime({ at, endedAt, running }: { at: number; endedAt?: number; runn
   const took = running ? now - at : endedAt ? endedAt - at : undefined
   const start = new Date(at)
   return (
-    <span className="step-time" title={`Started ${start.toLocaleString()}${took !== undefined ? `, ${running ? 'running for' : 'took'} ${formatDuration(took)}` : ''}`}>
+    <span className="step-time" title={took === undefined ? tr('timeline.started', { time: start.toLocaleString() }) : tr(running ? 'timeline.startedRunningFor' : 'timeline.startedTook', { time: start.toLocaleString(), took: formatDuration(took) })}>
       <span className="step-time-at">{start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
       {took !== undefined && <span className={running ? 'step-time-took live' : 'step-time-took'}>{formatDuration(took)}</span>}
     </span>
@@ -915,18 +925,18 @@ function ToolRow({ call, isAgent, guarded }: { call: ToolCall; isAgent: boolean;
         <span className="tool-text" title={isPath ? path : CODE_TOOLS.has(call.name) ? String(call.input.command ?? call.input.pattern ?? '') : toolSummary(call)}>
           {describeTool(call)}
         </span>
-        {guarded && <Icon name="shield" className={guarded === 'block' ? 'err' : 'warn'} title={guarded === 'block' ? 'Blocked by a guardrail' : 'Stopped for your approval by a guardrail'} />}
+        {guarded && <Icon name="shield" className={guarded === 'block' ? 'err' : 'warn'} title={guarded === 'block' ? tr('timeline.blockedByGuardrail') : tr('timeline.stoppedByGuardrail')} />}
         <span className="tool-actions">
-          <button className="icon-btn" title="Comment on this step" onClick={(e) => (e.stopPropagation(), setCommenting(true))}>
+          <button className="icon-btn" title={tr('timeline.commentOnStep')} onClick={(e) => (e.stopPropagation(), setCommenting(true))}>
             <Icon name="comment" />
           </button>
           {isPath && (
-            <button className="icon-btn" title="Open file" onClick={(e) => (e.stopPropagation(), openFile(path))}>
+            <button className="icon-btn" title={tr('timeline.openFile')} onClick={(e) => (e.stopPropagation(), openFile(path))}>
               <Icon name="go-to-file" />
             </button>
           )}
           {isAgent && (
-            <button className="icon-btn" title="Follow this agent" onClick={(e) => (e.stopPropagation(), setFilter(call.id), showPanel('agents'))}>
+            <button className="icon-btn" title={tr('timeline.followThisAgent')} onClick={(e) => (e.stopPropagation(), setFilter(call.id), showPanel('agents'))}>
               <Icon name="eye" />
             </button>
           )}
@@ -937,7 +947,7 @@ function ToolRow({ call, isAgent, guarded }: { call: ToolCall; isAgent: boolean;
       {commenting && <CommentBox target={toolTarget(call)} onDone={() => setCommenting(false)} />}
       {open && (
         <div className="tool-body">
-          <div className="label">Input</div>
+          <div className="label">{tr('timeline.input')}</div>
           <pre>{JSON.stringify(call.input, null, 2)}</pre>
           {call.result !== undefined && <ToolResult result={call.result} />}
         </div>
@@ -962,7 +972,7 @@ function ToolResult({ result }: { result: string }) {
     let live = true
     window.glassbox.toolOutput(saved).then(
       (r) => live && setFull(r),
-      () => live && setFull({ error: 'Couldn’t load the full output' })
+      () => live && setFull({ error: tr('timeline.couldNotLoadOutput') })
     )
     return () => {
       live = false
@@ -973,15 +983,15 @@ function ToolResult({ result }: { result: string }) {
   return (
     <>
       <div className="label">
-        Result
-        {saved && !full && <span className="muted"> (loading the full output…)</span>}
-        {saved && full?.error && <span className="muted"> (only a preview: {full.error.toLowerCase()})</span>}
+        {tr('timeline.result')}
+        {saved && !full && <span className="muted"> {tr('timeline.loadingFullOutput')}</span>}
+        {saved && full?.error && <span className="muted"> {tr('timeline.onlyPreview', { error: full.error.toLowerCase() })}</span>}
       </div>
       {/* The preview stops at the end of a line, not partway through one. */}
       <pre>{long && !all ? text.slice(0, Math.max(text.lastIndexOf('\n', RESULT_PREVIEW), RESULT_PREVIEW / 2)) : text}</pre>
       {long && (
         <button className="link small" onClick={() => setAll(!all)}>
-          {all ? 'Show less' : `Show all (${Math.round(text.length / 1024)} KB)`}
+          {all ? tr('timeline.showLess') : tr('timeline.showAll', { kb: Math.round(text.length / 1024) })}
         </button>
       )}
     </>
@@ -1011,12 +1021,12 @@ function BangCard({ id }: { id: string }) {
         {b.status === 'running' ? (
           <>
             <Icon name="loading" className="codicon-modifier-spin accent" />
-            <button className="btn quiet small" onClick={() => actions.stopShell(b.id)}>Stop</button>
+            <button className="btn quiet small" onClick={() => actions.stopShell(b.id)}>{tr('timeline.stop')}</button>
           </>
         ) : (
           <span className={b.status === 'failed' ? 'small err' : 'small muted'}>
-            {b.status === 'failed' ? `Failed${b.code != null ? ` (exit ${b.code})` : ''}` : 'Done'}
-            {b.sent ? ', sent to Claude' : ', goes to Claude with your next message'}
+            {b.status === 'failed' ? (b.code != null ? tr('timeline.failedExit', { code: b.code }) : tr('timeline.failed')) : tr('timeline.done')}
+            {b.sent ? tr('timeline.sentToClaude') : tr('timeline.goesWithNextMessage')}
           </span>
         )}
       </div>
@@ -1051,22 +1061,22 @@ export function ServiceErrorCard({ item }: { item: Extract<TimelineItem, { kind:
   return (
     <div className={open ? 'service-error' : 'service-error folded'}>
       <div className="service-error-head">
-        <button className="icon-btn" aria-expanded={open} title={open ? 'Hide the error' : 'Show the error'} onClick={() => setOpen(!open)}>
+        <button className="icon-btn" aria-expanded={open} title={open ? tr('timeline.hideError') : tr('timeline.showError')} onClick={() => setOpen(!open)}>
           <Icon name={open ? 'chevron-down' : 'chevron-right'} />
         </button>
         <Icon name="bug" className="err" />
         <span className="grow ellipsis">
-          <strong>{item.service}</strong> logged an error
-          {times > 1 && <span className="muted"> {times} times</span>}
+          <strong>{item.service}</strong> {tr('timeline.loggedAnError')}
+          {times > 1 && <span className="muted"> {tr('timeline.times', { n: times })}</span>}
           {item.after && (
             <span className="muted">
               {' '}
-              {secs < 90 ? `${secs}s` : `${Math.round(secs / 60)} min`} after Claude edited <span className="mono">{baseName(item.after.path)}</span>
+              {tr('timeline.afterClaudeEdited', { time: secs < 90 ? tr('timeline.seconds', { n: secs }) : tr('timeline.minutes', { n: Math.round(secs / 60) }) })} <span className="mono">{baseName(item.after.path)}</span>
             </span>
           )}
         </span>
         <button className="chip-btn" onClick={() => showPanel('services')}>
-          <Icon name="output" /> Logs
+          <Icon name="output" /> {tr('timeline.logs')}
         </button>
         <button
           className="chip-btn"
@@ -1078,7 +1088,7 @@ export function ServiceErrorCard({ item }: { item: Extract<TimelineItem, { kind:
             )
           }
         >
-          <Icon name="comment" /> Ask Claude
+          <Icon name="comment" /> {tr('timeline.askClaude')}
         </button>
       </div>
       {open && <pre className="service-error-text">{item.text}</pre>}

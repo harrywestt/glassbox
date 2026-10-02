@@ -5,6 +5,7 @@ import { useServices } from '../services'
 import { CHANGE_TOOLS } from '../session'
 import { Icon, IconButton, Toggle } from '../components/ui'
 import { Select } from '../components/Select'
+import { tr } from '../../../shared/i18n'
 import { activateBrowserTab, closeBrowserTab, openInBrowser, updateBrowserTab, useBrowser, type BrowserTabState } from '../browser'
 
 const RELOAD_DELAY_MS = 1500
@@ -37,17 +38,17 @@ export function BrowserTab() {
 
   return (
     <div className="work-page browser">
-      <div className="browser-tabs" role="tablist" aria-label="Browser tabs">
+      <div className="browser-tabs" role="tablist" aria-label={tr('browserTab.tabs')}>
         {b.tabs.map((t) => (
           <div key={t.id} role="tab" aria-selected={t.id === active?.id} className={t.id === active?.id ? 'browser-tab active' : 'browser-tab'} onClick={() => activateBrowserTab(tab.id, t.id)} onAuxClick={(e) => e.button === 1 && closeBrowserTab(tab.id, t.id)} title={t.url}>
             {t.loading ? <Icon name="loading" className="codicon-modifier-spin" /> : t.icon ? <img src={t.icon} alt="" className="browser-favicon" /> : <Icon name="globe" />}
-            <span className="ellipsis">{t.title || t.url.replace(/^https?:\/\//, '') || 'New tab'}</span>
-            <button className="browser-tab-close" aria-label="Close tab" onClick={(e) => (e.stopPropagation(), closeBrowserTab(tab.id, t.id))}>
+            <span className="ellipsis">{t.title || t.url.replace(/^https?:\/\//, '') || tr('browserTab.newTab')}</span>
+            <button className="browser-tab-close" aria-label={tr('browserTab.closeTab')} onClick={(e) => (e.stopPropagation(), closeBrowserTab(tab.id, t.id))}>
               <Icon name="close" />
             </button>
           </div>
         ))}
-        <IconButton icon="add" title="New tab" onClick={() => openInBrowser(tab.id, appUrl ?? 'about:blank')} />
+        <IconButton icon="add" title={tr('browserTab.newTab')} onClick={() => openInBrowser(tab.id, appUrl ?? 'about:blank')} />
       </div>
       {active && <AddressBar key={active.id} t={active} web={web.map((x) => ({ name: x.name, url: x.config.url!, status: x.status }))} follow={follow} setFollow={setFollow} />}
       <div className="preview-stage">
@@ -66,14 +67,14 @@ export function BrowserTab() {
               }}
             >
               <Icon name="globe" />
-              <input name="address" className="grow" placeholder="Type an address or search, then press Enter" aria-label="Address" autoFocus />
+              <input name="address" className="grow" placeholder={tr('browserTab.startPlaceholder')} aria-label={tr('browserTab.address')} autoFocus />
             </form>
             <p className="muted small">
-              Or start the app from{' '}
+              {tr('browserTab.startBefore')}{' '}
               <button className="link small" onClick={() => showPanel('services')}>
-                Services
+                {tr('browserTab.startLink')}
               </button>
-              . Pages Claude opens show here too, and sign-ins are kept.
+              {tr('browserTab.startAfter')}
             </p>
           </div>
         )}
@@ -95,15 +96,15 @@ function AddressBar({ t, web, follow, setFollow }: { t: BrowserTabState; web: { 
   }
   return (
     <div className="work-bar preview-bar-wide">
-      <IconButton icon="arrow-left" title="Back" onClick={() => wv()?.canGoBack() && wv()?.goBack()} />
-      <IconButton icon="arrow-right" title="Forward" onClick={() => wv()?.canGoForward() && wv()?.goForward()} />
-      <IconButton icon="refresh" title="Reload" onClick={() => wv()?.reload()} />
-      <input className="mono grow preview-address" value={address} onChange={(e) => setAddress(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && go(address)} placeholder="Address, or search" aria-label="Address" />
-      {web.length > 0 && <Select value="" onChange={(v) => go(v)} placeholder="Open the app" aria-label="Open one of the app's pages" options={web.map((x) => ({ value: x.url, label: x.name, hint: x.status }))} />}
-      <label className="live-follow" title="Reload local pages shortly after each of Claude's edits">
-        Reload after edits <Toggle checked={follow} onChange={setFollow} />
+      <IconButton icon="arrow-left" title={tr('browserTab.back')} onClick={() => wv()?.canGoBack() && wv()?.goBack()} />
+      <IconButton icon="arrow-right" title={tr('browserTab.forward')} onClick={() => wv()?.canGoForward() && wv()?.goForward()} />
+      <IconButton icon="refresh" title={tr('browserTab.reload')} onClick={() => wv()?.reload()} />
+      <input className="mono grow preview-address" value={address} onChange={(e) => setAddress(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && go(address)} placeholder={tr('browserTab.addressPlaceholder')} aria-label={tr('browserTab.address')} />
+      {web.length > 0 && <Select value="" onChange={(v) => go(v)} placeholder={tr('browserTab.openApp')} aria-label={tr('browserTab.openAppLabel')} options={web.map((x) => ({ value: x.url, label: x.name, hint: x.status }))} />}
+      <label className="live-follow" title={tr('browserTab.reloadAfterEditsTip')}>
+        {tr('browserTab.reloadAfterEdits')} <Toggle checked={follow} onChange={setFollow} />
       </label>
-      <IconButton icon="link-external" title="Open in your browser" onClick={() => void window.glassbox.openExternal(t.url)} />
+      <IconButton icon="link-external" title={tr('browserTab.openExternal')} onClick={() => void window.glassbox.openExternal(t.url)} />
     </div>
   )
 }
@@ -130,7 +131,7 @@ function Page({ t, visible, follow, edits }: { t: BrowserTabState; visible: bool
       on('did-fail-load', (e: { errorCode: number; errorDescription: string; validatedURL: string; isMainFrame: boolean }) => {
         // -3 is a navigation superseded by another (a redirect): not a failure.
         if (!e.isMainFrame || e.errorCode === -3) return
-        setFailed(`${e.errorDescription || 'The page didn’t load'} (${e.validatedURL})`)
+        setFailed(tr('browserTab.loadFailed', { reason: e.errorDescription || tr('browserTab.didntLoad'), url: e.validatedURL }))
       })
     ]
     return () => offs.forEach((f) => f())
@@ -168,7 +169,7 @@ function Page({ t, visible, follow, edits }: { t: BrowserTabState; visible: bool
           <Icon name="warning" />
           <span className="grow">{failed}</span>
           <button className="btn" onClick={() => (setFailed(null), ref.current?.reload())}>
-            Try again
+            {tr('browserTab.tryAgain')}
           </button>
         </div>
       )}

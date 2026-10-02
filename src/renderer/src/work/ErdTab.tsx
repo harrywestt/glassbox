@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import type { Erd, ErdEntity, ErdRelation } from '../../../shared/erd'
 import { Empty, Icon, IconButton, Toggle } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 import './ErdTab.css'
 
 const BOX_W = 236
@@ -83,7 +84,7 @@ export function ErdTab({ entities: initial, query: initialQuery }: { entities?: 
         if (seq !== askSeq.current) return
         if (r.entities.length) setFocus(new Set(r.entities))
         setWhy(r.why ?? null)
-        if (r.error) setAskError(hits.length ? `${r.error} Showing the tables whose names match.` : r.error)
+        if (r.error) setAskError(hits.length ? tr('erdTab.errorShowingMatches', { error: r.error }) : r.error)
       })
       .catch((e) => seq === askSeq.current && setAskError(String(e)))
       .finally(() => seq === askSeq.current && setAsking(null))
@@ -126,12 +127,12 @@ export function ErdTab({ entities: initial, query: initialQuery }: { entities?: 
   const selected = sel ? byId.get(sel) : undefined
 
   const body = (() => {
-    if (!erd) return <div className="erd-empty muted">Reading the database schema from the code…</div>
-    if (erd.error) return <div className="erd-empty">Couldn’t read the schema: {erd.error}</div>
+    if (!erd) return <div className="erd-empty muted">{tr('erdTab.reading')}</div>
+    if (erd.error) return <div className="erd-empty">{tr('erdTab.readError', { error: erd.error })}</div>
     if (!erd.entities.length)
       return (
-        <Empty icon="database" title="No database schema found">
-          Glassbox reads EF Core model snapshots, Prisma schemas and SQL migrations (CREATE TABLE). None were found in this project.
+        <Empty icon="database" title={tr('erdTab.noSchema.title')}>
+          {tr('erdTab.noSchema.body')}
         </Empty>
       )
     if (!shown) return <Overview erd={erd} onPick={(g) => (setFocus(new Set(erd.entities.filter((e) => e.group === g).map((e) => e.id))), setFocusLabel(g), setWhy(null), setSel(null))} />
@@ -148,14 +149,14 @@ export function ErdTab({ entities: initial, query: initialQuery }: { entities?: 
         }}
       >
         <Icon name="sparkle" className="erd-ask-icon" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask for an area of the database, e.g. controls v2, or how evidence links to controls" aria-label="Ask for an area of the database" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr('erdTab.ask.placeholder')} aria-label={tr('erdTab.ask.label')} />
         {asking ? (
           <span className="erd-ask-state small">
-            <Icon name="loading" className="codicon-modifier-spin" /> Claude is reading the code (up to a minute)
+            <Icon name="loading" className="codicon-modifier-spin" /> {tr('erdTab.ask.reading')}
           </span>
         ) : null}
         <button className="btn primary" type="submit" disabled={!q.trim() || !erd?.entities.length}>
-          Show
+          {tr('erdTab.ask.show')}
         </button>
       </form>
       {erd && erd.entities.length > 0 && (
@@ -166,26 +167,30 @@ export function ErdTab({ entities: initial, query: initialQuery }: { entities?: 
                 <strong>{focusLabel}</strong>
                 <span className="muted">
                   {' '}
-                  {focus?.size ?? 0} table{focus?.size === 1 ? '' : 's'}
-                  {shown && shown.context.size ? `, ${shown.context.size} connected` : ''}
-                  {hubs.size ? `, ${[...hubs].map((h) => byId.get(h)?.name ?? h).join(', ')} links hidden` : ''}
+                  {tr('erdTab.bar.tables', { count: focus?.size ?? 0 })}
+                  {shown && shown.context.size ? tr('erdTab.bar.connected', { count: shown.context.size }) : ''}
+                  {hubs.size ? tr('erdTab.bar.linksHidden', { names: [...hubs].map((h) => byId.get(h)?.name ?? h).join(', ') }) : ''}
                 </span>
               </span>
-              <button className="link small erd-all" onClick={clear} title={hubs.size ? `Links to ${[...hubs].map((h) => byId.get(h)?.name ?? h).join(', ')} are hidden because almost every table has one.` : undefined}>
-                All modules
+              <button className="link small erd-all" onClick={clear} title={hubs.size ? tr('erdTab.bar.hubsHiddenTitle', { names: [...hubs].map((h) => byId.get(h)?.name ?? h).join(', ') }) : undefined}>
+                {tr('erdTab.bar.allModules')}
               </button>
             </>
           ) : (
             <span className="muted">
-              {erd.entities.length} {erd.entities.length === 1 ? 'table' : 'tables'} in {((n) => `${n} ${n === 1 ? 'module' : 'modules'}`)(new Set(erd.entities.map((e) => e.group)).size)}, from {erd.source === 'ef' ? 'the EF Core model' : erd.source === 'prisma' ? 'the Prisma schema' : 'the SQL migrations'}. Pick a module or ask for an area.
+              {tr('erdTab.bar.summary', {
+                tables: tr('erdTab.bar.summaryTables', { count: erd.entities.length }),
+                modules: tr('erdTab.bar.summaryModules', { count: new Set(erd.entities.map((e) => e.group)).size }),
+                source: tr(erd.source === 'ef' ? 'erdTab.source.ef' : erd.source === 'prisma' ? 'erdTab.source.prisma' : 'erdTab.source.sql')
+              })}
             </span>
           )}
           <span className="spacer" />
-          <label className="erd-toggle" title="Show the tables the ones you picked connect to, faded">
-            Connected tables <Toggle checked={neighbours} onChange={setNeighbours} />
+          <label className="erd-toggle" title={tr('erdTab.bar.connectedTablesTitle')}>
+            {tr('erdTab.bar.connectedTables')} <Toggle checked={neighbours} onChange={setNeighbours} />
           </label>
-          <label className="erd-toggle" title="Links not declared in the model, only a column named after a table in another module (e.g. FrameworkId). Drawn dashed.">
-            Links across modules <Toggle checked={inferred} onChange={setInferred} />
+          <label className="erd-toggle" title={tr('erdTab.bar.crossLinksTitle')}>
+            {tr('erdTab.bar.crossLinks')} <Toggle checked={inferred} onChange={setInferred} />
           </label>
         </div>
       )}
@@ -233,13 +238,13 @@ function Overview({ erd, onPick }: { erd: Erd; onPick: (group: string) => void }
         <button key={g.name} className="erd-group" onClick={() => onPick(g.name)}>
           <span className="erd-group-head">
             <strong>{g.name}</strong>
-            <span className="muted small">{g.entities.length} table{g.entities.length === 1 ? '' : 's'}</span>
+            <span className="muted small">{tr('erdTab.overview.tables', { count: g.entities.length })}</span>
           </span>
-          <span className="erd-group-tables small">{g.entities.slice(0, 6).map((e) => e.name).join(', ')}{g.entities.length > 6 ? `, and ${g.entities.length - 6} more` : ''}</span>
+          <span className="erd-group-tables small">{g.entities.slice(0, 6).map((e) => e.name).join(', ')}{g.entities.length > 6 ? tr('erdTab.overview.andMore', { n: g.entities.length - 6 }) : ''}</span>
           {g.out.size > 0 && (
             <span className="erd-group-links small">
-              Uses {[...g.out].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n]) => n).join(', ')}
-              {g.out.size > 3 ? ` +${g.out.size - 3}` : ''}
+              {tr('erdTab.overview.uses', { names: [...g.out].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n]) => n).join(', ') })}
+              {g.out.size > 3 ? ` ${tr('erdTab.overview.extra', { n: g.out.size - 3 })}` : ''}
             </span>
           )}
         </button>
@@ -354,9 +359,9 @@ function Diagram({ erd, ids, context, relations, sel, onSel }: { erd: Erd; ids: 
       }}
     >
       <div className="erd-zoom">
-        <IconButton icon="zoom-in" title="Zoom in" onClick={() => setView((v) => ({ ...v, k: Math.min(2, v.k * 1.2) }))} />
-        <IconButton icon="zoom-out" title="Zoom out" onClick={() => setView((v) => ({ ...v, k: Math.max(0.25, v.k / 1.2) }))} />
-        <IconButton icon="screen-full" title="Fit to the view" onClick={fit} />
+        <IconButton icon="zoom-in" title={tr('erdTab.zoomIn')} onClick={() => setView((v) => ({ ...v, k: Math.min(2, v.k * 1.2) }))} />
+        <IconButton icon="zoom-out" title={tr('erdTab.zoomOut')} onClick={() => setView((v) => ({ ...v, k: Math.max(0.25, v.k / 1.2) }))} />
+        <IconButton icon="screen-full" title={tr('erdTab.fit')} onClick={fit} />
       </div>
       <svg className="erd-svg" width="100%" height="100%">
         <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
@@ -381,7 +386,7 @@ function Diagram({ erd, ids, context, relations, sel, onSel }: { erd: Erd; ids: 
                   <path className="erd-foot" d={`M ${x1 + dir * 10} ${y1} L ${x1} ${y1 - 5} M ${x1 + dir * 10} ${y1} L ${x1} ${y1 + 5} M ${x1 + dir * 10} ${y1} L ${x1} ${y1}`} />
                 )}
                 <path className="erd-foot" d={`M ${x2 + (a.x === b.x ? 8 : leftToRight ? 8 : -8)} ${y2 - 5} L ${x2 + (a.x === b.x ? 8 : leftToRight ? 8 : -8)} ${y2 + 5}`} />
-                <title>{`${a.e.name}.${r.column ?? '?'} → ${b.e.name}${r.inferred ? ' (inferred from the column name, not declared)' : ''}`}</title>
+                <title>{tr(r.inferred ? 'erdTab.edgeTitleInferred' : 'erdTab.edgeTitle', { from: a.e.name, column: r.column ?? '?', to: b.e.name })}</title>
               </g>
             )
           })}
@@ -392,7 +397,7 @@ function Diagram({ erd, ids, context, relations, sel, onSel }: { erd: Erd; ids: 
               onClick={() => onSel(sel === b.e.id ? null : b.e.id)}
               role="button"
               tabIndex={0}
-              aria-label={`${b.e.name}, table ${b.e.table ?? b.e.name}`}
+              aria-label={tr('erdTab.boxLabel', { name: b.e.name, table: b.e.table ?? b.e.name })}
               onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onSel(b.e.id))}
             >
               <rect className="erd-box-bg" x={b.x} y={b.y} width={BOX_W} height={b.h} rx={8} />
@@ -402,7 +407,7 @@ function Diagram({ erd, ids, context, relations, sel, onSel }: { erd: Erd; ids: 
               {b.rows.map((c, i) => (
                 <g key={c.name}>
                   <text className={`erd-col${c.key ? ' key' : ''}${c.fk ? ' fk' : ''}`} x={b.x + 12} y={b.y + HEAD_H + i * ROW_H + 13}>
-                    {c.key ? 'PK ' : c.fk ? 'FK ' : ''}
+                    {c.key ? `${tr('erdTab.pk')} ` : c.fk ? `${tr('erdTab.fk')} ` : ''}
                     {clip(c.name, 140, 6.6)}
                   </text>
                   <text className="erd-col-type" x={b.x + BOX_W - 12} y={b.y + HEAD_H + i * ROW_H + 13} textAnchor="end">
@@ -413,7 +418,7 @@ function Diagram({ erd, ids, context, relations, sel, onSel }: { erd: Erd; ids: 
               ))}
               {b.more > 0 && (
                 <text className="erd-col-more" x={b.x + 12} y={b.y + HEAD_H + b.rows.length * ROW_H + 13}>
-                  and {b.more} more column{b.more === 1 ? '' : 's'}
+                  {tr('erdTab.moreColumns', { count: b.more })}
                 </text>
               )}
             </g>
@@ -440,58 +445,58 @@ function EntityPanel({ e, erd, relations, onClose, onPick, onOpen, onAsk }: { e:
           </div>
           <div className="small muted">{e.group}</div>
         </div>
-        <IconButton icon="close" title="Close" onClick={onClose} />
+        <IconButton icon="close" title={tr('erdTab.panel.close')} onClick={onClose} />
       </div>
       <div className="erd-panel-actions">
         <button className="btn primary" onClick={onAsk}>
-          Ask Claude about it
+          {tr('erdTab.panel.askClaude')}
         </button>
         {onOpen && (
           <button className="btn" onClick={onOpen}>
-            Open the entity
+            {tr('erdTab.panel.openEntity')}
           </button>
         )}
       </div>
       {out.length > 0 && (
         <section>
-          <div className="erd-panel-label">Points at</div>
+          <div className="erd-panel-label">{tr('erdTab.panel.pointsAt')}</div>
           {out.map((r, i) => (
             <button key={i} className="erd-rel" onClick={() => onPick(r.to)}>
               <span className="mono">{r.column ?? r.nav}</span> → <strong>{name(r.to)?.name ?? r.to}</strong>
-              {r.inferred && <span className="muted"> (inferred)</span>}
+              {r.inferred && <span className="muted"> {tr('erdTab.panel.inferred')}</span>}
             </button>
           ))}
         </section>
       )}
       {inn.length > 0 && (
         <section>
-          <div className="erd-panel-label">Pointed at by</div>
+          <div className="erd-panel-label">{tr('erdTab.panel.pointedAtBy')}</div>
           {inn.slice(0, 40).map((r, i) => (
             <button key={i} className="erd-rel" onClick={() => onPick(r.from)}>
               <strong>{name(r.from)?.name ?? r.from}</strong>
               <span className="muted">
                 .{r.column ?? '?'}
-                {r.inferred ? ' (inferred)' : ''}
+                {r.inferred ? ` ${tr('erdTab.panel.inferred')}` : ''}
               </span>
             </button>
           ))}
-          {inn.length > 40 && <div className="small muted">and {inn.length - 40} more</div>}
+          {inn.length > 40 && <div className="small muted">{tr('erdTab.panel.andMore', { n: inn.length - 40 })}</div>}
         </section>
       )}
       <section>
-        <div className="erd-panel-label">Columns</div>
+        <div className="erd-panel-label">{tr('erdTab.panel.columns')}</div>
         <table className="erd-cols">
           <tbody>
             {e.columns.map((c) => (
               <tr key={c.name}>
                 <td className="mono">
                   {c.name}
-                  {c.key && <span className="erd-mark"> PK</span>}
-                  {c.fk && <span className="erd-mark"> FK</span>}
+                  {c.key && <span className="erd-mark"> {tr('erdTab.pk')}</span>}
+                  {c.fk && <span className="erd-mark"> {tr('erdTab.fk')}</span>}
                 </td>
                 <td className="mono muted">
                   {c.type}
-                  {c.required ? '' : ', optional'}
+                  {c.required ? '' : tr('erdTab.panel.optional')}
                 </td>
               </tr>
             ))}

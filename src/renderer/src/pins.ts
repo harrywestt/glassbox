@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { SDKSessionInfo } from '@anthropic-ai/claude-agent-sdk'
+import { tr } from '../../shared/i18n'
 
 /** Which sessions are pinned (kept for good), shared by the session header and History. */
 
@@ -29,7 +30,7 @@ export function usePinned(): Set<string> {
 export async function setPinned(info: SDKSessionInfo, pin: boolean): Promise<string | undefined> {
   if (pin) {
     const r = await window.glassbox.history.pin(info)
-    if (!r.ok) return r.error ?? 'Couldn’t pin this session'
+    if (!r.ok) return r.error ?? tr('pins.couldNotPin')
     ids = new Set([...ids, info.sessionId])
   } else {
     await window.glassbox.history.unpin(info.sessionId)

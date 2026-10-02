@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './ui'
+import { tr } from '../../../shared/i18n'
 
 export type SelectOption<T extends string> = { value: T; label: string; hint?: string }
 
@@ -132,7 +133,7 @@ function SelectList<T extends string>({ anchor, options, value, onPick, onClose 
           <Icon name="search" />
           <input
             autoFocus
-            placeholder="Filter"
+            placeholder={tr('select.filter')}
             value={q}
             onChange={(e) => {
               setQ(e.target.value)
@@ -167,7 +168,7 @@ function SelectList<T extends string>({ anchor, options, value, onPick, onClose 
             )}
           </div>
         ))}
-        {shown.length === 0 && <div className="muted small pad">No matches</div>}
+        {shown.length === 0 && <div className="muted small pad">{tr('select.noMatches')}</div>}
       </div>
       {options.length < SEARCH_FROM && <FocusOnMount target={box} />}
     </div>

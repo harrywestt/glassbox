@@ -4,15 +4,16 @@ import type { SessionState } from '../session'
 import type { CriterionStatus, FindingSeverity } from '../../../shared/events'
 import { baseName } from '../lib'
 import { Icon, Section } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 type FindingEntry = SessionState['findings'][number]
 
-const SEVERITY: Record<FindingSeverity, { label: string; cls: string }> = {
-  blocker: { label: 'Blocker', cls: 'sev-blocker' },
-  major: { label: 'Major', cls: 'sev-major' },
-  minor: { label: 'Minor', cls: 'sev-minor' },
-  nit: { label: 'Nit', cls: 'sev-nit' },
-  question: { label: 'Question', cls: 'sev-question' }
+const SEVERITY: Record<FindingSeverity, { cls: string }> = {
+  blocker: { cls: 'sev-blocker' },
+  major: { cls: 'sev-major' },
+  minor: { cls: 'sev-minor' },
+  nit: { cls: 'sev-nit' },
+  question: { cls: 'sev-question' }
 }
 
 /** A review finding: from Claude in a review session, or from the background reviewer. */
@@ -36,30 +37,30 @@ export function FindingCard({ f, compact }: { f: FindingEntry; compact?: boolean
   return (
     <div className={`finding ${sev.cls}`}>
       <div className="finding-head" onClick={() => setOpen(!open)}>
-        <span className="sev">{sev.label}</span>
+        <span className="sev">{tr(`signals.severity.${f.severity}`)}</span>
         <span className="grow finding-title">{f.title}</span>
         {where && (
           <button className="link small mono" onClick={(e) => (e.stopPropagation(), openFile(f.file!))}>
             {where}
           </button>
         )}
-        <span className="muted small">{f.source === 'reviewer' ? 'Reviewer' : 'Claude'}</span>
+        <span className="muted small">{f.source === 'reviewer' ? tr('signals.sourceReviewer') : tr('signals.sourceClaude')}</span>
       </div>
       {open && (f.detail || f.suggestion) && (
         <div className="finding-body small">
           {f.detail && <p>{f.detail}</p>}
-          {f.suggestion && <p className="muted">Suggestion: {f.suggestion}</p>}
+          {f.suggestion && <p className="muted">{tr('signals.suggestion', { suggestion: f.suggestion })}</p>}
         </div>
       )}
       <div className="finding-actions">
         {f.status === 'sent' ? (
-          <span className="muted small"><Icon name="check" /> Sent to Claude</span>
+          <span className="muted small"><Icon name="check" /> {tr('signals.sentToClaude')}</span>
         ) : (
           <button className="chip-btn" onClick={raise}>
-            <Icon name="comment" /> {f.source === 'reviewer' ? 'Ask Claude to check' : 'Ask Claude to fix'}
+            <Icon name="comment" /> {f.source === 'reviewer' ? tr('signals.askToCheck') : tr('signals.askToFix')}
           </button>
         )}
-        <button className="chip-btn" onClick={() => actions.findingStatus(tab.id, f.id, 'dismissed')}>Dismiss</button>
+        <button className="chip-btn" onClick={() => actions.findingStatus(tab.id, f.id, 'dismissed')}>{tr('signals.dismiss')}</button>
       </div>
     </div>
   )
@@ -79,7 +80,7 @@ export function CheckInCard({ id, sticky }: { id: string; sticky?: boolean }) {
       <div className="checkin answered">
         <Icon name="pass" className="ok" />
         <span className="grow small">
-          Checked in about <strong>{c.about}</strong>. You answered: {c.answer}
+          {tr('signals.checkedInBefore')}<strong>{c.about}</strong>{tr('signals.checkedInAfter', { answer: c.answer })}
         </span>
       </div>
     )
@@ -90,7 +91,7 @@ export function CheckInCard({ id, sticky }: { id: string; sticky?: boolean }) {
       <div className="checkin answered">
         <Icon name="debug-pause" className="warn" />
         <span className="grow small">
-          Paused to check with you about <strong>{c.about}</strong>. Answer below the conversation.
+          {tr('signals.pausedBefore')}<strong>{c.about}</strong>{tr('signals.pausedAfter')}
         </span>
       </div>
     )
@@ -98,8 +99,8 @@ export function CheckInCard({ id, sticky }: { id: string; sticky?: boolean }) {
     <div className={sticky ? 'checkin waiting sticky' : 'checkin waiting'}>
       <div className="checkin-head">
         <Icon name="debug-pause" className="warn" />
-        <strong>Claude has paused to check with you</strong>
-        <span className={`tag ${c.confidence === 'low' ? 'warn-tag' : ''}`}>{c.confidence} confidence</span>
+        <strong>{tr('signals.pausedHeading')}</strong>
+        <span className={`tag ${c.confidence === 'low' ? 'warn-tag' : ''}`}>{tr('signals.confidence', { level: c.confidence })}</span>
       </div>
       <div className="checkin-about">{c.about}</div>
       <div className="muted small">{c.reason}</div>
@@ -112,23 +113,23 @@ export function CheckInCard({ id, sticky }: { id: string; sticky?: boolean }) {
       ) : null}
       <div className="checkin-reply">
         <input
-          placeholder="Or tell Claude what to do"
+          placeholder={tr('signals.replyPlaceholder')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && text.trim() && answer(text.trim())}
         />
-        <button className="primary" disabled={!text.trim()} onClick={() => answer(text.trim())}>Send</button>
-        <button onClick={() => answer('Go ahead with your best judgement.')}>Carry on</button>
+        <button className="primary" disabled={!text.trim()} onClick={() => answer(text.trim())}>{tr('signals.send')}</button>
+        <button onClick={() => answer('Go ahead with your best judgement.')}>{tr('signals.carryOn')}</button>
       </div>
     </div>
   )
 }
 
 const CRITERION: Record<CriterionStatus, { icon: string; cls: string; label: string }> = {
-  todo: { icon: 'circle-large-outline', cls: 'muted', label: 'To do' },
-  'in-progress': { icon: 'loading', cls: 'accent codicon-modifier-spin', label: 'In progress' },
-  done: { icon: 'pass', cls: 'warn', label: 'Done, not tested' },
-  tested: { icon: 'pass-filled', cls: 'ok', label: 'Tested' }
+  todo: { icon: 'circle-large-outline', cls: 'muted', label: 'todo' },
+  'in-progress': { icon: 'loading', cls: 'accent codicon-modifier-spin', label: 'inProgress' },
+  done: { icon: 'pass', cls: 'warn', label: 'doneNotTested' },
+  tested: { icon: 'pass-filled', cls: 'ok', label: 'tested' }
 }
 
 export function CriteriaList() {
@@ -138,16 +139,16 @@ export function CriteriaList() {
   const tested = list.filter((c) => c.status === 'tested').length
   const untested = list.filter((c) => c.status === 'done').length
   return (
-    <Section id="criteria" title="Acceptance criteria" meta={s.criteria.source && <span className="muted small">{s.criteria.source}</span>} actions={<span className="small muted">{tested} of {list.length} tested</span>}>
+    <Section id="criteria" title={tr('signals.criteriaTitle')} meta={s.criteria.source && <span className="muted small">{s.criteria.source}</span>} actions={<span className="small muted">{tr('signals.criteriaTested', { tested, total: list.length })}</span>}>
       {untested > 0 && (
         <div className="callout callout-warn">
-          <Icon name="warning" /> {untested} marked done without a test proving it
+          <Icon name="warning" /> {tr('signals.untested', { count: untested })}
         </div>
       )}
       {list.map((c) => {
         const st = CRITERION[c.status]
         return (
-          <div key={c.id} className="criterion" title={st.label}>
+          <div key={c.id} className="criterion" title={tr(`signals.criterion.${st.label}`)}>
             <Icon name={st.icon} className={st.cls} />
             <div className="grow">
               <div>{c.text}</div>

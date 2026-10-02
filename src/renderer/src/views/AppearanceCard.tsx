@@ -1,6 +1,7 @@
 import { ACCENTS, CHAT_SIZES, UI_SCALES, resetAppearance, setAppearance, useAppearance, type ChatWidth, type TableStyle, type ThemePreference } from '../appearance'
 import { useThemeTokens } from '../App'
 import { Segmented, Toggle } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 /** Dashboard settings: notifications, the away summary, theme, accent colour, text sizes and conversation width. Saved on this machine. */
 export function AppearanceCard() {
@@ -10,37 +11,37 @@ export function AppearanceCard() {
   return (
     <section className="card appearance">
       <div className="card-title">
-        Settings
+        {tr('appearanceCard.settings')}
         <span className="spacer" />
-        <button className="link small" onClick={resetAppearance}>Reset to defaults</button>
+        <button className="link small" onClick={resetAppearance}>{tr('appearanceCard.resetToDefaults')}</button>
       </div>
 
       <label className="setting">
-        <span className="setting-label">Desktop notifications</span>
+        <span className="setting-label">{tr('appearanceCard.desktopNotifications')}</span>
         <Toggle checked={a.notifications} onChange={(notifications) => setAppearance({ notifications })} />
       </label>
 
       <label className="setting">
-        <span className="setting-label">“While you were away” summary</span>
+        <span className="setting-label">{tr('appearanceCard.awayDigest')}</span>
         <Toggle checked={a.awayDigest} onChange={(awayDigest) => setAppearance({ awayDigest })} />
       </label>
 
       <div className="setting">
-        <span className="setting-label">Theme</span>
+        <span className="setting-label">{tr('appearanceCard.theme')}</span>
         <Segmented<ThemePreference>
           value={a.theme}
           onChange={(theme) => setAppearance({ theme })}
           options={[
-            { value: 'system', label: 'Match Windows' },
-            { value: 'dark', label: 'Dark' },
-            { value: 'light', label: 'Light' }
+            { value: 'system', label: tr('appearanceCard.themeSystem') },
+            { value: 'dark', label: tr('appearanceCard.themeDark') },
+            { value: 'light', label: tr('appearanceCard.themeLight') }
           ]}
         />
       </div>
 
       <div className="setting">
-        <span className="setting-label">Accent colour</span>
-        <div className="accent-swatches" role="radiogroup" aria-label="Accent colour">
+        <span className="setting-label">{tr('appearanceCard.accentColour')}</span>
+        <div className="accent-swatches" role="radiogroup" aria-label={tr('appearanceCard.accentColour')}>
           {ACCENTS.map((c) => (
             <button
               key={c.id}
@@ -56,61 +57,61 @@ export function AppearanceCard() {
       </div>
 
       <div className="setting">
-        <span className="setting-label">Conversation text</span>
+        <span className="setting-label">{tr('appearanceCard.conversationText')}</span>
         <Segmented<string>
           value={String(a.chatSize)}
           onChange={(v) => setAppearance({ chatSize: Number(v) })}
-          options={CHAT_SIZES.map((n) => ({ value: String(n), label: `${n}px` }))}
+          options={CHAT_SIZES.map((n) => ({ value: String(n), label: tr('appearanceCard.pixels', { n }) }))}
         />
       </div>
 
       <div className="setting">
-        <span className="setting-label">Interface size</span>
+        <span className="setting-label">{tr('appearanceCard.interfaceSize')}</span>
         <Segmented<string>
           value={String(a.uiScale)}
           onChange={(v) => setAppearance({ uiScale: Number(v) })}
-          options={UI_SCALES.map((n) => ({ value: String(n), label: `${Math.round(n * 100)}%` }))}
+          options={UI_SCALES.map((n) => ({ value: String(n), label: tr('appearanceCard.percent', { n: Math.round(n * 100) }) }))}
         />
       </div>
 
       <div className="setting">
-        <span className="setting-label">Conversation width</span>
+        <span className="setting-label">{tr('appearanceCard.conversationWidth')}</span>
         <Segmented<ChatWidth>
           value={a.chatWidth}
           onChange={(chatWidth) => setAppearance({ chatWidth })}
           options={[
-            { value: 'full', label: 'Full width' },
-            { value: 'wide', label: 'Wide' },
-            { value: 'comfortable', label: 'Narrow' }
+            { value: 'full', label: tr('appearanceCard.widthFull') },
+            { value: 'wide', label: tr('appearanceCard.widthWide') },
+            { value: 'comfortable', label: tr('appearanceCard.widthNarrow') }
           ]}
         />
       </div>
 
       <div className="setting">
-        <span className="setting-label">Tables</span>
+        <span className="setting-label">{tr('appearanceCard.tables')}</span>
         <Segmented<TableStyle>
           value={a.tableStyle}
           onChange={(tableStyle) => setAppearance({ tableStyle })}
           options={[
-            { value: 'striped', label: 'Striped' },
-            { value: 'grid', label: 'Grid' },
-            { value: 'minimal', label: 'Minimal' }
+            { value: 'striped', label: tr('appearanceCard.tableStriped') },
+            { value: 'grid', label: tr('appearanceCard.tableGrid') },
+            { value: 'minimal', label: tr('appearanceCard.tableMinimal') }
           ]}
         />
       </div>
 
       <div className="appearance-preview markdown" style={{ fontSize: a.chatSize }}>
         <p>
-          Claude’s replies look like this, with <strong>bold text standing out</strong> and <code>inline code</code>.
+          {tr('appearanceCard.previewBefore')}<strong>{tr('appearanceCard.previewBold')}</strong>{tr('appearanceCard.previewMiddle')}<code>{tr('appearanceCard.previewCode')}</code>{tr('appearanceCard.previewAfter')}
         </p>
         <table>
           <thead>
-            <tr><th>File</th><th>Change</th><th>Lines</th></tr>
+            <tr><th>{tr('appearanceCard.previewFile')}</th><th>{tr('appearanceCard.previewChange')}</th><th>{tr('appearanceCard.previewLines')}</th></tr>
           </thead>
           <tbody>
-            <tr><td>api.js</td><td>Added JSDoc</td><td>+12</td></tr>
-            <tr><td>shipping.js</td><td>New module</td><td>+8</td></tr>
-            <tr><td>api.test.js</td><td>New tests</td><td>+24</td></tr>
+            <tr><td>api.js</td><td>{tr('appearanceCard.previewAddedJsdoc')}</td><td>+12</td></tr>
+            <tr><td>shipping.js</td><td>{tr('appearanceCard.previewNewModule')}</td><td>+8</td></tr>
+            <tr><td>api.test.js</td><td>{tr('appearanceCard.previewNewTests')}</td><td>+24</td></tr>
           </tbody>
         </table>
       </div>

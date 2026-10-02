@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useSession } from '../views/SessionView'
 import type { McpServerStatus } from '../../../shared/events'
 import { Empty, Icon, IconButton, PanelHeader, Toggle } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 const STATUS: Record<McpServerStatus['status'], { label: string; cls: string }> = {
-  connected: { label: 'Connected', cls: 'ok' },
-  pending: { label: 'Connecting…', cls: 'muted' },
-  'needs-auth': { label: 'Needs sign-in', cls: 'warn' },
-  failed: { label: 'Failed', cls: 'err' },
-  disabled: { label: 'Off', cls: 'muted' }
+  connected: { label: tr('connectorsPanel.statusConnected'), cls: 'ok' },
+  pending: { label: tr('connectorsPanel.statusConnecting'), cls: 'muted' },
+  'needs-auth': { label: tr('connectorsPanel.statusNeedsAuth'), cls: 'warn' },
+  failed: { label: tr('connectorsPanel.statusFailed'), cls: 'err' },
+  disabled: { label: tr('connectorsPanel.statusOff'), cls: 'muted' }
 }
 
 export const connectorName = (name: string) => name.replace(/^claude\.ai /, '')
@@ -24,8 +25,8 @@ export function ConnectorsPanel() {
     .filter((m) => m.source !== 'sdk' && connectorName(m.name).toLowerCase().includes(filter.toLowerCase()))
     .sort((a, b) => rank[a.status] - rank[b.status] || a.name.localeCompare(b.name))
   const groups: [string, McpServerStatus[]][] = [
-    ['claude.ai connectors', servers.filter((m) => m.source === 'claudeai')],
-    ['MCP servers', servers.filter((m) => m.source !== 'claudeai')]
+    [tr('connectorsPanel.claudeAiConnectors'), servers.filter((m) => m.source === 'claudeai')],
+    [tr('connectorsPanel.mcpServers'), servers.filter((m) => m.source !== 'claudeai')]
   ]
   const required = new Set(s.requirements.connectors)
 
@@ -45,19 +46,19 @@ export function ConnectorsPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Connectors" />
+      <PanelHeader title={tr('connectorsPanel.title')} />
       <div className="panel-toolbar">
         <div className="search grow">
           <Icon name="search" />
-          <input placeholder="Filter connectors" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <input placeholder={tr('connectorsPanel.filter')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
-        <IconButton icon="refresh" title="Refresh connectors" onClick={() => void window.glassbox.session.refresh(tab.id)} />
+        <IconButton icon="refresh" title={tr('connectorsPanel.refresh')} onClick={() => void window.glassbox.session.refresh(tab.id)} />
       </div>
       <div className="hint small muted">
-        <Icon name="pin" /> <strong>Require</strong> tells Claude to use a connector for this session. The switch turns a connector on or off for this session only.
+        <Icon name="pin" /> <strong>{tr('connectorsPanel.hintRequire')}</strong> {tr('connectorsPanel.hintBody')}
       </div>
       <div className="panel-scroll flush">
-        {s.mcp.length === 0 && <Empty icon="plug" title="Loading connectors…" />}
+        {s.mcp.length === 0 && <Empty icon="plug" title={tr('connectorsPanel.loading')} />}
         {groups.map(([title, list]) =>
           list.length ? (
             <section key={title}>
@@ -70,35 +71,35 @@ export function ConnectorsPanel() {
                 return (
                   <div key={m.name} className="connector">
                     <div className="connector-row">
-                      <button className="icon-btn" onClick={() => setOpen(open === m.name ? null : m.name)} title="Show tools">
+                      <button className="icon-btn" onClick={() => setOpen(open === m.name ? null : m.name)} title={tr('connectorsPanel.showTools')}>
                         <Icon name={open === m.name ? 'chevron-down' : 'chevron-right'} />
                       </button>
                       <span className={`dot dot-${st.cls}`} />
                       <span className="grow connector-name">
                         <span className="ellipsis">{connectorName(m.name)}</span>
-                        <span className={`small ${m.status === 'connected' ? 'muted' : st.cls}`}>{m.status === 'connected' && m.tools?.length ? `${m.tools.length} tools` : st.label}</span>
+                        <span className={`small ${m.status === 'connected' ? 'muted' : st.cls}`}>{m.status === 'connected' && m.tools?.length ? tr('connectorsPanel.tools', { n: m.tools.length }) : st.label}</span>
                         
                       </span>
                       <button
                         className={isReq ? 'chip-btn on' : 'chip-btn'}
                         disabled={m.status !== 'connected' && !isReq}
                         onClick={() => require(m.name)}
-                        title={isReq ? 'Required for this session. Click to remove' : 'Require Claude to use this connector'}
+                        title={isReq ? tr('connectorsPanel.requiredTitle') : tr('connectorsPanel.requireTitle')}
                       >
-                        <Icon name={isReq ? 'pinned' : 'pin'} /> {isReq ? 'Required' : 'Require'}
+                        <Icon name={isReq ? 'pinned' : 'pin'} /> {isReq ? tr('connectorsPanel.required') : tr('connectorsPanel.require')}
                       </button>
-                      <Toggle checked={m.status !== 'disabled'} onChange={(on) => void toggle(m.name, on)} title={busy === m.name ? 'Updating…' : 'On for this session'} />
+                      <Toggle checked={m.status !== 'disabled'} onChange={(on) => void toggle(m.name, on)} title={busy === m.name ? tr('connectorsPanel.updating') : tr('connectorsPanel.onForSession')} />
                     </div>
                     {open === m.name && (
                       <div className="connector-tools">
                         {m.error && <div className="note note-error">{m.error}</div>}
                         {m.status === 'needs-auth' && (
-                          <div className="muted small">Sign in to this connector in claude.ai (Settings → Connectors) or with <span className="mono">/mcp</span> in the Claude Code CLI, then refresh.</div>
+                          <div className="muted small">{tr('connectorsPanel.signInBefore')} <span className="mono">/mcp</span> {tr('connectorsPanel.signInAfter')}</div>
                         )}
                         {m.tools?.map((t) => (
                           <div key={t.name} className="tool-def">
                             <span className="mono small">{t.name}</span>
-                            {t.annotations?.readOnly && <span className="tag">read-only</span>}
+                            {t.annotations?.readOnly && <span className="tag">{tr('connectorsPanel.readOnly')}</span>}
                             {t.description && <div className="muted small clamp-2">{t.description}</div>}
                           </div>
                         ))}

@@ -6,16 +6,17 @@ import { createInterface } from 'node:readline'
 import { type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { query } from './claude'
 import type { LocalUsageDay, RateLimitWindow, UsageSnapshot } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 const DAYS = 14
 
 const WINDOW_LABELS: Record<string, string> = {
-  five_hour: 'Current 5-hour window',
-  seven_day: 'This week, all models',
-  seven_day_opus: 'This week, Opus',
-  seven_day_sonnet: 'This week, Sonnet',
-  seven_day_oauth_apps: 'This week, connected apps'
+  five_hour: tr('mainUsage.window.fiveHour'),
+  seven_day: tr('mainUsage.window.sevenDay'),
+  seven_day_opus: tr('mainUsage.window.sevenDayOpus'),
+  seven_day_sonnet: tr('mainUsage.window.sevenDaySonnet'),
+  seven_day_oauth_apps: tr('mainUsage.window.sevenDayOauthApps')
 }
 
 type FileAgg = {
@@ -72,7 +73,7 @@ export class UsageService {
           if (w && w.utilization != null) windows.push({ key, label, utilization: w.utilization, resetsAt: w.resets_at })
         }
         for (const m of limits.model_scoped ?? []) {
-          if (m.utilization != null) windows.push({ key: `model:${m.display_name}`, label: `This week, ${m.display_name}`, utilization: m.utilization, resetsAt: m.resets_at })
+          if (m.utilization != null) windows.push({ key: `model:${m.display_name}`, label: tr('mainUsage.thisWeekModel', { model: m.display_name }), utilization: m.utilization, resetsAt: m.resets_at })
         }
         snapshot.rateLimits = windows
         const extra = limits.extra_usage
@@ -83,7 +84,7 @@ export class UsageService {
       snapshot.todayRequests = usage.behaviors?.day.request_count
       snapshot.todaySessions = usage.behaviors?.day.session_count
     } catch (err) {
-      snapshot.error = `Couldn't read plan limits: ${String(err)}`
+      snapshot.error = tr('mainUsage.couldNotReadLimits', { error: String(err) })
     }
     return snapshot
   }

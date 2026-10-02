@@ -4,6 +4,7 @@ import { CHANGE_TOOLS } from '../session'
 import { checkOf } from '../review'
 import { baseName } from '../lib'
 import { Icon } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 const AWAY_MS = 2 * 60_000
 /** How long the digest stays before it goes by itself (held while the pointer is over it). */
@@ -63,45 +64,45 @@ export function AwayDigest({ active }: { active: boolean }) {
     <div className="away" onMouseEnter={() => setHolding(true)} onMouseLeave={() => setHolding(false)}>
       <div className="away-head">
         <Icon name="history" />
-        <strong>While you were away</strong>
-        <span className="muted small">{mins} min</span>
+        <strong>{tr('awayDigest.title')}</strong>
+        <span className="muted small">{tr('awayDigest.minutes', { mins })}</span>
         <span className="spacer" />
-        <button className="icon-btn" title="Dismiss" onClick={() => setSince(null)}>
+        <button className="icon-btn" title={tr('awayDigest.dismiss')} onClick={() => setSince(null)}>
           <Icon name="close" />
         </button>
       </div>
       <ul className="away-list">
         <li>
-          {calls.length} tool call{calls.length === 1 ? '' : 's'}
-          {turnsDone ? `, ${turnsDone} turn${turnsDone > 1 ? 's' : ''} finished` : ''}
-          {s.status === 'ready' ? '. Claude is waiting for you' : s.permissions.length ? '. Claude needs your approval' : ''}
+          {tr('awayDigest.toolCalls', { count: calls.length })}
+          {turnsDone ? tr('awayDigest.turnsFinished', { count: turnsDone }) : ''}
+          {s.status === 'ready' ? tr('awayDigest.claudeWaiting') : s.permissions.length ? tr('awayDigest.claudeNeedsApproval') : ''}
         </li>
         {edited.length > 0 && (
           <li>
-            Edited{' '}
+            {tr('awayDigest.edited')}{' '}
             {edited.slice(0, 5).map((p, i) => (
               <span key={p}>
                 {i > 0 && ', '}
                 <button className="link" onClick={() => openFile(p)}>{baseName(p)}</button>
               </span>
             ))}
-            {edited.length > 5 && ` and ${edited.length - 5} more`}
+            {edited.length > 5 && tr('awayDigest.andMore', { count: edited.length - 5 })}
           </li>
         )}
         {decisions.length > 0 && (
           <li>
             <button className="link" onClick={() => showPanel('decisions')}>
-              {decisions.length} logged
+              {tr('awayDigest.logged', { count: decisions.length })}
             </button>
-            {assumptions ? `, ${assumptions} assumption${assumptions > 1 ? 's' : ''}` : ''}
-            {questions ? `, ${questions} question${questions > 1 ? 's' : ''} for you` : ''}
+            {assumptions ? tr('awayDigest.assumptions', { count: assumptions }) : ''}
+            {questions ? tr('awayDigest.questions', { count: questions }) : ''}
           </li>
         )}
-        {checks.length > 0 && <li className={failed ? 'err' : ''}>{failed ? `${failed} of ${checks.length} checks failed` : `${checks.length} check${checks.length > 1 ? 's' : ''} passed`}</li>}
+        {checks.length > 0 && <li className={failed ? 'err' : ''}>{failed ? tr('awayDigest.checksFailed', { failed, total: checks.length }) : tr('awayDigest.checksPassed', { count: checks.length })}</li>}
         {guards > 0 && (
           <li className="warn">
             <button className="link" onClick={() => showPanel('guardrails')}>
-              {guards} guardrail stop{guards > 1 ? 's' : ''}
+              {tr('awayDigest.guardrailStops', { count: guards })}
             </button>
           </li>
         )}

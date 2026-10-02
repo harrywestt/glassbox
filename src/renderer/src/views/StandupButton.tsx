@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Standup } from '../../../shared/events'
 import { Icon, IconButton } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 /** Plain text for pasting into Slack or Teams: each epic, then its bullets. */
 function asText(s: Standup): string {
@@ -45,38 +46,38 @@ export function StandupButton() {
 
   return (
     <>
-      <button className="btn" onClick={() => (setOpen(true), !data && !busy && load(false))} title="What you did on the last working day, grouped by epic">
-        <Icon name="checklist" /> Stand-up
+      <button className="btn" onClick={() => (setOpen(true), !data && !busy && load(false))} title={tr('standupButton.buttonTitle')}>
+        <Icon name="checklist" /> {tr('standupButton.standup')}
       </button>
       {open && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-          <div className="dialog standup" role="dialog" aria-label="Stand-up">
+          <div className="dialog standup" role="dialog" aria-label={tr('standupButton.standup')}>
             <div className="standup-head">
               <div className="standup-title">
-                <strong>Stand-up</strong>
+                <strong>{tr('standupButton.standup')}</strong>
                 {data?.label && <span className="muted">{data.label}</span>}
               </div>
-              <IconButton icon="refresh" title="Write it again" onClick={() => !busy && load(true)} disabled={busy} />
-              <IconButton icon="close" title="Close (Esc)" onClick={() => setOpen(false)} />
+              <IconButton icon="refresh" title={tr('standupButton.writeAgain')} onClick={() => !busy && load(true)} disabled={busy} />
+              <IconButton icon="close" title={tr('standupButton.close')} onClick={() => setOpen(false)} />
             </div>
 
             <div className="standup-body">
               {busy && !data?.groups.length ? (
                 <div className="standup-wait">
                   <Icon name="loading" className="codicon-modifier-spin" />
-                  <span>Reading your sessions and commits, then finding each ticket’s epic in Jira…</span>
+                  <span>{tr('standupButton.reading')}</span>
                 </div>
               ) : data?.error ? (
-                <div className="standup-wait">Couldn’t put it together: {data.error}</div>
+                <div className="standup-wait">{tr('standupButton.error', { error: data.error })}</div>
               ) : data && !data.groups.length ? (
-                <div className="standup-wait">Nothing found for {data.label}: no Claude sessions or commits from you that day.</div>
+                <div className="standup-wait">{tr('standupButton.nothingFound', { label: data.label })}</div>
               ) : (
                 data?.groups.map((g) => (
                   <section key={g.epicKey ?? g.epic} className="standup-group">
                     <h3>
                       {g.epic}
                       {g.epicKey && (
-                        <button className="standup-key" onClick={() => g.url && void window.glassbox.openExternal(g.url)} disabled={!g.url} title={g.url ? 'Open the epic in Jira' : undefined}>
+                        <button className="standup-key" onClick={() => g.url && void window.glassbox.openExternal(g.url)} disabled={!g.url} title={g.url ? tr('standupButton.openEpic') : undefined}>
                           {g.epicKey}
                         </button>
                       )}
@@ -101,20 +102,20 @@ export function StandupButton() {
             {data && !data.error && data.groups.length > 0 && (
               <div className="standup-foot">
                 <span className="muted small">
-                  From {data.sessions} session{data.sessions === 1 ? '' : 's'} and {data.commits} commit{data.commits === 1 ? '' : 's'}.
+                  {tr('standupButton.from', { sessions: tr('standupButton.sessions', { count: data.sessions }), commits: tr('standupButton.commits', { count: data.commits }) })}
                   {data.jiraError && (
                     <>
-                      {data.groupedBy === 'repo' ? ' Grouped by project: ' : ' '}
-                      {/connect/i.test(data.jiraError) ? 'Jira isn’t connected (connect the Atlassian connector in claude.ai to group by epic).' : 'Jira didn’t answer, so epics are missing.'}{' '}
+                      {data.groupedBy === 'repo' ? tr('standupButton.groupedByProject') : ' '}
+                      {/connect/i.test(data.jiraError) ? tr('standupButton.jiraNotConnected') : tr('standupButton.jiraNoAnswer')}{' '}
                       <button className="link small" onClick={() => load(true)} disabled={busy}>
-                        Try Jira again
+                        {tr('standupButton.tryJiraAgain')}
                       </button>
                     </>
                   )}
                 </span>
                 <span className="spacer" />
                 <button className="btn primary" onClick={copy}>
-                  <Icon name={copied ? 'check' : 'copy'} /> {copied ? 'Copied' : 'Copy'}
+                  <Icon name={copied ? 'check' : 'copy'} /> {copied ? tr('standupButton.copied') : tr('standupButton.copy')}
                 </button>
               </div>
             )}

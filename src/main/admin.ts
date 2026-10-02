@@ -2,6 +2,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
+import { tr } from '../shared/i18n'
 
 /**
  * Running Glassbox as administrator (Windows): everything it starts (Claude's sessions, their shell
@@ -93,8 +94,8 @@ export async function elevateAtStartupIfWanted(): Promise<boolean> {
 /** Saves the preference and restarts Glassbox at the matching level. Returns false if UAC was cancelled. */
 export async function setRunAsAdmin(on: boolean): Promise<boolean> {
   const s = adminState()
-  if (!s.supported) throw new Error('Running as administrator is only available in the installed app on Windows.')
-  if (on && !s.adminAccount) throw new Error('Your Windows account isn’t an administrator, so Glassbox can’t run elevated as you. Claude asks for administrator rights per command instead.')
+  if (!s.supported) throw new Error(tr('mainAdmin.notSupported'))
+  if (on && !s.adminAccount) throw new Error(tr('mainAdmin.notAdminAccount'))
   if (on === s.elevated) {
     save({ runAsAdmin: on, adminAsked: true })
     return true

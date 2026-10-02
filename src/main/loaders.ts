@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import type { LoaderState } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 /**
  * Loaders Claude puts above the message box (show_progress). Claude can move one along itself, or
@@ -64,11 +65,11 @@ export class Loaders {
     const failRx = rx(w.fail_pattern)
     const began = Date.now()
     const tick = async () => {
-      if (Date.now() - began > GIVE_UP_MS) return this.patch(id, { status: 'failed', detail: 'Stopped watching after an hour' })
+      if (Date.now() - began > GIVE_UP_MS) return this.patch(id, { status: 'failed', detail: tr('mainLoaders.gaveUp') })
       try {
         if (w.url) {
           const r = await fetch(w.url, { signal: AbortSignal.timeout(2500) }).catch(() => null)
-          if (r && r.status < 500) return this.patch(id, { status: 'done', percent: 100, detail: `${w.url} is answering` })
+          if (r && r.status < 500) return this.patch(id, { status: 'done', percent: 100, detail: tr('mainLoaders.answering', { url: w.url }) })
         }
         if (w.file && existsSync(full(w.file))) return this.patch(id, { status: 'done', percent: 100 })
         if (w.log && existsSync(full(w.log))) {

@@ -5,6 +5,7 @@ import { CHANGE_TOOLS } from '../session'
 import type { CommitEntry } from '../../../main/git'
 import type { BranchPr } from '../../../main/launcher'
 import { timeAgo } from '../lib'
+import { tr } from '../../../shared/i18n'
 
 const AUTO_KEY = 'glassbox.autoCommit'
 
@@ -69,19 +70,19 @@ export function GitPanel() {
     }
   }
 
-  if (!repo) return <Empty icon="git-commit" title="Not a git repository">Open a folder under git to see its history here.</Empty>
+  if (!repo) return <Empty icon="git-commit" title={tr('gitPanel.notRepo')}>{tr('gitPanel.notRepoBody')}</Empty>
   const head = log?.commits[0]
   const lastError = [...s.timeline].reverse().find((i) => i.kind === 'commits' && (i.error || i.skipped))
 
   return (
     <div className="panel">
-      <PanelHeader title="Git" />
+      <PanelHeader title={tr('gitPanel.title')} />
       <div className="panel-scroll">
         <PrCard />
         <section className="card">
           <label className="setting-inline">
-            <span className="grow" title="At the end of each turn, split into logical commits in this repo’s style. Only files Claude edited; never pushed; never on the default branch.">
-              <strong className="small">Commit Claude’s changes automatically</strong>
+            <span className="grow" title={tr('gitPanel.autoCommitTitle')}>
+              <strong className="small">{tr('gitPanel.autoCommit')}</strong>
             </span>
             <Toggle checked={s.autoCommit} onChange={setAuto} />
           </label>
@@ -92,36 +93,36 @@ export function GitPanel() {
           )}
           <div className="git-status">
             <span className="small">
-              {log ? (log.uncommitted ? <><strong>{log.uncommitted}</strong> uncommitted change{log.uncommitted > 1 ? 's' : ''}</> : 'Nothing uncommitted') : 'Loading…'}
+              {log ? (log.uncommitted ? <><strong>{log.uncommitted}</strong> {tr('gitPanel.uncommittedChanges', { count: log.uncommitted })}</> : tr('gitPanel.nothingUncommitted')) : tr('gitPanel.loading')}
             </span>
             <span className="spacer" />
-            <IconButton icon="refresh" title="Refresh" onClick={() => void load()} />
-            <button disabled={busy || !log?.uncommitted || !claudeChanged} onClick={() => void commitNow()} title={claudeChanged ? 'Commit what Claude has changed this session and hasn’t been committed yet' : 'Claude hasn’t changed any files in this session'}>
-              {busy ? <Icon name="loading" className="codicon-modifier-spin" /> : <Icon name="git-commit" />} Commit Claude’s changes
+            <IconButton icon="refresh" title={tr('gitPanel.refresh')} onClick={() => void load()} />
+            <button disabled={busy || !log?.uncommitted || !claudeChanged} onClick={() => void commitNow()} title={claudeChanged ? tr('gitPanel.commitNowTitle') : tr('gitPanel.claudeNoChanges')}>
+              {busy ? <Icon name="loading" className="codicon-modifier-spin" /> : <Icon name="git-commit" />} {tr('gitPanel.commitNow')}
             </button>
           </div>
           {error && <div className="note note-error">{error}</div>}
         </section>
 
-        <Section id="git-commits" title={`On ${s.git?.branch ?? 'this branch'}`} meta={<span className="muted small">{log ? `${log.commits.length} commit${log.commits.length === 1 ? '' : 's'} since it branched` : ''}</span>}>
-          {log && log.commits.length === 0 && <div className="muted small">No commits on this branch yet.</div>}
+        <Section id="git-commits" title={s.git?.branch ? tr('gitPanel.onBranch', { branch: s.git.branch }) : tr('gitPanel.onThisBranch')} meta={<span className="muted small">{log ? tr('gitPanel.commitsSinceBranched', { count: log.commits.length }) : ''}</span>}>
+          {log && log.commits.length === 0 && <div className="muted small">{tr('gitPanel.noCommits')}</div>}
           <div className="commit-list">
             {log?.commits.map((c) => {
               const ours = !!mine[c.sha]
               return (
-                <div key={c.sha} className="commit-row" onClick={() => openCommit(c.sha, c.short)} title={`${c.subject}\n${c.author}, ${c.when}\nClick to see the changes`}>
-                  <span className={c.pushed ? 'commit-dot pushed' : 'commit-dot'} title={c.pushed ? 'Pushed' : 'Not pushed yet'} />
+                <div key={c.sha} className="commit-row" onClick={() => openCommit(c.sha, c.short)} title={`${c.subject}\n${c.author}, ${c.when}\n${tr('gitPanel.clickToSee')}`}>
+                  <span className={c.pushed ? 'commit-dot pushed' : 'commit-dot'} title={c.pushed ? tr('gitPanel.pushed') : tr('gitPanel.notPushedYet')} />
                   <span className="commit-main">
                     <span className="ellipsis">{c.subject}</span>
                     <span className="muted small">
                       {/* Plain words, not tags: who made it and whether it's pushed. */}
                       <span className="mono">{c.short}</span>, {c.when}
-                      {ours && ', by Glassbox'}
-                      {!c.pushed && ', not pushed'}
+                      {ours && tr('gitPanel.byGlassbox')}
+                      {!c.pushed && tr('gitPanel.notPushed')}
                     </span>
                   </span>
                   {ours && c === head && !c.pushed && (
-                    <button className="icon-btn" title="Undo this commit (its changes stay, uncommitted)" onClick={(e) => (e.stopPropagation(), void undo(c.sha))}>
+                    <button className="icon-btn" title={tr('gitPanel.undoCommit')} onClick={(e) => (e.stopPropagation(), void undo(c.sha))}>
                       <Icon name="discard" />
                     </button>
                   )}
@@ -135,7 +136,7 @@ export function GitPanel() {
   )
 }
 
-const REVIEW: Record<string, string> = { APPROVED: 'Approved', CHANGES_REQUESTED: 'Changes requested', REVIEW_REQUIRED: 'Review needed' }
+const REVIEW: Record<string, string> = { APPROVED: tr('gitPanel.reviewApproved'), CHANGES_REQUESTED: tr('gitPanel.reviewChangesRequested'), REVIEW_REQUIRED: tr('gitPanel.reviewNeeded') }
 
 /** The branch's pull request: what state it's in, reviews and checks, and a link to open it on GitHub. */
 function PrCard() {
@@ -153,39 +154,40 @@ function PrCard() {
   useEffect(() => load(), [load, s.git?.branch, s.git?.head])
 
   const pr = res?.pr
-  const state = pr ? (pr.state === 'MERGED' ? 'Merged' : pr.state === 'CLOSED' ? 'Closed' : pr.isDraft ? 'Draft' : 'Open') : ''
+  const stateKey = pr ? (pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : pr.isDraft ? 'draft' : 'open') : ''
+  const state = stateKey ? tr(`gitPanel.prState.${stateKey}`) : ''
   const checks = pr?.checks
   return (
-    <Section id="git-pr" className="pr-card" title="Pull request" actions={<IconButton icon={loading ? 'loading' : 'refresh'} title="Check again" onClick={load} />}>
+    <Section id="git-pr" className="pr-card" title={tr('gitPanel.pullRequest')} actions={<IconButton icon={loading ? 'loading' : 'refresh'} title={tr('gitPanel.checkAgain')} onClick={load} />}>
       {!res ? (
-        <div className="muted small">Looking for a pull request…</div>
+        <div className="muted small">{tr('gitPanel.lookingForPr')}</div>
       ) : pr ? (
         <>
           <button className="pr-link" onClick={() => void window.glassbox.openExternal(pr.url)} title={`${pr.url}
-Open on GitHub`}>
+${tr('gitPanel.openOnGithub')}`}>
             <span className="pr-title">{pr.title}</span>
             <span className="pr-number">#{pr.number}</span>
             <Icon name="link-external" />
           </button>
           <div className="pr-facts">
-            <span className={`pr-state pr-${state.toLowerCase()}`}>{state}</span>
-            <span>into {pr.base}</span>
+            <span className={`pr-state pr-${stateKey}`}>{state}</span>
+            <span>{tr('gitPanel.into', { base: pr.base })}</span>
             {pr.review && <span>{REVIEW[pr.review] ?? pr.review}</span>}
             {checks && checks.passed + checks.failed + checks.pending > 0 && (
               <span className={checks.failed ? 'pr-checks-failed' : ''}>
-                {checks.failed ? `${checks.failed} check${checks.failed > 1 ? 's' : ''} failing` : checks.pending ? `${checks.pending} check${checks.pending > 1 ? 's' : ''} running` : 'Checks passing'}
+                {checks.failed ? tr('gitPanel.checksFailing', { count: checks.failed }) : checks.pending ? tr('gitPanel.checksRunning', { count: checks.pending }) : tr('gitPanel.checksPassing')}
               </span>
             )}
           </div>
           <div className="muted small">
-            {pr.files} file{pr.files === 1 ? '' : 's'}, <span className="ok">+{pr.additions}</span> <span className="err">−{pr.deletions}</span>, updated {timeAgo(Date.parse(pr.updatedAt))}
+            {tr('gitPanel.prFiles', { count: pr.files })}, <span className="ok">+{pr.additions}</span> <span className="err">−{pr.deletions}</span>, {tr('gitPanel.updated', { ago: timeAgo(Date.parse(pr.updatedAt)) })}
           </div>
         </>
       ) : res.none ? (
         <div className="pr-none">
-          <span className="muted small">No pull request for {s.git?.branch ?? 'this branch'} yet.</span>
+          <span className="muted small">{s.git?.branch ? tr('gitPanel.noPr', { branch: s.git.branch }) : tr('gitPanel.noPrThisBranch')}</span>
           <button className="btn" onClick={() => composerRef.current?.insert('Push this branch and open a pull request for it. ')}>
-            Ask Claude to open one
+            {tr('gitPanel.askClaudeToOpen')}
           </button>
         </div>
       ) : (

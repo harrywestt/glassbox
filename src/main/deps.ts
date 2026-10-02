@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
+import { tr } from '../shared/i18n'
 
 /**
  * Blast radius: for each file Claude edited, the other files in the project that import or
@@ -333,16 +334,16 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 export async function findDependents(cwd: string, files: string[]): Promise<BlastRadiusResult> {
   const errors: string[] = []
   try {
-    if (!(await stat(cwd).catch(() => null))?.isDirectory()) return { files: [], error: `Project folder not found: ${cwd}` }
+    if (!(await stat(cwd).catch(() => null))?.isDirectory()) return { files: [], error: tr('mainDeps.folderNotFound', { cwd }) }
     const unique = [...new Map(files.map((f) => [keyOf(isAbsolute(f) ? f : resolve(cwd, f)), f])).values()]
-    if (unique.length > MAX_INPUT_FILES) errors.push(`Only the first ${MAX_INPUT_FILES} of ${unique.length} files were checked.`)
+    if (unique.length > MAX_INPUT_FILES) errors.push(tr('mainDeps.onlyFirstFiles', { max: MAX_INPUT_FILES, total: unique.length }))
     const inputs = unique.slice(0, MAX_INPUT_FILES)
     const git = await isGitRepo(cwd)
     const deadline = Date.now() + SCAN_BUDGET_MS
     let index: ScanIndex | null = null
     if (!git) {
       index = await scanIndex(cwd, deadline)
-      if (index.truncated) errors.push('Not a git repository, so only part of the folder was scanned.')
+      if (index.truncated) errors.push(tr('mainDeps.notGitPartial'))
     }
     const results = await mapLimit(inputs, git ? CONCURRENCY : 1, async (file): Promise<BlastRadiusFile> => {
       const t = makeTarget(cwd, file)

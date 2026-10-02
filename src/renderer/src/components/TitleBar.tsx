@@ -6,6 +6,7 @@ import type { ThemePreference } from '../theme'
 import { Icon } from './ui'
 import { liveVerb, tallyOf } from '../tally'
 import { Logo } from './Logo'
+import { tr } from '../../../shared/i18n'
 
 type Props = { state: AppState; dispatch: Dispatch<AppAction>; themePref: ThemePreference; themeBase: 'dark' | 'light'; onToggleTheme: () => void }
 
@@ -26,10 +27,10 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
         className={state.active === DASHBOARD ? 'brand-home active' : 'brand-home'}
         aria-current={state.active === DASHBOARD ? 'page' : undefined}
         onClick={() => dispatch({ type: 'activate', id: DASHBOARD })}
-        title="Dashboard (Ctrl+T)"
+        title={tr('titleBar.dashboardTip')}
       >
         <Logo size={20} state={overall} />
-        <span>Dashboard</span>
+        <span>{tr('titleBar.dashboard')}</span>
       </button>
       <div className="tabstrip" role="tablist">
         {state.tabs.map((tab, index) => {
@@ -58,7 +59,7 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
               </span>
               <button
                 className="tab-close"
-                title="Close (Ctrl+W)"
+                title={tr('titleBar.closeTip')}
                 onClick={(e) => {
                   e.stopPropagation()
                   actions.closeTab(tab.id)
@@ -69,13 +70,13 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
             </div>
           )
         })}
-        <button className="tab-new" title="New session (Ctrl+T)" onClick={newTab}>
+        <button className="tab-new" title={tr('titleBar.newSessionTip')} onClick={newTab}>
           <Icon name="add" />
         </button>
       </div>
       <div className="titlebar-drag" />
       <UpdateButton />
-      <button className="icon-btn titlebar-btn" title={`Switch to ${themeBase === 'dark' ? 'light' : 'dark'} mode${themePref === 'system' ? ' (currently following the system)' : ''}`} onClick={onToggleTheme}>
+      <button className="icon-btn titlebar-btn" title={themeBase === 'dark' ? (themePref === 'system' ? tr('titleBar.switchToLightSystem') : tr('titleBar.switchToLight')) : themePref === 'system' ? tr('titleBar.switchToDarkSystem') : tr('titleBar.switchToDark')} onClick={onToggleTheme}>
         <Icon name={themeBase === 'dark' ? 'sun' : 'moon'} />
       </button>
       <div className="window-controls-space" />
@@ -97,9 +98,9 @@ function UpdateButton() {
     <button
       className="update-chip ready"
       onClick={() => void window.glassbox.update.install()}
-      title={ready ? `Glassbox ${u.version} installs by itself when you close Glassbox. Click to restart into it now; your tabs reopen.` : `Glassbox ${u.version} is out. Opens the download page.`}
+      title={ready ? tr('titleBar.updateReadyTip', { version: u.version }) : tr('titleBar.updateAvailableTip', { version: u.version })}
     >
-      <Icon name={ready ? 'check' : 'cloud-download'} /> {ready ? 'Update ready' : `Get ${u.version}`}
+      <Icon name={ready ? 'check' : 'cloud-download'} /> {ready ? tr('titleBar.updateReady') : tr('titleBar.getVersion', { version: u.version })}
     </button>
   )
 }

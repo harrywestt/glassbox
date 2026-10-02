@@ -1,6 +1,7 @@
 import { type McpServerConfig, type Query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { query } from './claude'
 import type { Ticket, TicketActionResult, TicketComment, TicketResult, TicketTransition, TicketTransitionsResult } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 export { ticketKeyFromBranch } from '../shared/ticket'
 
@@ -22,7 +23,7 @@ const GET_TRANSITIONS = T('getTransitionsForJiraIssue')
 const TRANSITION = T('transitionJiraIssue')
 const COMMENT = T('addCommentToJiraIssue')
 
-const CONNECT = 'The Atlassian connector isn’t connected. Connect it in claude.ai (Settings, Connectors), then retry.'
+const CONNECT = tr('mainJira.notConnected')
 const CACHE_MS = 60_000
 const RUN_TIMEOUT_MS = 90_000
 
@@ -193,8 +194,8 @@ async function run(cwd: string, allowed: string[], task: string): Promise<{ outp
     }
   } catch (err) {
     if (err instanceof JiraError) throw err
-    if (abort.signal.aborted) throw new JiraError('Jira took too long to answer. Retry.')
-    throw new JiraError(`Couldn't reach Jira: ${err instanceof Error ? err.message : String(err)}`)
+    if (abort.signal.aborted) throw new JiraError(tr('mainJira.tooSlow'))
+    throw new JiraError(tr('mainJira.couldNotReach', { error: err instanceof Error ? err.message : String(err) }))
   } finally {
     clearTimeout(timer)
   }
@@ -218,20 +219,20 @@ function rememberSite(outputs: ToolOutput[]) {
 function outputOf(outputs: ToolOutput[], reply: Record<string, unknown> | null, tool: string, key: string): string {
   const resources = outputs.find((o) => o.name === RESOURCES)
   if (resources?.isError) throw new JiraError(describe(resources.text, key))
-  if (resources && !site) throw new JiraError('Your Atlassian account has no Jira site the connector can reach.')
+  if (resources && !site) throw new JiraError(tr('mainJira.noSite'))
   const out = outputs.find((o) => o.name === tool)
-  if (!out) throw new JiraError(typeof reply?.error === 'string' ? describe(reply.error, key) : 'Jira didn’t answer. Retry.')
+  if (!out) throw new JiraError(typeof reply?.error === 'string' ? describe(reply.error, key) : tr('mainJira.noAnswer'))
   if (out.isError || /^\s*(error|\{"error)/i.test(out.text)) throw new JiraError(describe(out.text, key))
   return out.text
 }
 
 function describe(text: string, key: string): string {
-  if (/does not exist|not found|404|no issue|permission to see/i.test(text)) return `Couldn't find ${key} in Jira.`
+  if (/does not exist|not found|404|no issue|permission to see/i.test(text)) return tr('mainJira.notFound', { key })
   if (/unauthori[sz]ed|401|403|forbidden|re-?auth|sign in|log ?in|token/i.test(text)) {
     connector = null
     return CONNECT
   }
-  return text.replace(/\s+/g, ' ').trim().slice(0, 240) || 'Jira returned an error.'
+  return text.replace(/\s+/g, ' ').trim().slice(0, 240) || tr('mainJira.genericError')
 }
 
 const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
@@ -266,12 +267,12 @@ function toTicket(text: string, key: string): Ticket {
   try {
     data = JSON.parse(text)
   } catch {
-    throw new JiraError('Jira sent something Glassbox couldn’t read. Retry.')
+    throw new JiraError(tr('mainJira.unreadable'))
   }
   const nodes = asRecord(data.issues).nodes
   const issue = asRecord(Array.isArray(nodes) ? nodes[0] : Array.isArray(data.issues) ? data.issues[0] : data)
   const f = asRecord(issue.fields)
-  if (!issue.key && !f.summary) throw new JiraError(`Couldn't find ${key} in Jira.`)
+  if (!issue.key && !f.summary) throw new JiraError(tr('mainJira.notFound', { key }))
   const realKey = str(issue.key) ?? key
   const rawComments = asRecord(f.comment).comments
   const comments: TicketComment[] = (Array.isArray(rawComments) ? rawComments : []).map((c) => {
@@ -340,7 +341,7 @@ export async function getTransitions(cwd: string, rawKey: string): Promise<Ticke
       .map((t) => ({ id: String(t.id), name: str(t.name) ?? String(t.id), to: str(asRecord(t.to).name) }))
     return { transitions }
   } catch (err) {
-    return fail(err instanceof SyntaxError ? new JiraError('Jira sent something Glassbox couldn’t read. Retry.') : err)
+    return fail(err instanceof SyntaxError ? new JiraError(tr('mainJira.unreadable')) : err)
   }
 }
 
@@ -360,7 +361,7 @@ export async function transitionTicket(cwd: string, rawKey: string, transitionId
 
 export async function commentOnTicket(cwd: string, rawKey: string, body: string): Promise<TicketActionResult> {
   const key = normKey(rawKey)
-  if (!body.trim()) return { error: 'The comment is empty.' }
+  if (!body.trim()) return { error: tr('mainJira.emptyComment') }
   try {
     const args = { issueIdOrKey: key, commentBody: body, contentFormat: 'markdown' }
     const { outputs, reply } = await run(cwd, [COMMENT], `Then call ${COMMENT} with cloudId and these arguments (pass commentBody exactly as given, unchanged): ${JSON.stringify(args)}`)

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { CheckState, GitHubSummary, PrItem, RepoPrCount, ReviewDecision, RunItem } from '../shared/github'
+import { tr } from '../shared/i18n'
 
 /*
   GitHub summary for the dashboard, read through the `gh` CLI (so it uses the user's existing
@@ -50,11 +51,11 @@ async function gh(args: string[], cwd?: string): Promise<string> {
 
 function toGhError(err: unknown): GhError {
   const e = err as NodeJS.ErrnoException & { stderr?: string; killed?: boolean; signal?: string }
-  if (e.code === 'ENOENT') return new GhError('The GitHub CLI isn’t installed. Install it from cli.github.com, then run `gh auth login`.', 'missing')
-  if (e.killed || e.signal === 'SIGTERM') return new GhError('GitHub took too long to respond', 'timeout')
+  if (e.code === 'ENOENT') return new GhError(tr('mainGithub.ghMissing'), 'missing')
+  if (e.killed || e.signal === 'SIGTERM') return new GhError(tr('mainGithub.tooSlow'), 'timeout')
   const stderr = (e.stderr ?? '').trim()
   if (/gh auth login|not logged in|authentication|HTTP 401|Bad credentials/i.test(stderr)) {
-    return new GhError('You’re signed out of the GitHub CLI. Sign in with `gh auth login`.', 'auth')
+    return new GhError(tr('mainGithub.signedOut'), 'auth')
   }
   return new GhError(firstLine(stderr) || e.message || String(err), 'other')
 }
@@ -173,7 +174,7 @@ async function fetchRepoCount(repo: string): Promise<RepoPrCount> {
   const [owner, name] = repo.split('/')
   const out = await gh(['api', 'graphql', '-f', `query=${REPO_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`])
   const r = (JSON.parse(out) as { data: { repository: { nameWithOwner: string; url: string; pullRequests: { totalCount: number } } | null } }).data.repository
-  if (!r) throw new Error('not found, or your account can’t see it')
+  if (!r) throw new Error(tr('mainGithub.repoNotFound'))
   return { repo: r.nameWithOwner, open: r.pullRequests.totalCount, url: `${r.url}/pulls` }
 }
 
@@ -232,15 +233,15 @@ async function buildSummary(repoDirs: string[]): Promise<GitHubSummary> {
   if (account instanceof Error) {
     // Without the account call we don't know who "you" are, so there's nothing useful to show.
     const kind = (account as GhError).kind
-    return empty(kind === 'missing' || kind === 'auth' ? account.message : `Couldn’t reach GitHub: ${account.message}`)
+    return empty(kind === 'missing' || kind === 'auth' ? account.message : tr('mainGithub.couldNotReach', { error: account.message }))
   }
 
   const errors: string[] = []
   const perRepo = await Promise.all(
     repos.map(async (repo) => {
       const [count, runs] = await Promise.allSettled([fetchRepoCount(repo), fetchRuns(repo, account.login)])
-      if (count.status === 'rejected') errors.push(`${repo}: ${(count.reason as Error).message}`)
-      if (runs.status === 'rejected') errors.push(`${repo} runs: ${(runs.reason as Error).message}`)
+      if (count.status === 'rejected') errors.push(tr('mainGithub.repoError', { repo, error: (count.reason as Error).message }))
+      if (runs.status === 'rejected') errors.push(tr('mainGithub.repoRunsError', { repo, error: (runs.reason as Error).message }))
       return { count: count.status === 'fulfilled' ? count.value : null, runs: runs.status === 'fulfilled' ? runs.value : [] }
     })
   )
@@ -271,7 +272,7 @@ let cache: { key: string; at: number; value: Promise<GitHubSummary> } | null = n
 export async function getGitHubSummary(repoDirs: string[], opts: { force?: boolean } = {}): Promise<GitHubSummary> {
   const key = [...new Set(repoDirs)].sort().join('\n')
   if (!opts.force && cache && cache.key === key && Date.now() - cache.at < CACHE_MS) return cache.value
-  const value = buildSummary(repoDirs).catch((err: unknown) => empty(`Couldn’t load GitHub: ${err instanceof Error ? err.message : String(err)}`))
+  const value = buildSummary(repoDirs).catch((err: unknown) => empty(tr('mainGithub.couldNotLoad', { error: err instanceof Error ? err.message : String(err) })))
   cache = { key, at: Date.now(), value }
   const result = await value
   // Don't hold on to a sign-in failure: the user may fix it and hit refresh straight away.

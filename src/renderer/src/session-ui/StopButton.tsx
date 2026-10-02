@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { Icon } from '../components/ui'
 import { stoppableTasks } from '../tally'
+import { tr } from '../../../shared/i18n'
 
 /**
  * Stop, without taking everything down with it. The square stops what you're looking at: the agent
@@ -10,10 +11,10 @@ import { stoppableTasks } from '../tally'
  */
 /** What "Stop everything" takes down, in words: "Claude's reply and both agents." */
 function everythingNote(turn: boolean, tasks: { agentId?: string }[]) {
-  const noun = tasks.every((t) => t.agentId) ? 'agent' : 'background task'
+  const kind = tasks.every((t) => t.agentId) ? 'agents' : 'tasks'
   const n = tasks.length
-  const these = n === 1 ? `the ${noun}` : n === 2 ? `both ${noun}s` : `all ${n} ${noun}s`
-  return turn ? `Claude’s reply and ${these}.` : `${these[0].toUpperCase()}${these.slice(1)}.`
+  const these = tr(`stopButton.${kind}.${n === 1 ? 'one' : n === 2 ? 'two' : 'many'}`, { count: n })
+  return turn ? tr('stopButton.replyAnd', { these }) : `${these[0].toUpperCase()}${these.slice(1)}.`
 }
 
 export function StopButton() {
@@ -35,8 +36,8 @@ export function StopButton() {
     <button
       className="send stop"
       onClick={focused ? () => stopTask(focused.id) : turn ? stopReply : () => setOpen(!open)}
-      title={focused ? `Stop this agent: ${focused.label}` : turn ? (tasks.length ? 'Stop Claude’s reply (Esc). Background agents keep working' : 'Stop Claude (Esc)') : 'Stop background agents'}
-      aria-label={focused ? 'Stop this agent' : turn ? 'Stop Claude' : 'Stop background agents'}
+      title={focused ? tr('stopButton.stopThisAgentNamed', { label: focused.label }) : turn ? (tasks.length ? tr('stopButton.stopReplyTitle') : tr('stopButton.stopClaudeTitle')) : tr('stopButton.stopBackground')}
+      aria-label={focused ? tr('stopButton.stopThisAgent') : turn ? tr('stopButton.stopClaude') : tr('stopButton.stopBackground')}
     >
       <span className="stop-square" />
     </button>
@@ -46,7 +47,7 @@ export function StopButton() {
   return (
     <div className="stop-split">
       {square}
-      <button className={open ? 'send stop stop-more open' : 'send stop stop-more'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title="Choose what to stop">
+      <button className={open ? 'send stop stop-more open' : 'send stop stop-more'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={tr('stopButton.chooseWhat')}>
         <Icon name="chevron-up" />
       </button>
       {open && (
@@ -55,25 +56,25 @@ export function StopButton() {
           <div className="menu stop-menu" role="menu">
             {turn && (
               <button role="menuitem" className="menu-item" onClick={run(stopReply)}>
-                <span className="stop-menu-label">Stop Claude’s reply</span>
-                <span className="stop-menu-note">Agents keep working in the background.</span>
+                <span className="stop-menu-label">{tr('stopButton.stopReply')}</span>
+                <span className="stop-menu-note">{tr('stopButton.agentsKeepWorking')}</span>
               </button>
             )}
             <div className="menu-group">
-              <div className="menu-heading">{tasks.length === 1 ? 'Running in the background' : `${tasks.length} running in the background`}</div>
+              <div className="menu-heading">{tr('stopButton.running', { count: tasks.length })}</div>
               {tasks.map((t) => (
                 <button key={t.id} role="menuitem" className="menu-item" onClick={run(() => stopTask(t.id))} title={t.label}>
                   <span className="stop-menu-label">
-                    <span className="ellipsis">Stop {t.label}</span>
-                    {t === focused && <span className="muted small">Selected</span>}
+                    <span className="ellipsis">{tr('stopButton.stopTask', { label: t.label })}</span>
+                    {t === focused && <span className="muted small">{tr('stopButton.selected')}</span>}
                   </span>
                 </button>
               ))}
             </div>
             <div className="menu-group">
               <button role="menuitem" className="menu-item danger" onClick={run(stopAll)}>
-                <span className="stop-menu-label">Stop everything</span>
-                <span className="stop-menu-note">{everythingNote(turn, tasks)} You can send a message afterwards to carry on.</span>
+                <span className="stop-menu-label">{tr('stopButton.stopEverything')}</span>
+                <span className="stop-menu-note">{tr('stopButton.everythingNote', { these: everythingNote(turn, tasks) })}</span>
               </button>
             </div>
           </div>

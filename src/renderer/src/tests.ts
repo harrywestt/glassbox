@@ -1,4 +1,5 @@
 import { CHANGE_TOOLS, isClaudeOwnFile, type SessionState, type ToolCall } from './session'
+import { tr } from '../../shared/i18n'
 
 /** A test run Claude did, read from its command and output. */
 export type TestRun = {
@@ -121,4 +122,4 @@ export function untestedEdits(s: SessionState, runs: TestRun[]): string[] {
 }
 
 export const runSummary = (r: TestRun) =>
-  r.ok ? `${r.passed} passed${r.skipped ? `, ${r.skipped} skipped` : ''}` : `${r.failed} failed${r.passed ? `, ${r.passed} passed` : ''}`
+  r.ok ? tr(r.skipped ? 'tests.passedSkipped' : 'tests.passed', { passed: r.passed, skipped: r.skipped }) : tr(r.passed ? 'tests.failedPassed' : 'tests.failed', { failed: r.failed, passed: r.passed })

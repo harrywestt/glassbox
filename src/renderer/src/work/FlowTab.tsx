@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { Icon, Segmented } from '../components/ui'
 import type { Flow, FlowHop } from '../session'
+import { tr } from '../../../shared/i18n'
 import './FlowTab.css'
 
 type View = 'before' | 'after'
@@ -32,7 +33,7 @@ export function FlowTab() {
     const first = switchRef.current?.querySelector('button')
     if (first) {
       first.disabled = !hasBefore
-      first.title = hasBefore ? '' : 'This flow is new, so there is no before'
+      first.title = hasBefore ? '' : tr('flowTab.noBefore')
     }
   })
 
@@ -41,7 +42,7 @@ export function FlowTab() {
   if (!current || !stats) {
     return (
       <div className="flow flow-empty-wrap">
-        <div className="flow-empty">No flows yet. Claude shows one when a change alters how a request moves through the system.</div>
+        <div className="flow-empty">{tr('flowTab.empty')}</div>
       </div>
     )
   }
@@ -58,16 +59,16 @@ export function FlowTab() {
             </div>
           )}
           <span className="flow-spacer" />
-          <button className="btn quiet" onClick={() => setRun((n) => n + 1)} title="Draw the flow again, one hop at a time">
-            <Icon name="debug-restart" /> Replay
+          <button className="btn quiet" onClick={() => setRun((n) => n + 1)} title={tr('flowTab.replayTitle')}>
+            <Icon name="debug-restart" /> {tr('flowTab.replay')}
           </button>
           <div ref={switchRef}>
             <Segmented<View>
               value={shown}
               onChange={(v) => (v === 'after' || hasBefore) && setView(v)}
               options={[
-                { value: 'before', label: 'Before' },
-                { value: 'after', label: 'After' }
+                { value: 'before', label: tr('flowTab.before') },
+                { value: 'after', label: tr('flowTab.after') }
               ]}
             />
           </div>
@@ -77,13 +78,13 @@ export function FlowTab() {
       <aside className="flow-side">
         <div className="flow-title">{current.title}</div>
         <div className="flow-counts">
-          <CountRow tone="ok" label="New" n={stats.added} />
-          <CountRow tone="warn" label="Changed" n={stats.changed} />
-          <CountRow tone="err" label="Removed" n={stats.removed} />
+          <CountRow tone="ok" label={tr('flowTab.counts.new')} n={stats.added} />
+          <CountRow tone="warn" label={tr('flowTab.counts.changed')} n={stats.changed} />
+          <CountRow tone="err" label={tr('flowTab.counts.removed')} n={stats.removed} />
         </div>
         {(stats.added + stats.changed + stats.removed === 0 || !current.before?.length) && <div className="flow-summary">{stats.sentence}</div>}
         <button className="btn" onClick={() => composerRef.current?.insert(`About the "${current.title}" flow you showed (${shown} your change): `)}>
-          Ask Claude about this flow
+          {tr('flowTab.askAbout')}
         </button>
       </aside>
     </div>
@@ -141,7 +142,7 @@ const FlowSequence = memo(function FlowSequence({ lanes, hops }: { lanes: string
   return (
     <div className="flow-canvas" ref={boxRef}>
       {width > 0 && (
-        <svg className="flow-svg" width={w + PAD * 2} height={height} role="img" aria-label={`Sequence: ${hops.map((h) => `${h.from} to ${h.to}, ${h.label}`).join('; ')}`}>
+        <svg className="flow-svg" width={w + PAD * 2} height={height} role="img" aria-label={tr('flowTab.sequenceLabel', { hops: hops.map((h) => tr('flowTab.sequenceHop', { from: h.from, to: h.to, label: h.label })).join('; ') })}>
           {lanes.map((lane) => {
             const cx = x(lane)
             return (
@@ -230,21 +231,20 @@ function summarise(flow: Flow) {
     if (!hs.length) return
     const calls = hs.filter((h) => what(h) === 'call').length
     const responses = hs.length - calls
-    if (calls && responses) parts.push(`${hs.length} ${adj} ${plural(hs.length, 'hop')}`)
-    else parts.push(`${hs.length} ${adj} ${plural(hs.length, calls ? 'call' : 'response')}`)
+    if (calls && responses) parts.push(tr('flowTab.summary.hops', { count: hs.length, kind: adj }))
+    else parts.push(tr(calls ? 'flowTab.summary.calls' : 'flowTab.summary.responses', { count: hs.length, kind: adj }))
   }
-  describe(added, 'new')
-  describe(changed, 'changed')
-  describe(removed, 'removed')
+  describe(added, tr('flowTab.summary.kind.new'))
+  describe(changed, tr('flowTab.summary.kind.changed'))
+  describe(removed, tr('flowTab.summary.kind.removed'))
 
   let sentence: string
-  if (!flow.before?.length) sentence = `A new flow: ${flow.after.length} ${plural(flow.after.length, 'hop')} across ${flow.lanes.length} participants.`
-  else if (!parts.length) sentence = 'The path is the same before and after.'
-  else sentence = `${capitalise(join(parts))}.`
+  if (!flow.before?.length) sentence = tr('flowTab.summary.newFlow', { hops: tr('flowTab.summary.hopCount', { count: flow.after.length }), lanes: flow.lanes.length })
+  else if (!parts.length) sentence = tr('flowTab.summary.same')
+  else sentence = tr('flowTab.summary.sentence', { text: capitalise(join(parts)) })
 
   return { added: added.length, changed: changed.length, removed: removed.length, sentence }
 }
 
-const plural = (n: number, word: string) => (n === 1 ? word : `${word}s`)
 const capitalise = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
-const join = (parts: string[]) => (parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`)
+const join = (parts: string[]) => (parts.length < 2 ? parts.join('') : tr('flowTab.summary.join', { rest: parts.slice(0, -1).join(', '), last: parts[parts.length - 1] }))

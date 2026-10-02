@@ -8,6 +8,7 @@ import { editText } from '../edits'
 export { editText }
 import { Icon } from '../components/ui'
 import { secretIn } from '../radar'
+import { tr } from '../../../shared/i18n'
 
 const PREVIEW_LINES = 14
 /** Edits undone this run, so the cards remember after re-rendering. */
@@ -57,32 +58,32 @@ export function EditCard({ call }: { call: ToolCall }) {
   return (
     <div className={failed ? 'edit-card failed' : undo === 'done' ? 'edit-card undone' : 'edit-card'}>
       <div className="edit-head-row">
-      <button className="edit-head" onClick={() => openDiff({ path, base: null, diffMode: 'merge-base', source: 'session' })} title={`${path}\nOpen the full diff`}>
+      <button className="edit-head" onClick={() => openDiff({ path, base: null, diffMode: 'merge-base', source: 'session' })} title={tr('editCard.openFullDiff', { path })}>
         {call.status === 'running' ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name={call.name === 'Write' ? 'new-file' : 'edit'} className={failed ? 'err' : 'warn'} />}
-        <span className="edit-verb">{failed ? 'Tried to edit' : call.name === 'Write' ? 'Wrote' : 'Edited'}</span>
+        <span className="edit-verb">{failed ? tr('editCard.triedToEdit') : call.name === 'Write' ? tr('editCard.wrote') : tr('editCard.edited')}</span>
         <span className="edit-file">{baseName(path)}</span>
         <span className="muted small ellipsis">{relPath(tab.cwd, path).split('/').slice(0, -1).join('/')}</span>
         <span className="spacer" />
-        {secret && <span className="tag err-tag" title="This edit adds something that looks like a secret. Keep it out of the code (use an environment variable or a secret store).">possible {secret}</span>}
+        {secret && <span className="tag err-tag" title={tr('editCard.secretHint')}>{tr('editCard.possibleSecret', { secret })}</span>}
         <span className="small num"><span className="ok">+{added}</span> <span className="err">−{removed}</span></span>
         <Icon name="link-external" className="muted edit-open" />
       </button>
       {!failed && !everyday && call.status === 'done' && (
-        <button className="icon-btn edit-undo" title="What would this change affect?" aria-label="What would this change affect?" onClick={() => openRipple(undefined, path)}>
+        <button className="icon-btn edit-undo" title={tr('editCard.whatWouldItAffect')} aria-label={tr('editCard.whatWouldItAffect')} onClick={() => openRipple(undefined, path)}>
           <Icon name="radio-tower" />
         </button>
       )}
       {undo === 'done' ? (
-        <span className="tag edit-undone">undone</span>
+        <span className="tag edit-undone">{tr('editCard.undone')}</span>
       ) : undo === 'confirm' ? (
         <span className="edit-undo-confirm small">
-          Undo this edit?
-          <button className="chip-btn" onClick={() => void doUndo()}>Undo</button>
-          <button className="chip-btn" onClick={() => setUndo('idle')}>Keep</button>
+          {tr('editCard.undoConfirm')}
+          <button className="chip-btn" onClick={() => void doUndo()}>{tr('editCard.undo')}</button>
+          <button className="chip-btn" onClick={() => setUndo('idle')}>{tr('editCard.keep')}</button>
         </span>
       ) : (
         canUndo && (
-          <button className="icon-btn edit-undo" disabled={undo === 'working'} title={call.name === 'Write' ? 'Undo: delete this new file' : 'Undo just this edit'} onClick={() => setUndo('confirm')}>
+          <button className="icon-btn edit-undo" disabled={undo === 'working'} title={call.name === 'Write' ? tr('editCard.undoNewFile') : tr('editCard.undoEdit')} onClick={() => setUndo('confirm')}>
             <Icon name={undo === 'working' ? 'loading' : 'discard'} className={undo === 'working' ? 'codicon-modifier-spin' : ''} />
           </button>
         )
@@ -94,7 +95,7 @@ export function EditCard({ call }: { call: ToolCall }) {
           {shown.map((l, idx) => (l ? <Line key={idx} l={l} /> : <div key={idx} className="edit-gap">⋯</div>))}
           {lines.length > PREVIEW_LINES && (
             <button className="edit-more" onClick={() => setAll(!all)}>
-              {all ? 'Show less' : `Show ${lines.length - PREVIEW_LINES} more lines`}
+              {all ? tr('editCard.showLess') : tr('editCard.showMoreLines', { n: lines.length - PREVIEW_LINES })}
             </button>
           )}
         </div>

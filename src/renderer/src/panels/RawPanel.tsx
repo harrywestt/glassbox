@@ -8,6 +8,7 @@ const idOf = (r: Row) => ids.get(r) ?? (ids.set(r, ++nextId), nextId)
 import { useSession } from '../views/SessionView'
 import type { SessionEvent } from '../../../shared/events'
 import { PanelHeader, Segmented } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 export function RawPanel() {
   const { s } = useSession()
@@ -30,15 +31,15 @@ export function RawPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Raw" />
+      <PanelHeader title={tr('rawPanel.title')} />
       <div className="panel-toolbar">
-        {view === 'events' ? <input className="grow" placeholder="Filter events (any text)…" value={filter} onChange={(e) => setFilter(e.target.value)} /> : <span className="grow" />}
+        {view === 'events' ? <input className="grow" placeholder={tr('rawPanel.filterPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} /> : <span className="grow" />}
         <Segmented
           value={view}
           onChange={setView}
           options={[
-            { value: 'events', label: `Events (${s.raw.length})` },
-            { value: 'stderr', label: `stderr (${s.stderr.length})` }
+            { value: 'events', label: tr('rawPanel.events', { n: s.raw.length }) },
+            { value: 'stderr', label: tr('rawPanel.stderr', { n: s.stderr.length }) }
           ]}
         />
       </div>
@@ -49,9 +50,9 @@ export function RawPanel() {
           <>
           {heldAt !== null && (
             <div className="raw-held">
-              <span className="muted small">{waiting ? `Paused while you read: ${waiting} new event${waiting === 1 ? '' : 's'}` : 'Paused while you read'}</span>
+              <span className="muted small">{waiting ? tr('rawPanel.pausedNew', { count: waiting }) : tr('rawPanel.paused')}</span>
               <button className="link small" onClick={() => (setOpen(new Set()), setHeldAt(null))}>
-                Close all and resume
+                {tr('rawPanel.closeAllResume')}
               </button>
             </div>
           )}

@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, unwatchFile, watchFi
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import type { ServiceConfig, ServicesEvent, ServicesSnapshot, ServiceState } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 export const SERVICES_FILE = join('.glassbox', 'services.json')
 
@@ -73,13 +74,13 @@ export class ProjectServices {
     }
     try {
       const parsed = JSON.parse(readFileSync(this.configPath, 'utf8')) as { services?: ServiceConfig[] }
-      if (!Array.isArray(parsed.services)) throw new Error('Expected a "services" array')
+      if (!Array.isArray(parsed.services)) throw new Error(tr('mainServices.expectedArray'))
       for (const s of parsed.services) {
-        if (!s.name || !s.command) throw new Error('Every service needs a "name" and a "command"')
+        if (!s.name || !s.command) throw new Error(tr('mainServices.needsNameCommand'))
       }
       this.configs = parsed.services
     } catch (err) {
-      this.error = `Couldn't read ${SERVICES_FILE}: ${err instanceof Error ? err.message : String(err)}`
+      this.error = tr('mainServices.couldNotRead', { file: SERVICES_FILE, error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -118,11 +119,11 @@ export class ProjectServices {
   async startAll() {
     const launches = new Map<string, Promise<boolean>>()
     const launch = (name: string, chain: string[] = []): Promise<boolean> => {
-      if (chain.includes(name)) return Promise.reject(new Error(`Circular dependsOn: ${[...chain, name].join(' → ')}`))
+      if (chain.includes(name)) return Promise.reject(new Error(tr('mainServices.circular', { chain: [...chain, name].join(' → ') })))
       const existing = launches.get(name)
       if (existing) return existing
       const config = this.configs.find((c) => c.name === name)
-      if (!config) return Promise.reject(new Error(`Unknown service in dependsOn: ${name}`))
+      if (!config) return Promise.reject(new Error(tr('mainServices.unknownDependency', { name })))
       const p = (async () => {
         const deps = config.dependsOn ?? []
         // Show it as waiting (not stopped) until what it depends on is ready.
@@ -146,7 +147,7 @@ export class ProjectServices {
         this.waiting.delete(name)
         const failed = deps.filter((_, i) => !ok[i])
         if (failed.length) {
-          this.noteSkipped(name, `Not started: ${failed.join(', ')} didn't start`)
+          this.noteSkipped(name, tr('mainServices.notStarted', { deps: failed.join(', ') }))
           return false
         }
         return this.start(name)
@@ -170,7 +171,7 @@ export class ProjectServices {
     const existing = this.running.get(name)
     if (existing) return existing.ready
     const config = this.configs.find((c) => c.name === name)
-    if (!config) throw new Error(`No service named ${name}`)
+    if (!config) throw new Error(tr('mainServices.noService', { name }))
     for (const dep of config.dependsOn ?? []) {
       const run = this.running.get(dep)
       if (run && !(await run.ready)) return false
@@ -182,7 +183,7 @@ export class ProjectServices {
     const first = !logs.length
     await this.reservePorts()
     const port = config.port ? this.assigned.get(name) : undefined
-    if (port && first) logs.push(`\x1b[90mThis session runs ${name} on port ${port} (its usual port is ${config.port}).\x1b[0m`)
+    if (port && first) logs.push(`\x1b[90m${tr('mainServices.sessionPort', { name, port, usual: config.port })}\x1b[0m`)
     const command = this.fill(config.command, config)!
     const env: Record<string, string> = { ...(port ? { PORT: String(port) } : {}), ...Object.fromEntries(Object.entries(config.env ?? {}).map(([k, v]) => [k, this.fill(v, config)!])) }
     logs.push(`\x1b[90m▶ ${command}\x1b[0m`)
@@ -209,7 +210,7 @@ export class ProjectServices {
     if (!pattern) setTimeout(setReady, 1500)
     setTimeout(() => {
       if (run.state.status === 'starting') {
-        this.appendLog(name, run.logs, `\x1b[33mNo line matched readyPattern after ${READY_TIMEOUT_MS / 1000}s; treating as running.\x1b[0m`)
+        this.appendLog(name, run.logs, `\x1b[33m${tr('mainServices.noReadyMatch', { seconds: READY_TIMEOUT_MS / 1000 })}\x1b[0m`)
         setReady()
       }
     }, READY_TIMEOUT_MS)
@@ -263,7 +264,7 @@ export class ProjectServices {
       // Exiting before it was ready means it failed to start; a clean exit after that is fine.
       markReady(run.state.status === 'running' || code === 0)
       const crashed = run.state.status !== 'stopping' && code !== 0
-      this.appendLog(name, run.logs, `\x1b[90m■ exited ${signal ? `(${signal})` : `with code ${code}`}\x1b[0m`)
+      this.appendLog(name, run.logs, `\x1b[90m${signal ? tr('mainServices.exitedSignal', { signal }) : tr('mainServices.exitedCode', { code })}\x1b[0m`)
       this.stopped.set(name, { ...run.state, status: crashed ? 'crashed' : 'stopped', exitCode: code ?? undefined, logs: run.logs })
       this.emitState()
     })

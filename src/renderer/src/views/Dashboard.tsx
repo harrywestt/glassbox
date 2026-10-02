@@ -14,6 +14,7 @@ import { AdminChip } from './AdminCard'
 import { SessionsOverview } from './SessionsOverview'
 import { GitHubSection } from './GitHubSection'
 import { money, useFx } from '../money'
+import { tr } from '../../../shared/i18n'
 
 type Props = { tabs: Tab[]; sessions: Record<string, SessionState>; visible: boolean }
 
@@ -68,7 +69,7 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
       <div className="dash-inner">
         <header className="dash-header">
           <div>
-            <h1>Dashboard</h1>
+            <h1>{tr('dashboard.title')}</h1>
             <div className="account-line">
               {usage ? <span>{usage.account?.email}</span> : <span className="skeleton-bar inline" style={{ width: 180 }} />}
               {usage?.account?.organization && <span>{usage.account.organization}</span>}
@@ -79,8 +80,8 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
           <StandupButton />
           <AccountsButton />
           <AdminChip />
-          {usage && <span className="muted small">Updated {timeAgo(usage.fetchedAt)}</span>}
-          <IconButton icon={loading ? 'loading' : 'refresh'} title="Refresh" onClick={() => void refresh(true)} />
+          {usage && <span className="muted small">{tr('dashboard.updated', { ago: timeAgo(usage.fetchedAt) })}</span>}
+          <IconButton icon={loading ? 'loading' : 'refresh'} title={tr('dashboard.refresh')} onClick={() => void refresh(true)} />
         </header>
 
         {usageError && <div className="note note-error">{usageError}</div>}
@@ -90,12 +91,12 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
         <div className="dash-grid">
           <div className="dash-col">
             <section className="card">
-              <div className="card-title">Plan usage</div>
+              <div className="card-title">{tr('dashboard.planUsage')}</div>
               {usage?.error && <div className="note note-warn">{usage.error}</div>}
               {!usage ? (
                 <Skeleton lines={4} widths={['40%', '100%', '40%', '100%']} />
               ) : usage.rateLimits.length === 0 ? (
-                <div className="muted small">No plan limits apply to this account (it uses an API key or a cloud provider).</div>
+                <div className="muted small">{tr('dashboard.noPlanLimits')}</div>
               ) : (
                 <div className="limits">
                   {usage.rateLimits.map((w) => {
@@ -104,16 +105,16 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
                       <div key={w.key} className="limit">
                         <div className="limit-top">
                           <span className="limit-label">{w.label}</span>
-                          <span className="limit-value">{left.toFixed(0)}% left</span>
+                          <span className="limit-value">{tr('dashboard.percentLeft', { n: left.toFixed(0) })}</span>
                         </div>
                         <Meter value={w.utilization} />
                         <div className="limit-foot muted small">
                           <span className={w.utilization >= 90 ? 'err' : w.utilization >= 70 ? 'warn' : ''}>
-                            {w.utilization >= 90 && <Icon name="error" />} {w.utilization >= 70 && w.utilization < 90 && <Icon name="warning" />} {w.utilization.toFixed(0)}% used
+                            {w.utilization >= 90 && <Icon name="error" />} {w.utilization >= 70 && w.utilization < 90 && <Icon name="warning" />} {tr('dashboard.percentUsed', { n: w.utilization.toFixed(0) })}
                           </span>
                           {w.resetsAt && (
                             <span title={new Date(w.resetsAt).toLocaleString()}>
-                              Resets in {timeUntil(w.resetsAt)}
+                              {tr('dashboard.resetsIn', { time: timeUntil(w.resetsAt) })}
                             </span>
                           )}
                         </div>
@@ -123,7 +124,7 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
                   {usage.extraUsage && (
                     <div className="limit">
                       <div className="limit-top">
-                        <span className="limit-label">Extra usage this month</span>
+                        <span className="limit-label">{tr('dashboard.extraUsage')}</span>
                         <span className="limit-value">
                           {(() => {
                             // Amounts arrive in minor units (cents) of the billing currency.
@@ -131,8 +132,8 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
                             const used = money((usage.extraUsage.usedCredits ?? 0) / 100, cur, fx)
                             const limit = usage.extraUsage.monthlyLimit != null ? money(usage.extraUsage.monthlyLimit / 100, cur, fx) : null
                             return (
-                              <span title={`Spent ${used.title}${limit ? ` of ${limit.title}` : ''}`}>
-                                {used.text} <span className="muted small">of {limit ? limit.text : 'no limit'}</span>
+                              <span title={limit ? tr('dashboard.spentOf', { used: used.title, limit: limit.title }) : tr('dashboard.spent', { used: used.title })}>
+                                {used.text} <span className="muted small">{tr('dashboard.ofLimit', { limit: limit ? limit.text : tr('dashboard.noLimit') })}</span>
                               </span>
                             )
                           })()}
@@ -146,8 +147,8 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
             </section>
 
             <section className="card">
-              <div className="card-title" title="Last 14 days, across every Claude Code session on this machine">Tokens per day</div>
-              {days ? <UsageChart days={days} /> : <div className="chart-skeleton" aria-busy="true" aria-label="Loading">{Array.from({ length: 14 }, (_, i) => <span key={i} className="skeleton-bar" style={{ height: `${28 + ((i * 37) % 60)}%` }} />)}</div>}
+              <div className="card-title" title={tr('dashboard.tokensPerDayTitle')}>{tr('dashboard.tokensPerDay')}</div>
+              {days ? <UsageChart days={days} /> : <div className="chart-skeleton" aria-busy="true" aria-label={tr('dashboard.loading')}>{Array.from({ length: 14 }, (_, i) => <span key={i} className="skeleton-bar" style={{ height: `${28 + ((i * 37) % 60)}%` }} />)}</div>}
             </section>
 
             <AppearanceCard />
@@ -184,7 +185,7 @@ function UsageChart({ days }: { days: LocalUsageDay[] }) {
 
   return (
     <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Tokens per day for the last 14 days">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={tr('dashboard.chartLabel')}>
         {ticks.map((t) => (
           <g key={t}>
             <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} className="grid" />
@@ -209,7 +210,7 @@ function UsageChart({ days }: { days: LocalUsageDay[] }) {
               )}
               {(i % 2 === days.length % 2 || i === days.length - 1) && (
                 <text x={x + barW / 2} y={H - 6} className="axis" textAnchor="middle">
-                  {i === days.length - 1 ? 'Today' : date.toLocaleDateString([], { day: 'numeric', month: 'short' })}
+                  {i === days.length - 1 ? tr('dashboard.today') : date.toLocaleDateString([], { day: 'numeric', month: 'short' })}
                 </text>
               )}
             </g>
@@ -219,12 +220,12 @@ function UsageChart({ days }: { days: LocalUsageDay[] }) {
       {hover !== null && (
         <div className="chart-tip" style={{ left: `${((pad.l + hover * bw + bw / 2) / W) * 100}%` }}>
           <strong>{new Date(days[hover].date + 'T00:00:00').toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</strong>
-          <div className="tip-row"><span>Total</span><span>{totals[hover].toLocaleString()}</span></div>
-          <div className="tip-row muted"><span>Cache read</span><span>{days[hover].cacheRead.toLocaleString()}</span></div>
-          <div className="tip-row muted"><span>Cache write</span><span>{days[hover].cacheWrite.toLocaleString()}</span></div>
-          <div className="tip-row muted"><span>Input</span><span>{days[hover].input.toLocaleString()}</span></div>
-          <div className="tip-row muted"><span>Output</span><span>{days[hover].output.toLocaleString()}</span></div>
-          <div className="tip-row muted"><span>Requests</span><span>{days[hover].requests.toLocaleString()}</span></div>
+          <div className="tip-row"><span>{tr('dashboard.tipTotal')}</span><span>{totals[hover].toLocaleString()}</span></div>
+          <div className="tip-row muted"><span>{tr('dashboard.tipCacheRead')}</span><span>{days[hover].cacheRead.toLocaleString()}</span></div>
+          <div className="tip-row muted"><span>{tr('dashboard.tipCacheWrite')}</span><span>{days[hover].cacheWrite.toLocaleString()}</span></div>
+          <div className="tip-row muted"><span>{tr('dashboard.tipInput')}</span><span>{days[hover].input.toLocaleString()}</span></div>
+          <div className="tip-row muted"><span>{tr('dashboard.tipOutput')}</span><span>{days[hover].output.toLocaleString()}</span></div>
+          <div className="tip-row muted"><span>{tr('dashboard.tipRequests')}</span><span>{days[hover].requests.toLocaleString()}</span></div>
         </div>
       )}
     </div>
@@ -250,7 +251,7 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
     })
     const startOfDay = new Date().setHours(0, 0, 0, 0)
     // Pinned sessions first, whenever they were last used.
-    const buckets: [string, SDKSessionInfo[]][] = [['Pinned', []], ['Today', []], ['Yesterday', []], ['This week', []], ['Older', []]]
+    const buckets: [string, SDKSessionInfo[]][] = [[tr('dashboard.groupPinned'), []], [tr('dashboard.today'), []], [tr('dashboard.groupYesterday'), []], [tr('dashboard.groupThisWeek'), []], [tr('dashboard.groupOlder'), []]]
     for (const h of items) {
       if (pinned.has(h.sessionId)) {
         buckets[0][1].push(h)
@@ -265,17 +266,17 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
   return (
     <>
       <div className="history-head">
-        <div className="card-title">History</div>
+        <div className="card-title">{tr('dashboard.history')}</div>
         <span className="spacer" />
         <div className="search">
           <Icon name="search" />
-          <input placeholder="Search past sessions" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder={tr('dashboard.searchPlaceholder')} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
       </div>
       {pinError && <div className="note note-error small">{pinError}</div>}
       <div className="history-list">
         {!history && <SkeletonRows rows={6} />}
-        {history && groups.length === 0 && <Empty icon="history" title={q ? 'No matching sessions' : 'No sessions yet'} />}
+        {history && groups.length === 0 && <Empty icon="history" title={q ? tr('dashboard.noMatches') : tr('dashboard.noSessions')} />}
         {groups.map(([label, list]) => (
           <div key={label}>
             <div className="group-title">{label}</div>
@@ -292,7 +293,7 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
                   <div className="grow history-main">
                     <div className="ellipsis">{h.customTitle ?? h.summary}</div>
                     <div className="muted small ellipsis">
-                      <Icon name="folder" /> {h.cwd ? baseName(h.cwd) : 'unknown'}
+                      <Icon name="folder" /> {h.cwd ? baseName(h.cwd) : tr('dashboard.unknownFolder')}
                       {h.gitBranch && (
                         <>
                           {' '}
@@ -301,11 +302,11 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
                       )}
                     </div>
                   </div>
-                  {open && <span className="tag accent">open</span>}
+                  {open && <span className="tag accent">{tr('dashboard.openTag')}</span>}
                   <button
                     className={pinned.has(h.sessionId) ? 'icon-btn pin-btn on' : 'icon-btn pin-btn'}
                     aria-pressed={pinned.has(h.sessionId)}
-                    title={pinned.has(h.sessionId) ? 'Pinned: kept for good. Click to unpin' : 'Pin to keep it for good'}
+                    title={pinned.has(h.sessionId) ? tr('dashboard.unpinTitle') : tr('dashboard.pinTitle')}
                     onClick={(e) => {
                       e.stopPropagation()
                       setPinError(null)
@@ -333,9 +334,9 @@ function AppVersion() {
   if (!version) return null
   return (
     <footer className="dash-version muted small">
-      Glassbox {version}{' '}
-      <button className="link small" onClick={() => void window.glassbox.openExternal(`https://github.com/harrywestt/glassbox/releases/tag/v${version}`)} title="What's in this version">
-        Release notes
+      {tr('dashboard.version', { version })}{' '}
+      <button className="link small" onClick={() => void window.glassbox.openExternal(`https://github.com/harrywestt/glassbox/releases/tag/v${version}`)} title={tr('dashboard.releaseNotesTitle')}>
+        {tr('dashboard.releaseNotes')}
       </button>
     </footer>
   )

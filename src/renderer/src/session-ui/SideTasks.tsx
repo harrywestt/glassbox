@@ -7,6 +7,7 @@ import type { SideTask } from '../../../shared/events'
 import type { ToolCall } from '../session'
 import { describeTool } from './describe'
 import { toolIcon } from './Timeline'
+import { tr } from '../../../shared/i18n'
 
 const ICON: Record<SideTask['kind'], string> = {
   diagram: 'type-hierarchy-sub',
@@ -34,7 +35,7 @@ export function SideTasks() {
 
   if (!tasks.length) return null
   return (
-    <Section id="side-tasks" title="Side tasks" meta={<span className="muted small">running separately from the main session</span>}>
+    <Section id="side-tasks" title={tr('sideTasks.title')} meta={<span className="muted small">{tr('sideTasks.meta')}</span>}>
       {tasks.slice(0, 8).map((t) => {
         const secs = Math.round(((t.endedAt ?? now) - t.startedAt) / 1000)
         const cost = t.costUsd != null ? money(t.costUsd, 'USD', fx) : null
@@ -49,12 +50,12 @@ export function SideTasks() {
               <Icon name={ICON[t.kind]} />
               <span className="grow ellipsis">
                 {t.title}
-                <span className="muted small"> {t.status === 'running' ? t.activity ?? 'Starting…' : t.status === 'failed' ? 'Failed' : t.status === 'stopped' ? 'Stopped' : ''}</span>
+                <span className="muted small"> {t.status === 'running' ? t.activity ?? tr('sideTasks.starting') : t.status === 'failed' ? tr('sideTasks.failed') : t.status === 'stopped' ? tr('sideTasks.stopped') : ''}</span>
               </span>
-              <span className="muted small num">{secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`}</span>
+              <span className="muted small num">{secs >= 60 ? tr('sideTasks.minutesSeconds', { m: Math.floor(secs / 60), s: secs % 60 }) : tr('sideTasks.seconds', { s: secs })}</span>
               {cost && <span className="muted small" title={cost.title}>{cost.text}</span>}
               {t.status === 'running' && (
-                <button className="icon-btn" title="Stop" onClick={(e) => (e.stopPropagation(), void window.glassbox.session.stopSide(tab.id, t.id))}>
+                <button className="icon-btn" title={tr('sideTasks.stop')} onClick={(e) => (e.stopPropagation(), void window.glassbox.session.stopSide(tab.id, t.id))}>
                   <Icon name="debug-stop" />
                 </button>
               )}
@@ -80,7 +81,7 @@ export function SideTaskSteps({ task }: { task: SideTask }) {
   }, [steps.length, task.status])
   return (
     <div className="side-steps" ref={list}>
-      {steps.length === 0 && task.status === 'running' && <div className="muted small side-step">Starting…</div>}
+      {steps.length === 0 && task.status === 'running' && <div className="muted small side-step">{tr('sideTasks.starting')}</div>}
       {steps.map((st, i) =>
         st.tool ? (
           <div key={i} className="side-step">
@@ -94,7 +95,7 @@ export function SideTaskSteps({ task }: { task: SideTask }) {
       )}
       {task.status === 'running' && steps.length > 0 && (
         <div className="side-step muted small">
-          <Icon name="loading" className="codicon-modifier-spin" /> Working…
+          <Icon name="loading" className="codicon-modifier-spin" /> {tr('sideTasks.working')}
         </div>
       )}
       {task.result && <div className="markdown small side-result" dangerouslySetInnerHTML={{ __html: renderMarkdown(task.result) }} />}

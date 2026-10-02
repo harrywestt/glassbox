@@ -7,12 +7,13 @@ import { Empty, Icon, IconButton, PanelHeader } from '../components/ui'
 import { PanZoom } from '../components/PanZoom'
 import { READ_TOOLS } from '../side'
 import { Select } from '../components/Select'
+import { tr } from '../../../shared/i18n'
 
 const PRESETS = [
-  { label: 'Architecture of this work', prompt: 'the architecture of what we are building or changing in this session, and how it connects to the existing system' },
-  { label: 'Request flow', prompt: 'a sequence diagram of the main request or data flow through the code we are working on' },
-  { label: 'Modules in context', prompt: 'the modules and files currently in context and the dependencies between them' },
-  { label: 'Data model', prompt: 'an entity-relationship diagram of the data model involved in this work' }
+  { label: tr('diagramsPanel.presetArchitecture'), prompt: 'the architecture of what we are building or changing in this session, and how it connects to the existing system' },
+  { label: tr('diagramsPanel.presetRequestFlow'), prompt: 'a sequence diagram of the main request or data flow through the code we are working on' },
+  { label: tr('diagramsPanel.presetModules'), prompt: 'the modules and files currently in context and the dependencies between them' },
+  { label: tr('diagramsPanel.presetDataModel'), prompt: 'an entity-relationship diagram of the data model involved in this work' }
 ]
 
 export function DiagramsPanel() {
@@ -26,19 +27,19 @@ export function DiagramsPanel() {
   const generate = (what: string, label: string) =>
     runSide({
       kind: 'diagram',
-      title: `Diagram: ${label}`,
+      title: tr('diagramsPanel.sideTaskTitle', { label }),
       prompt: `Use the show_diagram tool to draw ${what}. Base it on the actual code in this project (read what you need first), keep it readable, and give it a clear title.`,
       tools: READ_TOOLS
     })
 
   return (
     <div className="panel">
-      <PanelHeader title="Diagrams" />
+      <PanelHeader title={tr('diagramsPanel.title')} />
       <div className="panel-toolbar wrap">
         <div className="search grow">
           <Icon name="wand" />
           <input
-            placeholder="Describe a diagram to generate…"
+            placeholder={tr('diagramsPanel.describePlaceholder')}
             value={ask}
             onChange={(e) => setAsk(e.target.value)}
             onKeyDown={(e) => {
@@ -50,7 +51,7 @@ export function DiagramsPanel() {
           />
         </div>
         <button className="primary" disabled={!ask.trim() || !canSend} onClick={() => (generate(ask.trim(), ask.trim()), setAsk(''))}>
-          Generate
+          {tr('diagramsPanel.generate')}
         </button>
       </div>
       <div className="chips-row">
@@ -61,15 +62,15 @@ export function DiagramsPanel() {
         ))}
       </div>
       {!current ? (
-        <Empty icon="type-hierarchy-sub" title="No diagrams yet">
-          Claude draws diagrams here whenever it designs or changes architecture. Generate one above at any time.
+        <Empty icon="type-hierarchy-sub" title={tr('diagramsPanel.emptyTitle')}>
+          {tr('diagramsPanel.emptyBody')}
         </Empty>
       ) : (
         <>
           {list.length > 1 && (
             <div className="panel-toolbar">
-              <Select className="grow" value={current.id} onChange={setSelected} aria-label="Diagram" options={list.map((d) => ({ value: d.id, label: d.title }))} />
-              <span className="muted small">{list.length} diagrams</span>
+              <Select className="grow" value={current.id} onChange={setSelected} aria-label={tr('diagramsPanel.diagram')} options={list.map((d) => ({ value: d.id, label: d.title }))} />
+              <span className="muted small">{tr('diagramsPanel.diagramCount', { n: list.length })}</span>
             </div>
           )}
           <MermaidView diagram={current} />
@@ -139,9 +140,9 @@ function MermaidView({ diagram }: { diagram: Diagram }) {
       contentKey={`${diagram.id}:${diagram.at}:${svg.length}:${theme.base}:${full}`}
       toolbar={
         <>
-          <IconButton icon="code" title={showSource ? 'Hide Mermaid source' : 'Show Mermaid source'} onClick={() => setShowSource(!showSource)} active={showSource} />
-          <IconButton icon="copy" title="Copy Mermaid source" onClick={() => void navigator.clipboard.writeText(diagram.mermaid)} />
-          <IconButton icon={full ? 'screen-normal' : 'screen-full'} title={full ? 'Exit full screen (Esc)' : 'Full screen'} onClick={() => setFull(!full)} />
+          <IconButton icon="code" title={showSource ? tr('diagramsPanel.hideSource') : tr('diagramsPanel.showSource')} onClick={() => setShowSource(!showSource)} active={showSource} />
+          <IconButton icon="copy" title={tr('diagramsPanel.copySource')} onClick={() => void navigator.clipboard.writeText(diagram.mermaid)} />
+          <IconButton icon={full ? 'screen-normal' : 'screen-full'} title={full ? tr('diagramsPanel.exitFullScreen') : tr('diagramsPanel.fullScreen')} onClick={() => setFull(!full)} />
         </>
       }
     >
@@ -153,10 +154,10 @@ function MermaidView({ diagram }: { diagram: Diagram }) {
     <>
       <div className="preview-bar">
         <strong className="ellipsis grow">{diagram.title}</strong>
-        <span className="muted small">Updated {new Date(diagram.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        {full && <IconButton icon="close" title="Close (Esc)" onClick={() => setFull(false)} />}
+        <span className="muted small">{tr('diagramsPanel.updated', { time: new Date(diagram.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}</span>
+        {full && <IconButton icon="close" title={tr('diagramsPanel.close')} onClick={() => setFull(false)} />}
       </div>
-      {error && <div className="note note-error">Mermaid couldn’t render this diagram: {error}</div>}
+      {error && <div className="note note-error">{tr('diagramsPanel.renderError', { error })}</div>}
       <div className="diagram-canvas">{canvas}</div>
       {(showSource || error) && <pre className="diagram-source">{diagram.mermaid}</pre>}
     </>

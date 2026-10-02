@@ -15,6 +15,7 @@ import { loadAccess } from './session-ui/AccessToggle'
 import type { OpenTarget, Requirements } from '../../shared/events'
 import { bangContext, type CommentTarget } from './session'
 import { commentPrompt } from './review'
+import { tr } from '../../shared/i18n'
 
 const ThemeContext = createContext<ThemeTokens>(THEMES['glassbox-dark'])
 export const useThemeTokens = () => useContext(ThemeContext)
@@ -84,7 +85,7 @@ export function App() {
           ? stateRef.current.tabs.find((t) => t.resumeId === opts.resumeId || stateRef.current.sessions[t.id]?.sessionId === opts.resumeId)
           : undefined
         if (existing) return dispatch({ type: 'activate', id: existing.id })
-        dispatch({ type: 'open', tab: { id: newId(), cwd, title: opts?.title ?? 'New session', resumeId: opts?.resumeId, kind: opts?.kind, pendingStart: opts?.pendingStart } })
+        dispatch({ type: 'open', tab: { id: newId(), cwd, title: opts?.title ?? tr('app.newSession'), resumeId: opts?.resumeId, kind: opts?.kind, pendingStart: opts?.pendingStart } })
       },
       closeTab(id) {
         opened.current.delete(id)

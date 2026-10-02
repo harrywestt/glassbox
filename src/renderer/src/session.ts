@@ -21,6 +21,7 @@ import { type UserQuestion,
   type PlanMap,
   type LoaderState
 } from '../../shared/events'
+import { tr } from '../../shared/i18n'
 
 export type SessionStatus = HostStatus | 'new'
 
@@ -110,14 +111,14 @@ export function taskOf(s: SessionState, agentId?: string): { summary: string; st
     if (!list.length) return undefined
     const active = list.find((t) => t.status === 'active')
     const done = list.filter((t) => t.status === 'done').length
-    return { summary: active?.activeForm || active?.label || (done === list.length ? 'All done' : `${done} of ${list.length} done`), steps: list.map((t) => ({ label: t.label, status: t.status })) }
+    return { summary: active?.activeForm || active?.label || (done === list.length ? tr('session.allDone') : tr('session.doneOf', { done, total: list.length })), steps: list.map((t) => ({ label: t.label, status: t.status })) }
   }
   const todos = s.todos ?? []
   if (!todos.length) return s.task
   const active = todos.find((t) => t.status === 'active')
   const done = todos.filter((t) => t.status === 'done').length
   return {
-    summary: s.task?.summary || active?.activeForm || active?.label || (done === todos.length ? 'All done' : `${done} of ${todos.length} done`),
+    summary: s.task?.summary || active?.activeForm || active?.label || (done === todos.length ? tr('session.allDone') : tr('session.doneOf', { done, total: todos.length })),
     steps: todos.map((t) => ({ label: t.label, status: t.status, files: s.task?.steps?.find((x) => x.label.toLowerCase() === t.label.toLowerCase())?.files }))
   }
 }
@@ -473,7 +474,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       }
       const settle = <T extends { status: string }>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.status === 'running' ? { ...v, status: 'done' } : v]))
       next = { ...next, toolCalls: settle(next.toolCalls), agents: settle(next.agents) }
-      return next.timeline.length ? note(next, 'Resumed: earlier conversation loaded from the transcript', 'info') : next
+      return next.timeline.length ? note(next, tr('session.resumed'), 'info') : next
     }
     case 'glassbox': {
       const s = event.signal
@@ -489,9 +490,9 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       const h = event.input
       switch (h.hook_event_name) {
         case 'PreCompact':
-          return note(state, 'Compacting context…', 'warn')
+          return note(state, tr('session.compacting'), 'warn')
         case 'PostCompact':
-          return note(state, 'Context compacted', 'warn')
+          return note(state, tr('session.compacted'), 'warn')
         case 'Notification':
           // "Claude needs your permission to use X" and "waiting for your input" are already the dialog
           // or the question box in front of you; as notes they only linger after you've answered.
@@ -534,7 +535,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
       if (msg.subtype === 'init') {
         return { ...state, sessionId: msg.session_id, model: msg.model, tools: msg.tools, permissionMode: msg.permissionMode }
       }
-      if (msg.subtype === 'compact_boundary') return note(state, 'Earlier context was summarized (compaction)', 'warn')
+      if (msg.subtype === 'compact_boundary') return note(state, tr('session.compactionBoundary'), 'warn')
       if (msg.subtype === 'background_tasks_changed' && !fromHistory) {
         const tasks = ((msg as { tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[] }).tasks ?? []).filter((t) => !t.ambient)
         const before = new Map((state.backgroundTasks ?? []).map((t) => [t.id, t.since]))
@@ -566,7 +567,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         }
         if (m.subtype === 'task_progress') {
           if (m.usage) next.toolCalls = Math.max(next.toolCalls, m.usage.tool_uses)
-          const doing = m.summary || (m.last_tool_name ? `Using ${m.last_tool_name}` : undefined)
+          const doing = m.summary || (m.last_tool_name ? tr('session.usingTool', { tool: m.last_tool_name }) : undefined)
           if (doing) next.progress = doing
         }
         if (m.subtype === 'task_updated') {

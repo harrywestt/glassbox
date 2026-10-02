@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { Icon, IconButton, useFolded } from '../components/ui'
 import type { LoaderState } from '../../../shared/events'
+import { tr } from '../../../shared/i18n'
 
 /** A finished loader stays this long, then clears itself; a failed one stays until you close it. */
 const DONE_KEEP_MS = 20_000
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
-  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`
+  return s < 60 ? tr('loaders.clock.seconds', { s }) : s < 3600 ? tr('loaders.clock.minutes', { m: Math.floor(s / 60), s: String(s % 60).padStart(2, '0') }) : tr('loaders.clock.hours', { h: Math.floor(s / 3600), m: String(Math.floor((s % 3600) / 60)).padStart(2, '0') })
 }
 
 /**
@@ -41,9 +42,9 @@ export function Loaders() {
       <button className="loaders-head" aria-expanded={!folded} onClick={toggle}>
         <Icon name="chevron-down" className="section-chevron" />
         <span className="loaders-title">
-          {running.length ? `${running.length} in progress` : 'All finished'}
-          {failed ? `, ${failed} failed` : ''}
-          {shown.length - running.length - failed > 0 ? `, ${shown.length - running.length - failed} done` : ''}
+          {running.length ? tr('loaders.inProgress', { count: running.length }) : tr('loaders.allFinished')}
+          {failed ? tr('loaders.failedCount', { count: failed }) : ''}
+          {shown.length - running.length - failed > 0 ? tr('loaders.doneCount', { count: shown.length - running.length - failed }) : ''}
         </span>
         {folded && running.length > 0 && <Bar percent={overall} status="running" />}
       </button>
@@ -54,7 +55,7 @@ export function Loaders() {
 
 function LoaderRow({ l, now, onClose }: { l: LoaderState; now: number; onClose: () => void }) {
   return (
-    <div className={`loader ${l.status}`} role="status" aria-label={`${l.label}, ${l.status}${l.percent !== undefined ? `, ${Math.round(l.percent)}%` : ''}`}>
+    <div className={`loader ${l.status}`} role="status" aria-label={l.percent !== undefined ? tr('loaders.ariaWithPercent', { label: l.label, status: tr(`loaders.status.${l.status}`), percent: Math.round(l.percent) }) : tr('loaders.aria', { label: l.label, status: tr(`loaders.status.${l.status}`) })}>
       <span className="loader-icon" aria-hidden>
         {l.status === 'done' ? <Icon name="pass-filled" /> : l.status === 'failed' ? <Icon name="error" /> : <Icon name="loading" className="codicon-modifier-spin" />}
       </span>
@@ -62,14 +63,14 @@ function LoaderRow({ l, now, onClose }: { l: LoaderState; now: number; onClose: 
         <div className="loader-line">
           <span className="loader-label">{l.label}</span>
           <span className="loader-meta">
-            {l.status === 'running' && l.step && l.steps ? `Step ${Math.min(l.step, l.steps)} of ${l.steps}, ` : l.percent !== undefined && l.status === 'running' ? `${Math.round(l.percent)}%, ` : ''}
-            {l.status === 'running' ? clock(now - l.started) : l.status === 'done' ? `done in ${clock(l.updated - l.started)}` : 'failed'}
+            {l.status === 'running' && l.step && l.steps ? tr('loaders.stepOf', { step: Math.min(l.step, l.steps), steps: l.steps }) : l.percent !== undefined && l.status === 'running' ? tr('loaders.percent', { percent: Math.round(l.percent) }) : ''}
+            {l.status === 'running' ? clock(now - l.started) : l.status === 'done' ? tr('loaders.doneIn', { time: clock(l.updated - l.started) }) : tr('loaders.failed')}
           </span>
         </div>
         {l.status === 'running' && <Bar percent={l.percent} status={l.status} />}
         {l.detail && <div className="loader-detail" title={l.detail}>{l.detail}</div>}
       </div>
-      {l.status !== 'running' && <IconButton icon="close" title="Clear" onClick={onClose} />}
+      {l.status !== 'running' && <IconButton icon="close" title={tr('loaders.clear')} onClick={onClose} />}
     </div>
   )
 }

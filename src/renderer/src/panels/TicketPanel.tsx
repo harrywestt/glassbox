@@ -5,6 +5,7 @@ import { ticketKeyFromBranch } from '../../../shared/ticket'
 import { IconButton } from '../components/ui'
 import { Select, type SelectOption } from '../components/Select'
 import { renderMarkdown, timeAgo } from '../lib'
+import { tr } from '../../../shared/i18n'
 
 // A ticket key you set, per project and branch, so it's still there when the session is reopened.
 const overrideKey = (cwd: string, branch?: string) => `glassbox.ticketKey.${cwd.replace(/\\/g, '/').toLowerCase()}#${branch ?? ''}`
@@ -122,7 +123,7 @@ export function TicketPanel() {
     return (
       <div className="ticket">
         <div className="ticket-empty">
-          {!key && <p>No ticket in this branch name.</p>}
+          {!key && <p>{tr('ticketPanel.noTicket')}</p>}
           <KeyForm initial={key ?? ''} onSave={setKey} onCancel={key ? () => setEditing(false) : undefined} branchKey={branchKey} />
         </div>
       </div>
@@ -134,18 +135,18 @@ export function TicketPanel() {
       <div className="ticket-head">
         <span className="ticket-key">{load.state === 'ready' ? load.ticket.key : key}</span>
         {load.state === 'ready' && load.ticket.url && (
-          <IconButton icon="link-external" title="Open in Jira" onClick={() => void window.glassbox.openExternal(load.ticket.url!)} />
+          <IconButton icon="link-external" title={tr('ticketPanel.openInJira')} onClick={() => void window.glassbox.openExternal(load.ticket.url!)} />
         )}
         <button className="btn quiet" onClick={() => setEditing(true)}>
-          Change
+          {tr('ticketPanel.change')}
         </button>
-        <IconButton icon="refresh" title="Refresh" onClick={() => refresh(true)} disabled={load.state === 'loading'} />
+        <IconButton icon="refresh" title={tr('ticketPanel.refresh')} onClick={() => refresh(true)} disabled={load.state === 'loading'} />
       </div>
 
       {load.state === 'loading' && (
-        <div className="ticket-skeleton" aria-busy="true" aria-label="Loading">
+        <div className="ticket-skeleton" aria-busy="true" aria-label={tr('ticketPanel.loading')}>
           {/* Jira answers through the Claude connector, which takes ten seconds or so the first time. */}
-          <div className="muted small">Getting {key} from Jira…</div>
+          <div className="muted small">{tr('ticketPanel.gettingFromJira', { key })}</div>
           <span style={{ width: '70%' }} />
           <span style={{ width: '45%' }} />
           <span style={{ width: '55%' }} />
@@ -160,11 +161,11 @@ export function TicketPanel() {
           <span className="ticket-error-actions">
             {/connector|sign in|signed in|connect/i.test(load.error) && (
               <button className="btn primary" onClick={() => void window.glassbox.accounts.signIn('connector:claude.ai Atlassian')}>
-                Connect Jira
+                {tr('ticketPanel.connectJira')}
               </button>
             )}
             <button className="btn" onClick={() => refresh(true)}>
-              Retry
+              {tr('ticketPanel.retry')}
             </button>
           </span>
         </div>
@@ -193,18 +194,18 @@ function KeyForm({ initial, onSave, onCancel, branchKey }: { initial: string; on
   }
   return (
     <form onSubmit={submit}>
-      <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Ticket key, e.g. NSD-123" aria-label="Ticket key" spellCheck={false} autoFocus={!!onCancel} />
+      <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={tr('ticketPanel.keyPlaceholder')} aria-label={tr('ticketPanel.ticketKey')} spellCheck={false} autoFocus={!!onCancel} />
       <button type="submit" className="btn primary" disabled={!value.trim() && !onCancel}>
-        Show
+        {tr('ticketPanel.show')}
       </button>
       {branchKey && initial !== branchKey && (
         <button type="button" className="btn quiet" onClick={() => onSave('')}>
-          Use {branchKey}
+          {tr('ticketPanel.use', { key: branchKey })}
         </button>
       )}
       {onCancel && (
         <button type="button" className="btn quiet" onClick={onCancel}>
-          Cancel
+          {tr('ticketPanel.cancel')}
         </button>
       )}
     </form>
@@ -230,7 +231,7 @@ function TicketBody({
 }) {
   const choices = (transitions ?? []).filter((t) => (t.to ?? t.name) !== ticket.status)
   const options: SelectOption<string>[] = [
-    { value: '', label: moving ? `Moving to ${moving}…` : ticket.status },
+    { value: '', label: moving ? tr('ticketPanel.movingTo', { status: moving }) : ticket.status },
     ...choices.map((t) => ({ value: t.id, label: t.name, hint: t.to && t.to !== t.name ? t.to : undefined }))
   ]
 
@@ -238,14 +239,14 @@ function TicketBody({
     <>
       <h2 className="ticket-title">{ticket.summary}</h2>
       <dl className="ticket-meta">
-        <dt>Status</dt>
+        <dt>{tr('ticketPanel.status')}</dt>
         <dd>
           <Select
             value=""
             options={options}
             disabled={!!moving || transitions === null || choices.length === 0}
-            title={transitions === null ? 'Loading statuses' : choices.length === 0 ? 'No other statuses available' : 'Change status'}
-            aria-label="Status"
+            title={transitions === null ? tr('ticketPanel.loadingStatuses') : choices.length === 0 ? tr('ticketPanel.noOtherStatuses') : tr('ticketPanel.changeStatus')}
+            aria-label={tr('ticketPanel.status')}
             onChange={(id) => {
               const t = choices.find((c) => c.id === id)
               if (t) onMove(t)
@@ -259,31 +260,31 @@ function TicketBody({
         </dd>
         {ticket.type && (
           <>
-            <dt>Type</dt>
+            <dt>{tr('ticketPanel.type')}</dt>
             <dd>{ticket.type}</dd>
           </>
         )}
-        <dt>Assignee</dt>
-        <dd>{ticket.assignee ?? 'Unassigned'}</dd>
+        <dt>{tr('ticketPanel.assignee')}</dt>
+        <dd>{ticket.assignee ?? tr('ticketPanel.unassigned')}</dd>
         {ticket.updated && (
           <>
-            <dt>Updated</dt>
+            <dt>{tr('ticketPanel.updated')}</dt>
             <dd title={new Date(ticket.updated).toLocaleString()}>{ago(ticket.updated)}</dd>
           </>
         )}
       </dl>
 
       <section className="ticket-section">
-        <h3 className="ticket-section-title">Description</h3>
+        <h3 className="ticket-section-title">{tr('ticketPanel.description')}</h3>
         {ticket.description ? (
           <div className="ticket-body markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(ticket.description) }} />
         ) : (
-          <p className="ticket-empty">No description.</p>
+          <p className="ticket-empty">{tr('ticketPanel.noDescription')}</p>
         )}
       </section>
 
       <section className="ticket-section">
-        <h3 className="ticket-section-title">Comments{ticket.comments.length ? ` (${ticket.comments.length})` : ''}</h3>
+        <h3 className="ticket-section-title">{ticket.comments.length ? tr('ticketPanel.commentsCount', { n: ticket.comments.length }) : tr('ticketPanel.comments')}</h3>
         {ticket.comments.length > 0 && (
           <ul className="ticket-comments">
             {ticket.comments.map((c, i) => (
@@ -336,8 +337,8 @@ function Reply({ ticketKey, cwd, onPosted }: { ticketKey: string; cwd: string; o
             void post()
           }
         }}
-        placeholder="Add a comment"
-        aria-label="Add a comment"
+        placeholder={tr('ticketPanel.addComment')}
+        aria-label={tr('ticketPanel.addComment')}
         disabled={posting}
         rows={3}
       />
@@ -347,7 +348,7 @@ function Reply({ ticketKey, cwd, onPosted }: { ticketKey: string; cwd: string; o
         </span>
       )}
       <button type="submit" className="btn primary" disabled={posting || !text.trim()}>
-        {posting ? 'Posting…' : 'Post'}
+        {posting ? tr('ticketPanel.posting') : tr('ticketPanel.post')}
       </button>
     </form>
   )

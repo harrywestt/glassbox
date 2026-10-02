@@ -13,6 +13,7 @@ import type { MapGroups } from '../../../main/mapGroups'
 import type { MapAnswer } from '../../../main/mapAsk'
 import { searchHits, taskOf } from '../session'
 import { Icon, IconButton, Segmented } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 import './MapTab.css'
 
 const LABEL_W = 112
@@ -95,9 +96,9 @@ function wire(a: Box, b: Box): string {
 const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 const elapsed = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000))
-  if (s < 60) return `${s}s`
-  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
-  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`
+  if (s < 60) return tr('mapTab.elapsed.seconds', { s })
+  if (s < 3600) return tr('mapTab.elapsed.minutes', { m: Math.floor(s / 60), s: String(s % 60).padStart(2, '0') })
+  return tr('mapTab.elapsed.hours', { h: Math.floor(s / 3600), m: String(Math.floor((s % 3600) / 60)).padStart(2, '0') })
 }
 
 const MAX_CONTEXT = 8
@@ -226,13 +227,14 @@ const planEdgeDone = (arch: Architecture, e: PlanShape['edges'][number]) => {
 }
 
 type Bound = Extract<FileMark, 'avoid' | 'ask' | 'api'>
+/** Labels and notes are i18n keys, looked up when shown. */
 const BOUNDS: { value: Bound | null; label: string; note: string }[] = [
-  { value: null, label: 'Edit freely', note: 'No limits beyond your guardrails.' },
-  { value: 'ask', label: 'Ask me first', note: 'Claude can edit here, but you approve each edit.' },
-  { value: 'api', label: 'Public API only', note: 'Other modules may only use its entry point (index file, contracts). Imports into its internals are blocked.' },
-  { value: 'avoid', label: 'Hands off', note: 'Claude can read it, but every edit here is blocked.' }
+  { value: null, label: 'mapTab.bounds.free.label', note: 'mapTab.bounds.free.note' },
+  { value: 'ask', label: 'mapTab.bounds.ask.label', note: 'mapTab.bounds.ask.note' },
+  { value: 'api', label: 'mapTab.bounds.api.label', note: 'mapTab.bounds.api.note' },
+  { value: 'avoid', label: 'mapTab.bounds.avoid.label', note: 'mapTab.bounds.avoid.note' }
 ]
-const BOUND_TAG: Record<Bound, string> = { avoid: 'No edits', ask: 'Ask first', api: 'API only' }
+const BOUND_TAG: Record<Bound, string> = { avoid: 'mapTab.boundTag.avoid', ask: 'mapTab.boundTag.ask', api: 'mapTab.boundTag.api' }
 
 type Moment = { at: number; kind: 'you' | 'edit' | 'decision'; label: string }
 
@@ -243,10 +245,10 @@ type Moment = { at: number; kind: 'you' | 'edit' | 'decision'; label: string }
 function keyMoments(s: SessionState, arch: Architecture | null): Moment[] {
   const out: Moment[] = []
   for (const i of s.timeline) {
-    if (i.kind === 'user') out.push({ at: i.at, kind: 'you', label: `You: ${i.text.replace(/\s+/g, ' ').slice(0, 80)}` })
-    else if (i.kind === 'comment') out.push({ at: i.at, kind: 'you', label: `You replied: ${i.text.replace(/\s+/g, ' ').slice(0, 70)}` })
+    if (i.kind === 'user') out.push({ at: i.at, kind: 'you', label: tr('mapTab.moments.you', { text: i.text.replace(/\s+/g, ' ').slice(0, 80) }) })
+    else if (i.kind === 'comment') out.push({ at: i.at, kind: 'you', label: tr('mapTab.moments.youReplied', { text: i.text.replace(/\s+/g, ' ').slice(0, 70) }) })
   }
-  for (const d of s.decisions) out.push({ at: d.at, kind: 'decision', label: `${d.kind === 'question' ? 'Asked' : d.kind === 'assumption' ? 'Assumed' : 'Decided'}: ${d.title}` })
+  for (const d of s.decisions) out.push({ at: d.at, kind: 'decision', label: tr(d.kind === 'question' ? 'mapTab.moments.asked' : d.kind === 'assumption' ? 'mapTab.moments.assumed' : 'mapTab.moments.decided', { title: d.title }) })
   let run: { mod: string; name: string; files: Set<string>; moment: Moment } | null = null
   for (const f of s.files) {
     if (!isEditTouch(f, s)) continue
@@ -254,10 +256,10 @@ function keyMoments(s: SessionState, arch: Architecture | null): Moment[] {
     const mod = m?.id ?? f.path
     if (run && run.mod === mod) {
       run.files.add(f.path)
-      run.moment.label = `Edited ${run.files.size} files in ${run.name}`
+      run.moment.label = tr('mapTab.moments.editedFiles', { count: run.files.size, name: run.name })
       continue
     }
-    const moment: Moment = { at: f.at, kind: 'edit', label: `Edited ${baseName(f.path)}` }
+    const moment: Moment = { at: f.at, kind: 'edit', label: tr('mapTab.moments.edited', { name: baseName(f.path) }) }
     run = { mod, name: m?.name ?? baseName(f.path), files: new Set([f.path]), moment }
     out.push(moment)
   }
@@ -397,10 +399,10 @@ export function MapTab() {
     if (groups) {
       const layerOf = new Map<string, string>()
       for (const g of groups.groups) for (const id of g.modules) layerOf.set(id, g.name)
-      const ghosts = (plan?.ghosts ?? []).map((m) => ({ ...m, layer: layerOf.get(m.id) ?? 'Planned' }))
+      const ghosts = (plan?.ghosts ?? []).map((m) => ({ ...m, layer: layerOf.get(m.id) ?? tr('mapTab.plannedGroup') }))
       const mods = [...arch.modules.filter((m) => layerOf.has(m.id)).map((m) => ({ ...m, layer: layerOf.get(m.id)! })), ...ghosts]
       const ids = new Set(mods.map((m) => m.id))
-      const layers = [...groups.groups.map((g) => g.name), ...(ghosts.some((g) => g.layer === 'Planned') ? ['Planned'] : [])]
+      const layers = [...groups.groups.map((g) => g.name), ...(ghosts.some((g) => g.layer === tr('mapTab.plannedGroup')) ? [tr('mapTab.plannedGroup')] : [])]
       return { ...arch, layers, modules: mods, edges: arch.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) }
     }
     const ids = new Set([...scope.focus, ...scope.context])
@@ -533,9 +535,9 @@ export function MapTab() {
       if (!m) continue
       const main = agentId === null
       const type = s.agents[agentId!]?.type
-      const who = main ? 'Claude' : `${type ? type[0].toUpperCase() + type.slice(1) : 'An'} agent`
-      const doing = `${touchVerb(f.tool).toLowerCase()} ${baseName(f.path)}`
-      const say = past || !main ? doing : tally === 'wait' ? 'waiting for you' : s.status !== 'running' ? (tally === 'ok' ? 'finished here' : 'last here') : doing
+      const who = main ? tr('mapTab.crew.claude') : type ? tr('mapTab.crew.typedAgent', { type: type[0].toUpperCase() + type.slice(1) }) : tr('mapTab.crew.agent')
+      const doing = tr('mapTab.crew.doing', { verb: touchVerb(f.tool).toLowerCase(), file: baseName(f.path) })
+      const say = past || !main ? doing : tally === 'wait' ? tr('mapTab.crew.waiting') : s.status !== 'running' ? (tally === 'ok' ? tr('mapTab.crew.finishedHere') : tr('mapTab.crew.lastHere')) : doing
       crew.push({ key: agentId ?? 'main', who, say, mod: m.id, kind: main ? 'main' : 'agent' })
     }
     // Other sessions in the same project, faintly, so overlapping work is visible.
@@ -566,17 +568,17 @@ export function MapTab() {
   }, [arch, lay, s, peers, tab.cwd, at, plan])
 
   const body = (() => {
-    if (!arch) return <div className="map-empty">Mapping the project…</div>
-    if (arch.error && !arch.modules.length) return <div className="map-empty">Couldn’t map this project: {arch.error}</div>
-    if (!arch.modules.length) return <div className="map-empty">No source folders found to map.</div>
+    if (!arch) return <div className="map-empty">{tr('mapTab.mapping')}</div>
+    if (arch.error && !arch.modules.length) return <div className="map-empty">{tr('mapTab.mapError', { error: arch.error })}</div>
+    if (!arch.modules.length) return <div className="map-empty">{tr('mapTab.noSourceFolders')}</div>
     if (mode === 'ask' && feature && !feature.steps.length) return null
     if (mode === 'conv' && scope && !scope.focus.size)
       return (
         <div className="map-empty map-empty-scope">
-          <strong>The map fills in as Claude works</strong>
-          <span>It shows the parts of {basename(arch.root)} this conversation reads and changes, and what they connect to.</span>
+          <strong>{tr('mapTab.convEmpty.title')}</strong>
+          <span>{tr('mapTab.convEmpty.body', { project: basename(arch.root) })}</span>
           <button className="btn" onClick={() => setWhole(true)}>
-            Show the whole project
+            {tr('mapTab.convEmpty.showWhole')}
           </button>
         </div>
       )
@@ -628,14 +630,14 @@ export function MapTab() {
       <Icon name={asking ? 'loading' : 'sparkle'} className={asking ? 'codicon-modifier-spin accent' : 'accent'} />
       {asking ? (
         <span className="map-ask-busy">
-          Finding “{asking.q}” in the code… <span className="muted">{elapsed(Date.now() - asking.since)}</span>
+          {tr('mapTab.ask.finding', { q: asking.q })} <span className="muted">{elapsed(Date.now() - asking.since)}</span>
         </span>
       ) : (
         <input
           className="grow"
           list={`map-asks-${tab.id}`}
-          placeholder="Show me a feature, e.g. how discount codes are applied"
-          aria-label="Ask the map to show a feature"
+          placeholder={tr('mapTab.ask.placeholder')}
+          aria-label={tr('mapTab.ask.label')}
           value={askText}
           onChange={(e) => setAskText(e.target.value)}
           onKeyDown={(e) => e.key === 'Escape' && setAskText('')}
@@ -648,7 +650,7 @@ export function MapTab() {
       </datalist>
       {!asking && (
         <button className="btn" type="submit" disabled={!askText.trim()}>
-          Show me
+          {tr('mapTab.showMe')}
         </button>
       )}
     </form>
@@ -659,8 +661,8 @@ export function MapTab() {
         value={mode}
         onChange={(v) => (setMode(v), setSel(null), setQuery(''))}
         options={[
-          { value: 'conv', label: 'This conversation' },
-          { value: 'whole', label: 'Whole project' },
+          { value: 'conv', label: tr('mapTab.bar.thisConversation') },
+          { value: 'whole', label: tr('mapTab.bar.wholeProject') },
           ...(feature ? [{ value: 'ask' as const, label: feature.title }] : [])
         ]}
       />
@@ -668,8 +670,8 @@ export function MapTab() {
         <input
           className="map-search"
           type="search"
-          placeholder="Find a module"
-          aria-label="Find a module by name or folder"
+          placeholder={tr('mapTab.bar.findPlaceholder')}
+          aria-label={tr('mapTab.bar.findLabel')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -679,27 +681,27 @@ export function MapTab() {
         />
       )}
       {mode === 'conv' && (groups || busyGrouping) && (
-        <span className="map-grouped" title={groups ? 'Claude grouped these from what this session read, edited and searched, and left out generated code and other noise' : undefined}>
+        <span className="map-grouped" title={groups ? tr('mapTab.bar.groupedTitle') : undefined}>
           <Icon name={busyGrouping ? 'loading' : 'sparkle'} className={busyGrouping ? 'codicon-modifier-spin' : undefined} />
-          {busyGrouping ? 'Grouping…' : 'Grouped by Claude'}
+          {busyGrouping ? tr('mapTab.bar.grouping') : tr('mapTab.bar.grouped')}
           {groups && !busyGrouping && (
             <button className="link small" onClick={() => setRegroupN((n) => n + 1)}>
-              Regroup
+              {tr('mapTab.bar.regroup')}
             </button>
           )}
         </span>
       )}
       <span className="map-bar-note">
         {whole && found
-          ? `${found.size} match${found.size === 1 ? '' : 'es'}${found.size ? '. Enter opens the first' : ''}`
+          ? tr(found.size ? 'mapTab.bar.matchesEnter' : 'mapTab.bar.matches', { count: found.size })
           : whole
-          ? `All ${arch.modules.length} modules`
+          ? tr('mapTab.bar.allModules', { count: arch.modules.length })
           : mode === 'ask'
           ? feature && shown && feature.steps.length
-            ? `${shown.modules.length} module${shown.modules.length === 1 ? '' : 's'} in ${feature.steps.length} step${feature.steps.length === 1 ? '' : 's'}`
+            ? tr('mapTab.bar.askSummary', { modules: tr('mapTab.bar.modulesCount', { count: shown.modules.length }), steps: tr('mapTab.bar.stepsCount', { count: feature.steps.length }) })
             : ''
           : scope.focus.size
-          ? `${scope.focus.size} module${scope.focus.size === 1 ? '' : 's'} in this conversation, and ${scope.context.size} connected to ${scope.focus.size === 1 ? 'it' : 'them'}${scope.moreContext ? ` (${scope.moreContext} more connected, hidden)` : ''}`
+          ? tr(scope.moreContext ? 'mapTab.bar.convSummaryHidden' : 'mapTab.bar.convSummary', { count: scope.focus.size, context: scope.context.size, more: scope.moreContext })
           : ''}
       </span>
     </div>
@@ -710,17 +712,17 @@ export function MapTab() {
       <div className="map-feature-head">
         <strong>{feature.title}</strong>
         <span className="spacer" />
-        <button className="btn quiet" onClick={() => void ask(feature.question, true)} disabled={!!asking} title={`Ask again: “${feature.question}”`}>
-          <Icon name="refresh" /> Ask again
+        <button className="btn quiet" onClick={() => void ask(feature.question, true)} disabled={!!asking} title={tr('mapTab.feature.askAgainTitle', { q: feature.question })}>
+          <Icon name="refresh" /> {tr('mapTab.feature.askAgain')}
         </button>
-        <IconButton icon="close" title="Close this feature and go back to the conversation’s map" onClick={() => (askedFor.delete(tab.id), setFeature(null), setMode('conv'), setSel(null))} />
+        <IconButton icon="close" title={tr('mapTab.feature.close')} onClick={() => (askedFor.delete(tab.id), setFeature(null), setMode('conv'), setSel(null))} />
       </div>
       {feature.summary && <p className="map-feature-summary" title={feature.summary}>{feature.summary}</p>}
       {feature.steps.length === 0 ? (
-        <p className="muted small">{feature.summary ? 'Try describing it another way, or name a screen, endpoint or file.' : 'Nothing in the code matched that. Try describing it another way, or name a screen, endpoint or file.'}</p>
+        <p className="muted small">{feature.summary ? tr('mapTab.feature.tryAgain') : tr('mapTab.feature.noMatch')}</p>
       ) : !stepsOpen ? (
         <button className="link small map-feature-toggle" onClick={() => setStepsOpen(true)}>
-          Show the {feature.steps.length} steps and their files
+          {tr('mapTab.feature.showSteps', { count: feature.steps.length })}
         </button>
       ) : (
         <ol className="map-feature-steps">
@@ -739,7 +741,7 @@ export function MapTab() {
           ))}
           <li>
             <button className="link small" onClick={() => setStepsOpen(false)}>
-              Hide the steps
+              {tr('mapTab.feature.hideSteps')}
             </button>
           </li>
         </ol>
@@ -751,16 +753,16 @@ export function MapTab() {
     <div className={planPending ? 'map-plan-bar waiting' : 'map-plan-bar'}>
       <span className="map-plan-key" aria-hidden />
       <span className="map-plan-text">
-        <strong>{planPending ? 'Claude’s plan, waiting for your approval' : 'Claude’s plan'}</strong>
+        <strong>{planPending ? tr('mapTab.plan.waiting') : tr('mapTab.plan.title')}</strong>
         {planSummary(arch, planAll, editedMods)}
       </span>
       {planPending && (
         <button className="btn primary" onClick={() => openPlan()}>
-          Review the plan
+          {tr('mapTab.plan.review')}
         </button>
       )}
       <button className="btn quiet" onClick={() => setShowPlan((v) => !v)} aria-pressed={showPlan}>
-        {showPlan ? 'Hide plan' : 'Show plan'}
+        {showPlan ? tr('mapTab.plan.hide') : tr('mapTab.plan.show')}
       </button>
     </div>
   )
@@ -785,7 +787,7 @@ export function MapTab() {
       {askBox}
       {askError && (
         <div className="note note-error map-ask-error">
-          Couldn’t find that: {askError} <button className="link" onClick={() => setAskError(null)}>Dismiss</button>
+          {tr('mapTab.ask.error', { error: askError })} <button className="link" onClick={() => setAskError(null)}>{tr('mapTab.ask.dismiss')}</button>
         </div>
       )}
       {scopeBar}
@@ -856,10 +858,14 @@ function planSummary(arch: Architecture, plan: PlanShape, edited: Set<string>): 
   const open = plan.edges.filter((e) => !planEdgeDone(arch, e))
   const added = open.filter((e) => e.change === 'new').length
   const removed = open.filter((e) => e.change === 'removed').length
-  const n = (k: number, w: string) => `${k} ${w}${k === 1 ? '' : 's'}`
-  const parts = [changes && `changes ${n(changes, 'module')}`, adds && `adds ${n(adds, 'new module')}`, added && n(added, 'new connection'), removed && `removes ${n(removed, 'connection')}`].filter(Boolean) as string[]
-  if (!parts.length) return ': done. Every part of it has been worked on.'
-  return `: ${todo.length < plan.modules.size ? 'still to do, ' : ''}${parts.join(', ')}.`
+  const parts = [
+    changes && tr('mapTab.planSummary.changesModules', { count: changes }),
+    adds && tr('mapTab.planSummary.addsModules', { count: adds }),
+    added && tr('mapTab.planSummary.newConnections', { count: added }),
+    removed && tr('mapTab.planSummary.removesConnections', { count: removed })
+  ].filter(Boolean) as string[]
+  if (!parts.length) return tr('mapTab.planSummary.done')
+  return tr(todo.length < plan.modules.size ? 'mapTab.planSummary.stillToDo' : 'mapTab.planSummary.toDo', { parts: parts.join(', ') })
 }
 
 type ModuleDecision = { title: string; detail?: string; kind: string; at: number; earlier: boolean }
@@ -926,7 +932,7 @@ function MapSvg({
   for (const st of view.steps) if (st.mod) (stepsAt[st.mod] ??= []).push(st)
 
   return (
-    <svg className="map-svg" width={W} height={lay.height} viewBox={`0 0 ${W} ${lay.height}`} role="img" aria-label="Map of the project with Claude's activity">
+    <svg className="map-svg" width={W} height={lay.height} viewBox={`0 0 ${W} ${lay.height}`} role="img" aria-label={tr('mapTab.svgLabel')}>
       <defs>
         <pattern id="map-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <line x1="0" y1="0" x2="0" y2="8" className="map-hatch-line" />
@@ -944,7 +950,7 @@ function MapSvg({
           onClick={whole ? (e) => (e.stopPropagation(), onToggleFold(b.layer)) : undefined}
           role={whole ? 'button' : undefined}
           aria-expanded={whole ? !b.folded : undefined}
-          aria-label={whole ? `${b.layer}, ${b.count} modules, ${b.folded ? 'folded' : 'open'}` : undefined}
+          aria-label={whole ? tr('mapTab.band.label', { layer: b.layer, count: b.count, state: tr(b.folded ? 'mapTab.band.folded' : 'mapTab.band.open') }) : undefined}
         >
           <rect className={b.folded ? 'map-band folded' : 'map-band'} x={4} y={b.y} width={W - 8} height={b.h} rx={10} />
           {/* The fold chevron: pointing right when folded, down when open. */}
@@ -952,7 +958,7 @@ function MapSvg({
           {b.folded ? (
             <text className="map-band-label" x={30} y={b.y + b.h / 2 + 4}>
               {b.layer}
-              <tspan className="map-band-count" dx={10}>{b.count} modules. Click to show them</tspan>
+              <tspan className="map-band-count" dx={10}>{tr('mapTab.band.foldedCount', { count: b.count })}</tspan>
             </text>
           ) : (
             /* Long category names wrap onto a second line rather than being cut off. */
@@ -960,7 +966,7 @@ function MapSvg({
               {bandLines(b.layer).map((line, i) => (
                 <tspan key={i} x={whole ? 30 : 18} dy={i ? 14 : 0}>{line}</tspan>
               ))}
-              {whole && <tspan className="map-band-count" x={30} dy={16}>{b.count} modules</tspan>}
+              {whole && <tspan className="map-band-count" x={30} dy={16}>{tr('mapTab.band.count', { count: b.count })}</tspan>}
             </text>
           )}
         </g>
@@ -977,7 +983,9 @@ function MapSvg({
         const cls = pointed ? 'map-edge pointed' : mine ? 'map-edge focus' : focus ? 'map-edge dim' : hot ? 'map-edge hot' : 'map-edge'
         const names = [...new Set((linksBy.get(`${e.from}>${e.to}`) ?? []).flatMap((l) => l.names))]
         // A loose HTTP match (only the shape of the URL lines up) is drawn fainter and said as "probably".
-        const tip = `${a.name} ${e.http ? (e.weak ? 'probably calls' : 'calls') : 'uses'} ${b.name}${e.http ? ' over HTTP' : ''}${names.length ? `: ${names.slice(0, 6).join(', ')}${names.length > 6 ? ` and ${names.length - 6} more` : ''}` : ''}${e.weak ? '\nMatched by the shape of the URL only, so it may not be a real call.' : ''}`
+        const link = tr(e.http ? (e.weak ? 'mapTab.edgeTip.probablyCalls' : 'mapTab.edgeTip.calls') : 'mapTab.edgeTip.uses', { from: a.name, to: b.name })
+        const listed = names.length > 6 ? tr('mapTab.edgeTip.andMore', { names: names.slice(0, 6).join(', '), count: names.length - 6 }) : names.join(', ')
+        const tip = `${names.length ? tr('mapTab.edgeTip.withNames', { link, names: listed }) : link}${e.weak ? `\n${tr('mapTab.edgeTip.weak')}` : ''}`
         return (
           <g key={`${e.from}>${e.to}`}>
             <path className={e.http ? `${cls} http${e.weak ? ' weak' : ''}` : cls} d={d} markerEnd="url(#map-arrow)" />
@@ -990,7 +998,7 @@ function MapSvg({
         const a = box(e.from), b = box(e.to)
         if (!a || !b || planEdgeDone(arch, e)) return null
         const d = wire(a, b)
-        const tip = `Planned: ${a.name} ${e.change === 'new' ? 'will start' : 'will stop'} ${e.http ? 'calling' : 'using'} ${b.name}${e.why ? `\n${e.why}` : ''}`
+        const tip = `${tr(e.change === 'new' ? (e.http ? 'mapTab.planEdge.startCalling' : 'mapTab.planEdge.startUsing') : e.http ? 'mapTab.planEdge.stopCalling' : 'mapTab.planEdge.stopUsing', { from: a.name, to: b.name })}${e.why ? `\n${e.why}` : ''}`
         return (
           <g key={`plan:${e.from}>${e.to}`}>
             <path className={`map-edge-plan ${e.change}`} d={d} markerEnd="url(#map-arrow)" />
@@ -1009,14 +1017,20 @@ function MapSvg({
         const planned = view.plan?.modules.get(b.id)
         // A planned module keeps its plan outline until Claude starts on it.
         const planOpen = planned && m.edits === 0
-        const tag = bound ? BOUND_TAG[bound] : planOpen ? (planned.change === 'new' ? 'New' : 'Planned') : m.reads + m.edits > 0 ? (m.edits ? `${m.edits} edit${m.edits > 1 ? 's' : ''}` : `${m.reads} read${m.reads > 1 ? 's' : ''}`) : ''
+        const tag = bound ? tr(BOUND_TAG[bound]) : planOpen ? (planned.change === 'new' ? tr('mapTab.tag.new') : tr('mapTab.tag.planned')) : m.reads + m.edits > 0 ? (m.edits ? tr('mapTab.tag.edits', { count: m.edits }) : tr('mapTab.tag.reads', { count: m.reads })) : ''
         return (
           <g
             key={b.id}
             className={`map-mod${sel === b.id ? ' sel' : ''}${b.external ? ' ext' : ''}${context?.has(b.id) ? ' ctx' : ''}${pointed.has(b.id) || found?.has(b.id) ? ' pt' : ''}${found && !found.has(b.id) ? ' faded' : ''}${ghost ? ' ghost' : ''}${planOpen ? ' planned' : ''}${bound ? ` bound-${bound}` : ''}`}
             tabIndex={0}
             role="button"
-            aria-label={`${b.name}, ${b.path || 'project root'}, ${ghost ? 'a new module in the plan' : `${m.edits} edits`}${planOpen && !ghost ? ', in the plan' : ''}${bound ? `, ${BOUND_TAG[bound]}` : ''}`}
+            aria-label={tr('mapTab.box.label', {
+              name: b.name,
+              path: b.path || tr('mapTab.box.projectRoot'),
+              state: ghost ? tr('mapTab.box.newInPlan') : tr('mapTab.box.edits', { n: m.edits }),
+              inPlan: planOpen && !ghost ? tr('mapTab.box.inPlan') : '',
+              bound: bound ? tr('mapTab.box.bound', { tag: tr(BOUND_TAG[bound]) }) : ''
+            })}
             onClick={() => setSel(sel === b.id ? null : b.id)}
             onMouseEnter={() => setHover(b.id)}
             onMouseLeave={() => setHover((h) => (h === b.id ? null : h))}
@@ -1038,7 +1052,7 @@ function MapSvg({
             {bound === 'avoid' && <rect className="map-mod-fence" x={b.x} y={b.y} width={b.w} height={b.h} rx={8} />}
             {bound === 'api' && <rect className="map-mod-api" x={b.x + 3} y={b.y + 3} width={b.w - 6} height={b.h - 6} rx={6} />}
             <text className="map-mod-name" x={b.x + 12} y={b.y + 22}>{clip(b.name, b.w - 56, 7.2)}</text>
-            <text className="map-mod-path" x={b.x + 12} y={b.y + 37}>{clip(b.path || '(root)', b.w, 6.4)}</text>
+            <text className="map-mod-path" x={b.x + 12} y={b.y + 37}>{clip(b.path || tr('mapTab.root'), b.w, 6.4)}</text>
             {ghost && planned?.why && b.h > CONTEXT_H && (
               <text className="map-mod-file" x={b.x + 12} y={b.y + 58}>{clip(planned.why, b.w, 6.4)}</text>
             )}
@@ -1059,7 +1073,7 @@ function MapSvg({
             ) : (
               !ghost && b.files > 0 && (
                 <text className="map-mod-size" x={b.x + b.w - 10} y={b.y + 22} textAnchor="end">
-                  {b.files} file{b.files === 1 ? '' : 's'}
+                  {tr('mapTab.files', { count: b.files })}
                 </text>
               )
             )}
@@ -1078,7 +1092,7 @@ function Footer({ b, crew, steps, tally, past }: { b: Box; crew: Crew[]; steps: 
   const ordered = [...crew].sort((a, c) => ['main', 'agent', 'peer'].indexOf(a.kind) - ['main', 'agent', 'peer'].indexOf(c.kind))
   const lead = ordered[0]
   const more = ordered.length - 1
-  const stepText = steps.length === 1 ? `Step ${steps[0].n}` : steps.length ? `Steps ${steps.map((x) => x.n).join(', ')}` : ''
+  const stepText = steps.length === 1 ? tr('mapTab.footer.step', { n: steps[0].n }) : steps.length ? tr('mapTab.footer.steps', { list: steps.map((x) => x.n).join(', ') }) : ''
   const stepState = steps.some((x) => x.status === 'active') ? 'now' : steps.length && steps.every((x) => x.status === 'done') ? 'done' : 'todo'
   const stepW = stepText ? stepText.length * 6.6 + 12 : 0
   const moreW = more > 0 ? 26 : 0
@@ -1089,7 +1103,7 @@ function Footer({ b, crew, steps, tally, past }: { b: Box; crew: Crew[]; steps: 
   const sayRoom = room - who.length * 7 - 5
   const say = lead?.say && sayRoom > 40 ? clip(lead.say, sayRoom + 24, 6.4) : ''
   const lampClass = lead?.kind === 'main' && !past ? ` tally-${tally}` : ''
-  const tip = ordered.map((c) => (c.kind === 'peer' ? `Another session here: ${c.who}` : `${c.who} ${c.say}`)).join('\n')
+  const tip = ordered.map((c) => (c.kind === 'peer' ? tr('mapTab.footer.peer', { who: c.who }) : tr('mapTab.footer.crew', { who: c.who, say: c.say }))).join('\n')
   return (
     <g className="map-foot">
       <line className="map-foot-rule" x1={b.x + 1} x2={b.x + b.w - 1} y1={y} y2={y} />
@@ -1106,7 +1120,7 @@ function Footer({ b, crew, steps, tally, past }: { b: Box; crew: Crew[]; steps: 
         </g>
       )}
       {stepText && (
-        <text className={`map-step ${stepState}`} x={b.x + b.w - 10} y={base} textAnchor="end" data-tip={steps.map((x) => `Step ${x.n}: ${x.label}`).join('\n')}>
+        <text className={`map-step ${stepState}`} x={b.x + b.w - 10} y={base} textAnchor="end" data-tip={steps.map((x) => tr('mapTab.footer.stepTip', { n: x.n, label: x.label })).join('\n')}>
           {stepText}
         </text>
       )}
@@ -1165,7 +1179,6 @@ function Inspector({
   onAsk: (text: string) => void
 }) {
   const where = box.path ? `${box.path}/` : 'the project root'
-  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
   const ghost = isGhost(box.id)
   const conns = useMemo(() => (ghost ? [] : connectionsOf(arch, box.id)), [arch, box.id, ghost])
   const uses = conns.filter((c) => c.out)
@@ -1240,20 +1253,24 @@ function Inspector({
                     {file(f)}
                   </span>
                 ))}
-                {g.from.length > 2 && <span className="map-conn-names">{` and ${g.from.length - 2} more`}</span>}
-                <span className="map-conn-names">{names.length ? ` ${g.weak ? 'probably ' : ''}${g.http ? 'call' : 'use'}${g.from.length === 1 ? 's' : ''} ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` +${names.length - 4}` : ''}` : ` import${g.from.length === 1 ? 's' : ''}`}</span>
+                {g.from.length > 2 && <span className="map-conn-names">{` ${tr('mapTab.conn.andMore', { n: g.from.length - 2 })}`}</span>}
+                <span className="map-conn-names">
+                  {names.length
+                    ? ` ${tr(g.weak ? (g.http ? 'mapTab.conn.probablyCalls' : 'mapTab.conn.probablyUses') : g.http ? 'mapTab.conn.calls' : 'mapTab.conn.uses', { count: g.from.length, names: `${names.slice(0, 4).join(', ')}${names.length > 4 ? ` ${tr('mapTab.conn.extra', { n: names.length - 4 })}` : ''}` })}`
+                    : ` ${tr('mapTab.conn.imports', { count: g.from.length })}`}
+                </span>
                 {g.to && (
                   <>
-                    <span className="map-conn-names">{g.http ? ' in ' : names.length ? ' from ' : ' '}</span>
+                    <span className="map-conn-names">{g.http ? ` ${tr('mapTab.conn.in')} ` : names.length ? ` ${tr('mapTab.conn.from')} ` : ' '}</span>
                     {g.to.endsWith('/') ? <span className="map-conn-file">{baseName(g.to.replace(/\/$/, ''))}</span> : file(g.to)}
                   </>
                 )}
               </div>
             )
           })}
-          {targets.length > shownTargets.length && <div className="map-conn-more">and {plural(targets.length - shownTargets.length, 'more file')} used</div>}
+          {targets.length > shownTargets.length && <div className="map-conn-more">{tr('mapTab.conn.moreFiles', { count: targets.length - shownTargets.length })}</div>}
         </div>
-        {changed.length > 0 && <div className="map-conn-changed">Changed this session: {changed.map((f) => baseName(f)).join(', ')}</div>}
+        {changed.length > 0 && <div className="map-conn-changed">{tr('mapTab.conn.changed', { files: changed.map((f) => baseName(f)).join(', ') })}</div>}
       </div>
     )
   }
@@ -1263,39 +1280,43 @@ function Inspector({
       <div className="map-inspect-head">
         <div className="map-inspect-title">
           <strong>{box.name}</strong>
-          <span className="mono muted">{box.path || '(root)'}</span>
+          <span className="mono muted">{box.path || tr('mapTab.root')}</span>
         </div>
-        <IconButton icon="close" title="Close (Esc)" onClick={onClose} />
+        <IconButton icon="close" title={tr('mapTab.inspect.close')} onClick={onClose} />
       </div>
       <div className="map-inspect-meta">
-        {ghost ? 'A new module in Claude’s plan. Nothing is here yet.' : box.external ? 'Outside this project.' : `${plural(box.files, 'source file')}, ${plural(box.tests, 'test')}.`}
+        {ghost
+          ? tr('mapTab.inspect.ghost')
+          : box.external
+          ? tr('mapTab.inspect.external')
+          : tr('mapTab.inspect.size', { files: tr('mapTab.inspect.sourceFiles', { count: box.files }), tests: tr('mapTab.inspect.tests', { count: box.tests }) })}
         {mod.files.length > 0 && (
           <>
-            {' Claude changed '}
+            {` ${tr('mapTab.inspect.claudeChanged')} `}
             {mod.files.map((f, i) => (
               <span key={f.path}>
                 {i > 0 && ', '}
-                <button className="link" onClick={() => onOpen(f.path, true)} title={`${f.path}\nOpen the diff`}>
+                <button className="link" onClick={() => onOpen(f.path, true)} title={`${f.path}\n${tr('mapTab.inspect.openDiff')}`}>
                   {f.name}
                 </button>
               </span>
             ))}
-            {' this session.'}
+            {` ${tr('mapTab.inspect.thisSession')}`}
           </>
         )}
       </div>
 
       {(inPlan || planEdges.length > 0) && (
         <div className="map-inspect-section map-inspect-plan">
-          <div className="map-inspect-label">In Claude’s plan</div>
+          <div className="map-inspect-label">{tr('mapTab.inspect.inPlan')}</div>
           {inPlan?.why && <div className="map-conn-why">{inPlan.why}</div>}
           {planEdges.map((e) => {
             const out = e.from === box.id
             const other = nameOf(out ? e.to : e.from)
-            const verb = e.http ? (e.change === 'new' ? 'call' : 'stop calling') : e.change === 'new' ? 'use' : 'stop using'
+            const verb = e.http ? (e.change === 'new' ? 'Call' : 'StopCalling') : e.change === 'new' ? 'Use' : 'StopUsing'
             return (
               <div key={`${e.from}>${e.to}`} className={`map-plan-conn ${e.change}`}>
-                <span>{out ? `Will ${verb} ${other}` : `${other} will ${verb} this`}</span>
+                <span>{tr(out ? `mapTab.inspect.will${verb}` : `mapTab.inspect.otherWill${verb}`, { other })}</span>
                 {e.why && <span className="map-conn-names">{e.why}</span>}
               </div>
             )
@@ -1304,66 +1325,66 @@ function Inspector({
       )}
 
       {ghost ? null : conns.length === 0 ? (
-        <div className="map-inspect-note">No imports connect this module to the others.</div>
+        <div className="map-inspect-note">{tr('mapTab.inspect.noConnections')}</div>
       ) : (
         <>
           {uses.length > 0 && (
             <div className="map-inspect-section">
-              <div className="map-inspect-label">Uses</div>
+              <div className="map-inspect-label">{tr('mapTab.inspect.uses')}</div>
               {uses.map(row)}
             </div>
           )}
           {usedBy.length > 0 && (
             <div className="map-inspect-section">
-              <div className="map-inspect-label">Used by</div>
+              <div className="map-inspect-label">{tr('mapTab.inspect.usedBy')}</div>
               {usedBy.map(row)}
             </div>
           )}
-          {whyError && <div className="map-inspect-note">Couldn’t explain the connections: {whyError}</div>}
+          {whyError && <div className="map-inspect-note">{tr('mapTab.inspect.whyError', { error: whyError })}</div>}
         </>
       )}
 
       {decisions.length > 0 && (
         <div className="map-inspect-section">
-          <div className="map-inspect-label">Decided here</div>
+          <div className="map-inspect-label">{tr('mapTab.inspect.decidedHere')}</div>
           {decisions.map((d, i) => (
             <div key={i} className="map-decision">
               <span className="map-decision-title">
-                {d.kind === 'assumption' ? 'Assumed: ' : ''}
+                {d.kind === 'assumption' ? `${tr('mapTab.inspect.assumed')} ` : ''}
                 {d.title}
               </span>
               {d.detail && <span className="map-conn-names">{d.detail}</span>}
-              {d.earlier && <span className="map-decision-when">Earlier session, {new Date(d.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>}
+              {d.earlier && <span className="map-decision-when">{tr('mapTab.inspect.earlierSession', { date: new Date(d.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) })}</span>}
             </div>
           ))}
         </div>
       )}
 
       <div className="map-inspect-actions">
-        <button className="btn primary" onClick={() => onAsk(`About ${where}: `)} title={`Start a message to Claude about ${where}`}>
-          Ask Claude about it
+        <button className="btn primary" onClick={() => onAsk(`About ${where}: `)} title={tr('mapTab.inspect.askTitle', { where: box.path ? `${box.path}/` : tr('mapTab.inspect.projectRoot') })}>
+          {tr('mapTab.inspect.askClaude')}
         </button>
         {usedBy.length > 0 && (
-          <button className="btn" onClick={onRipple} title="Everything that would feel a change here, and what's tested">
-            What a change would affect
+          <button className="btn" onClick={onRipple} title={tr('mapTab.inspect.rippleTitle')}>
+            {tr('mapTab.inspect.ripple')}
           </button>
         )}
         {!box.external && box.files > 0 && box.tests === 0 && (
-          <button className="btn" onClick={() => onAsk(`Add tests for ${where} covering `)} title="Start a message asking Claude for tests here">
-            Ask for tests
+          <button className="btn" onClick={() => onAsk(`Add tests for ${where} covering `)} title={tr('mapTab.inspect.askTestsTitle')}>
+            {tr('mapTab.inspect.askTests')}
           </button>
         )}
       </div>
 
       {!box.external && !ghost && (
-        <div className="map-inspect-bounds" ref={boundsRef} role="radiogroup" aria-label="What Claude may do here">
-          <div className="map-inspect-label">What Claude may do here</div>
+        <div className="map-inspect-bounds" ref={boundsRef} role="radiogroup" aria-label={tr('mapTab.inspect.bounds')}>
+          <div className="map-inspect-label">{tr('mapTab.inspect.bounds')}</div>
           {BOUNDS.map((o) => (
             <label key={o.value ?? 'free'} className={bound === o.value ? 'map-bound on' : 'map-bound'}>
               <input type="radio" name={`bound-${box.id}`} checked={bound === o.value} onChange={() => onBound(o.value)} />
               <span className="map-bound-text">
-                <span className="map-bound-label">{o.label}</span>
-                <span className="map-bound-note">{o.note}</span>
+                <span className="map-bound-label">{tr(o.label)}</span>
+                <span className="map-bound-note">{tr(o.note)}</span>
               </span>
             </label>
           ))}
@@ -1414,7 +1435,7 @@ function ReplayBar({
   }
   return (
     <div className={at === null ? 'map-replay' : 'map-replay past'}>
-      <IconButton icon={playing ? 'debug-pause' : 'play'} title={playing ? 'Pause' : at === null ? 'Replay the session from the start' : 'Play from here'} onClick={onPlay} />
+      <IconButton icon={playing ? 'debug-pause' : 'play'} title={playing ? tr('mapTab.replay.pause') : at === null ? tr('mapTab.replay.fromStart') : tr('mapTab.replay.fromHere')} onClick={onPlay} />
       <div className="map-replay-track">
         <div className="map-replay-marks" aria-hidden>
           {moments.map((mo, i) => (
@@ -1434,8 +1455,8 @@ function ReplayBar({
           onChange={(e) => e.currentTarget === document.activeElement && go(Math.round((Number(e.target.value) / STEPS) * n))}
           onMouseMove={(e) => setHover(posAt(e))}
           onMouseLeave={() => setHover(null)}
-          aria-label="Replay the session"
-          aria-valuetext={m ? `${elapsed(m.at - start)} in: ${m.label}` : 'Now'}
+          aria-label={tr('mapTab.replay.label')}
+          aria-valuetext={m ? tr('mapTab.replay.valueText', { time: elapsed(m.at - start), label: m.label }) : tr('mapTab.replay.now')}
         />
       </div>
       <div className="map-replay-status">
@@ -1445,12 +1466,12 @@ function ReplayBar({
             <span className="map-replay-what" title={m.label}>{m.label}</span>
           </>
         ) : (
-          <span className="map-replay-what">Now</span>
+          <span className="map-replay-what">{tr('mapTab.replay.now')}</span>
         )}
       </div>
       {at !== null && (
         <button className="btn quiet" onClick={onNow}>
-          Back to now
+          {tr('mapTab.replay.backToNow')}
         </button>
       )}
     </div>

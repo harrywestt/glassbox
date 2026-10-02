@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { adoptServicesFile } from './services'
 import { worktreePath } from './git'
+import { tr } from '../shared/i18n'
 
 const exec = promisify(execFile)
 const run = async (cmd: string, args: string[], cwd: string) =>
@@ -44,7 +45,7 @@ export async function listOpenPrs(cwd: string): Promise<{ prs: LaunchPr[]; error
     return { prs }
   } catch (err) {
     const msg = String((err as { stderr?: string }).stderr || err)
-    return { prs: [], error: /not a git repository|no git remotes|could not determine/i.test(msg) ? 'This folder isn’t a GitHub repository.' : /auth|login/i.test(msg) ? 'Sign in with `gh auth login`.' : msg.split('\n')[0] }
+    return { prs: [], error: /not a git repository|no git remotes|could not determine/i.test(msg) ? tr('mainLauncher.notGitHubRepo') : /auth|login/i.test(msg) ? tr('mainLauncher.signInGh') : msg.split('\n')[0] }
   }
 }
 
@@ -87,7 +88,7 @@ export async function getPr(cwd: string, ref: string): Promise<{ pr?: LaunchPr &
     }
   } catch (err) {
     const msg = String((err as { stderr?: string }).stderr || err)
-    return { error: /could not resolve|not found|no pull requests/i.test(msg) ? 'No pull request found for that link or number.' : /auth|login/i.test(msg) ? 'Sign in with `gh auth login`.' : msg.split('\n')[0] }
+    return { error: /could not resolve|not found|no pull requests/i.test(msg) ? tr('mainLauncher.noPr') : /auth|login/i.test(msg) ? tr('mainLauncher.signInGh') : msg.split('\n')[0] }
   }
 }
 
@@ -130,6 +131,6 @@ export async function getBranchPr(cwd: string): Promise<{ pr?: BranchPr; none?: 
   } catch (err) {
     const msg = String((err as { stderr?: string }).stderr || err)
     if (/no pull requests found|no open pull requests/i.test(msg)) return { none: true }
-    return { error: /not a git repository|no git remotes|could not determine/i.test(msg) ? 'This folder isn’t a GitHub repository.' : /auth|login/i.test(msg) ? 'Sign in to GitHub (Accounts on the dashboard).' : /ENOENT|not recognized/i.test(msg) ? 'The GitHub CLI (gh) isn’t installed.' : msg.split('\n')[0] }
+    return { error: /not a git repository|no git remotes|could not determine/i.test(msg) ? tr('mainLauncher.notGitHubRepo') : /auth|login/i.test(msg) ? tr('mainLauncher.signInGitHub') : /ENOENT|not recognized/i.test(msg) ? tr('mainLauncher.ghMissing') : msg.split('\n')[0] }
   }
 }

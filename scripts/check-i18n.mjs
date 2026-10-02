@@ -21,7 +21,8 @@ const collect = (dir) => {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name)
     if (statSync(p).isDirectory()) collect(p)
-    else if (/\.(ts|tsx)$/.test(name) && !name.endsWith('.d.ts')) files.push(p)
+    // i18n.ts itself only has examples in its doc comment.
+    else if (/\.(ts|tsx)$/.test(name) && !name.endsWith('.d.ts') && name !== 'i18n.ts') files.push(p)
   }
 }
 collect(join(root, 'src'))
@@ -39,6 +40,6 @@ for (const f of files) {
 const base = (k) => k.replace(/_(zero|one|two|few|many|other)$/, '')
 const unused = [...keys].filter((k) => !used.has(k) && !used.has(base(k)))
 for (const p of problems) console.log(p)
-if (unused.length) console.log(`${unused.length} unused key(s): ${unused.slice(0, 30).join(', ')}${unused.length > 30 ? '…' : ''}`)
+if (unused.length) console.log(`${unused.length} key(s) not used by a literal tr('…') (fine when the key is built at runtime): ${unused.slice(0, 30).join(', ')}${unused.length > 30 ? '…' : ''}`)
 console.log(`${used.size} keys used, ${keys.size} in en-GB.json, ${problems.length} missing`)
 process.exit(problems.length ? 1 : 0)

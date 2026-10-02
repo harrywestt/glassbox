@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { tr } from '../../shared/i18n'
 
 export type ThemePreference = 'system' | 'dark' | 'light'
 export type ChatWidth = 'full' | 'wide' | 'comfortable'
@@ -19,12 +20,12 @@ export type Appearance = {
 
 /** Accent colours, each tuned separately for dark and light backgrounds. */
 export const ACCENTS: { id: string; label: string; dark: string; light: string }[] = [
-  { id: 'teal', label: 'Teal', dark: '#4fb3c8', light: '#0e7c90' },
-  { id: 'blue', label: 'Blue', dark: '#6ea8fe', light: '#2563c9' },
-  { id: 'violet', label: 'Violet', dark: '#a78bfa', light: '#6d4fd6' },
-  { id: 'green', label: 'Green', dark: '#5cc98a', light: '#1f8a4f' },
-  { id: 'amber', label: 'Amber', dark: '#e8b24f', light: '#a86a00' },
-  { id: 'rose', label: 'Rose', dark: '#f07892', light: '#c23a5a' }
+  { id: 'teal', label: tr('appearance.accent.teal'), dark: '#4fb3c8', light: '#0e7c90' },
+  { id: 'blue', label: tr('appearance.accent.blue'), dark: '#6ea8fe', light: '#2563c9' },
+  { id: 'violet', label: tr('appearance.accent.violet'), dark: '#a78bfa', light: '#6d4fd6' },
+  { id: 'green', label: tr('appearance.accent.green'), dark: '#5cc98a', light: '#1f8a4f' },
+  { id: 'amber', label: tr('appearance.accent.amber'), dark: '#e8b24f', light: '#a86a00' },
+  { id: 'rose', label: tr('appearance.accent.rose'), dark: '#f07892', light: '#c23a5a' }
 ]
 
 export const UI_SCALES = [0.9, 1, 1.1, 1.25]

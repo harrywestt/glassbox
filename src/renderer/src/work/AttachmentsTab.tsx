@@ -3,6 +3,7 @@ import { useSession } from '../views/SessionView'
 import { sessionAttachments, type Attachment } from '../attachments'
 import { FileCard } from '../components/FileCard'
 import { Empty, Icon, Segmented } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 /**
  * Every file in this conversation in one place: the ones you attached, and the ones Claude made or
@@ -38,27 +39,27 @@ export function AttachmentsTab() {
           value={who}
           onChange={setWho}
           options={[
-            { value: 'all', label: `All ${all.length}` },
-            { value: 'you', label: `From you ${mine}` },
-            { value: 'claude', label: `From Claude ${claude}` }
+            { value: 'all', label: tr('attachmentsTab.all', { count: all.length }) },
+            { value: 'you', label: tr('attachmentsTab.fromYouCount', { count: mine }) },
+            { value: 'claude', label: tr('attachmentsTab.fromClaudeCount', { count: claude }) }
           ]}
         />
         <span className="spacer" />
         <button className="btn" onClick={() => void window.glassbox.attachments.pick().then((p) => p.length && attachFiles(p))}>
-          <Icon name="attach" /> Attach files
+          <Icon name="attach" /> {tr('attachmentsTab.attachFiles')}
         </button>
       </div>
       <div className="work-body attach-body">
         {all.length === 0 ? (
-          <Empty icon="attach" title="No files yet">
-            Files you attach to a message (the paperclip, or drop them anywhere on this window) and files Claude makes for you collect here.
+          <Empty icon="attach" title={tr('attachmentsTab.noFiles')}>
+            {tr('attachmentsTab.noFilesBody')}
           </Empty>
         ) : shown.length === 0 ? (
-          <Empty icon="attach" title="Nothing here yet" />
+          <Empty icon="attach" title={tr('attachmentsTab.nothingHere')} />
         ) : (
           <>
-            {group(shown.filter((a) => a.from === 'claude'), 'From Claude')}
-            {group(shown.filter((a) => a.from === 'you'), 'From you')}
+            {group(shown.filter((a) => a.from === 'claude'), tr('attachmentsTab.fromClaude'))}
+            {group(shown.filter((a) => a.from === 'you'), tr('attachmentsTab.fromYou'))}
           </>
         )}
       </div>

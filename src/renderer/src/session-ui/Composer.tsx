@@ -9,8 +9,8 @@ import { Loaders } from './Loaders'
 import { QuestionsCard } from './QuestionsCard'
 import { StopButton } from './StopButton'
 import { stoppableTasks } from '../tally'
+import { tr } from '../../../shared/i18n'
 
-const MARK_LABEL = { read: 'must read', edit: 'must edit', avoid: "don't touch", ask: 'ask first', api: 'public API only' } as const
 const MARK_ICON = { read: 'eye', edit: 'edit', avoid: 'lock', ask: 'question', api: 'shield' } as const
 
 /** How long Space must be held before it starts recording rather than typing a space. */
@@ -197,26 +197,26 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
       <Loaders />
       <AskDock asks={asks} index={askIndex} onIndex={setAskIndex} answering={answering} onAnswering={setAnswering} compact={compact} />
       {hasReq ? (
-        <div className="req-chips" title="Attached to every message you send in this session">
+        <div className="req-chips" title={tr('composer.attachedTitle')}>
           <span className="muted small">
-            <Icon name="pinned" /> Attached:
+            <Icon name="pinned" /> {tr('composer.attached')}
           </span>
           {req.files.map((f) => (
-            <span key={f.path} className={`req-chip mark-${f.mark}`} title={`${f.path} (${MARK_LABEL[f.mark]})`}>
+            <span key={f.path} className={`req-chip mark-${f.mark}`} title={tr('composer.fileMarkTitle', { path: f.path, mark: tr(`composer.mark.${f.mark}`) })}>
               <Icon name={MARK_ICON[f.mark]} /> {baseName(f.path)}
-              <button onClick={() => markFile(f.path, null)} aria-label="Remove"><Icon name="close" /></button>
+              <button onClick={() => markFile(f.path, null)} aria-label={tr('composer.remove')}><Icon name="close" /></button>
             </span>
           ))}
           {req.connectors.map((c) => (
-            <span key={c} className="req-chip" title="Required connector">
+            <span key={c} className="req-chip" title={tr('composer.requiredConnector')}>
               <Icon name="plug" /> {c.replace(/^claude\.ai /, '')}
-              <button onClick={() => updateRequirements((r) => ({ ...r, connectors: r.connectors.filter((x) => x !== c) }))} aria-label="Remove"><Icon name="close" /></button>
+              <button onClick={() => updateRequirements((r) => ({ ...r, connectors: r.connectors.filter((x) => x !== c) }))} aria-label={tr('composer.remove')}><Icon name="close" /></button>
             </span>
           ))}
           {req.skills.map((k) => (
-            <span key={k} className="req-chip" title="Preferred skill">
+            <span key={k} className="req-chip" title={tr('composer.preferredSkill')}>
               <Icon name="sparkle" /> /{k}
-              <button onClick={() => updateRequirements((r) => ({ ...r, skills: r.skills.filter((x) => x !== k) }))} aria-label="Remove"><Icon name="close" /></button>
+              <button onClick={() => updateRequirements((r) => ({ ...r, skills: r.skills.filter((x) => x !== k) }))} aria-label={tr('composer.remove')}><Icon name="close" /></button>
             </span>
           ))}
         </div>
@@ -224,13 +224,13 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
       {error && <div className="note note-error">{error}</div>}
       {voice.error && (
         <div className="note note-error">
-          {voice.error} <button className="link" onClick={voice.clearError}>Dismiss</button>
+          {voice.error} <button className="link" onClick={voice.clearError}>{tr('composer.dismiss')}</button>
         </div>
       )}
       <div className={`composer-box${voice.state === 'listening' || voice.state === 'starting' ? ' listening' : ''}${shellMode ? ' shell' : ''}`}>
         {shellMode && (
           <div className="shell-hint">
-            <Icon name="terminal" /> Shell command. Runs in {baseName(tab.cwd)} when you press Enter; Claude sees the output with your next message.
+            <Icon name="terminal" /> {tr('composer.shellHint', { folder: baseName(tab.cwd) })}
           </div>
         )}
         {attached.length > 0 && (
@@ -238,14 +238,14 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
             {attached.map((p) => (
               <span key={p} className="composer-file" title={p}>
                 {fileKind(p) === 'image' ? (
-                  <button className="composer-file-thumb checker" onClick={() => openAttachment(p)} aria-label={`Open ${baseName(p)}`}>
+                  <button className="composer-file-thumb checker" onClick={() => openAttachment(p)} aria-label={tr('composer.openFile', { name: baseName(p) })}>
                     <img src={mediaUrl(p)} alt="" />
                   </button>
                 ) : (
                   <Icon name={KIND_ICON[fileKind(p)]} />
                 )}
                 <span className="ellipsis">{baseName(p)}</span>
-                <button className="icon-btn" onClick={() => setAttached((a) => a.filter((x) => x !== p))} aria-label={`Remove ${baseName(p)}`} title="Remove">
+                <button className="icon-btn" onClick={() => setAttached((a) => a.filter((x) => x !== p))} aria-label={tr('composer.removeFile', { name: baseName(p) })} title={tr('composer.remove')}>
                   <Icon name="close" />
                 </button>
               </span>
@@ -257,7 +257,7 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
             {voice.state === 'starting' ? (
               <>
                 <Icon name="loading" className="codicon-modifier-spin" />
-                <span>Starting the microphone…</span>
+                <span>{tr('composer.voiceStarting')}</span>
               </>
             ) : voice.state === 'listening' ? (
               <>
@@ -267,15 +267,15 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
                     <span key={i} style={{ transform: `scaleY(${0.15 + voice.level * w})` }} />
                   ))}
                 </span>
-                <span>Listening. Let go of Space to finish, Esc to cancel</span>
+                <span>{tr('composer.voiceListening')}</span>
               </>
             ) : (
               <>
                 <Icon name="loading" className="codicon-modifier-spin" />
                 <span>
                   {voice.model?.status === 'downloading'
-                    ? `Downloading the speech model, one time only (${voice.model.progress ?? 0}%)`
-                    : 'Transcribing…'}
+                    ? tr('composer.voiceDownloading', { percent: voice.model.progress ?? 0 })
+                    : tr('composer.voiceTranscribing')}
                 </span>
               </>
             )}
@@ -294,7 +294,7 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
         )}
         {predicted && (
           <span className="predicted-hint small" aria-hidden>
-            <kbd>Tab</kbd> send · <kbd>→</kbd> edit
+            <kbd>{tr('composer.predictedTabKey')}</kbd> {tr('composer.predictedSend')} · <kbd>→</kbd> {tr('composer.predictedEdit')}
           </span>
         )}
         <textarea
@@ -302,7 +302,7 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
           value={text}
           rows={currentAsk ? 1 : 3}
           className={predicted ? 'has-prediction' : undefined}
-          placeholder={currentAsk ? (targets.length > 1 ? `Answer the ${targets.length} questions` : 'Type an answer') : predicted ?? (canSend ? 'Message Claude' : 'Starting session…')}
+          placeholder={currentAsk ? (targets.length > 1 ? tr('composer.placeholderAnswerAll', { count: targets.length }) : tr('composer.placeholderAnswer')) : predicted ?? (canSend ? tr('composer.placeholderMessage') : tr('composer.placeholderStarting'))}
           onChange={(e) => {
             setText(e.target.value)
             setPick(0)
@@ -332,30 +332,30 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
           }}
         />
         <div className="composer-actions">
-          <button className="icon-btn" title="Attach files (or drop them anywhere on the window, or paste a screenshot)" aria-label="Attach files" onClick={() => void window.glassbox.attachments.pick().then((p) => p.length && attach(p))}>
+          <button className="icon-btn" title={tr('composer.attachFilesTitle')} aria-label={tr('composer.attachFiles')} onClick={() => void window.glassbox.attachments.pick().then((p) => p.length && attach(p))}>
             <Icon name="attach" />
           </button>
           {!everyday && (
-            <button className="icon-btn" title="Mark project files Claude must read, edit or leave alone" onClick={() => showPanel('explorer')}>
+            <button className="icon-btn" title={tr('composer.markFilesTitle')} onClick={() => showPanel('explorer')}>
               <Icon name="files" />
             </button>
           )}
-          <button className="icon-btn" title="Skills" onClick={() => showPanel('skills')}>
+          <button className="icon-btn" title={tr('composer.skills')} onClick={() => showPanel('skills')}>
             <Icon name="library" />
           </button>
           <button
             className={planFirst ? 'chip-btn on' : 'chip-btn'}
-            title="Claude proposes a plan and waits for your approval before changing anything"
+            title={tr('composer.planFirstTitle')}
             onClick={() => setPlanFirst(!planFirst)}
           >
-            <Icon name="checklist" /> Plan first
+            <Icon name="checklist" /> {tr('composer.planFirst')}
           </button>
           {s.mode === 'plan' && (
             <span className="muted small">
-              Planning, no edits until you approve.{' '}
+              {tr('composer.planning')}{' '}
               {s.status === 'ready' && (
                 <button className="link" onClick={() => void window.glassbox.session.exitPlan(tab.id)}>
-                  Exit plan mode
+                  {tr('composer.exitPlanMode')}
                 </button>
               )}
             </span>
@@ -363,18 +363,18 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
           <span className="spacer" />
           <button
             className={voice.state === 'listening' || voice.state === 'starting' ? 'icon-btn mic on' : 'icon-btn mic'}
-            title={voice.state === 'listening' || voice.state === 'starting' ? 'Stop and transcribe' : 'Speak to Claude (or hold Space). Transcribed on this machine'}
+            title={voice.state === 'listening' || voice.state === 'starting' ? tr('composer.micStop') : tr('composer.micStart')}
             disabled={voice.state === 'transcribing'}
             onClick={() => (voice.state === 'listening' || voice.state === 'starting' ? void finishVoice() : startVoice())}
           >
             <Icon name={voice.state === 'listening' || voice.state === 'starting' ? 'debug-stop' : 'mic'} />
           </button>
-          {s.status === 'running' && text.trim() && <span className="hint">Sends when Claude finishes this step</span>}
+          {s.status === 'running' && text.trim() && <span className="hint">{tr('composer.queuedHint')}</span>}
           {/* While Claude or its agents work and the box is empty, Send becomes Stop; typing turns it back into Send (queued). */}
           {(s.status === 'running' || stoppableTasks(s).length > 0) && !text.trim() && !attached.length ? (
             <StopButton />
           ) : (
-            <button className="primary send" disabled={!canSend || (!text.trim() && !attached.length)} onClick={() => void submit()} title="Send">
+            <button className="primary send" disabled={!canSend || (!text.trim() && !attached.length)} onClick={() => void submit()} title={tr('composer.send')}>
               <Icon name="send" />
             </button>
           )}

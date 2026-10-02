@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { buildLaunch, jiraKey, KINDS, type LaunchFields, type PendingStart, type SessionKind } from '../launch'
 import { baseName, timeAgo } from '../lib'
 import { Icon, Segmented } from './ui'
+import { tr } from '../../../shared/i18n'
 
 type Pr = { number: number; title: string; author: string; branch: string; isDraft: boolean; url: string; updatedAt: string; reviewRequested: boolean }
 
@@ -49,13 +50,13 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
 
   // What Start is waiting for, said next to it rather than left as a greyed-out button.
   const missing = !cwd
-    ? 'Pick a project folder'
+    ? tr('newSessionDialog.missing.folder')
     : kind === 'coding' && !f.ticket?.trim() && !f.describe?.trim()
-      ? 'Add a ticket or describe the change'
+      ? tr('newSessionDialog.missing.ticket')
       : kind === 'review' && !f.pr
-        ? 'Pick a pull request'
+        ? tr('newSessionDialog.missing.pr')
         : (kind === 'planning' || kind === 'prd') && !f.topic?.trim()
-          ? 'Say what it’s about'
+          ? tr('newSessionDialog.missing.topic')
           : null
 
   const launch = async () => {
@@ -64,15 +65,15 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
     let dir = cwd
     try {
       if (kind === 'review' && f.pr && f.worktree) {
-        setBusy(`Checking out #${f.pr.number} into a worktree…`)
+        setBusy(tr('newSessionDialog.busy.checkoutPr', { number: f.pr.number }))
         dir = await window.glassbox.launch.worktree(cwd, f.pr.number)
       }
       let fields = f
       if (sharing > 0 && ownCopy && changesFiles) {
         const branch = f.branch?.trim() || `${jiraKey(f.ticket ?? '') ?? 'session'}-${Date.now().toString(36).slice(-5)}`
-        setBusy('Getting the latest from the default branch…')
+        setBusy(tr('newSessionDialog.busy.fetching'))
         await window.glassbox.git.fetchDefault(cwd).catch(() => {})
-        setBusy(`Checking out its own copy on ${branch} (a big repo takes a little while)…`)
+        setBusy(tr('newSessionDialog.busy.ownCopy', { branch }))
         dir = await window.glassbox.git.worktree(cwd, branch)
         fields = { ...f, branch }
       }
@@ -91,21 +92,21 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog launcher" role="dialog" aria-label="New session">
+      <div className="dialog launcher" role="dialog" aria-label={tr('newSessionDialog.title')}>
         <div className="dialog-title">
-          <span>New session</span>
+          <span>{tr('newSessionDialog.title')}</span>
           <span className="spacer" />
-          <button className="icon-btn" title="Close" onClick={onClose}>
+          <button className="icon-btn" title={tr('newSessionDialog.close')} onClick={onClose}>
             <Icon name="close" />
           </button>
         </div>
 
         <div className="launch-section">
-          <div className="launch-label">Project</div>
+          <div className="launch-label">{tr('newSessionDialog.project')}</div>
           <div className="launch-project">
             <Icon name="folder" />
-            <span className="grow ellipsis" title={cwd}>{cwd ? <><strong>{baseName(cwd)}</strong> <span className="muted small">{cwd}</span></> : <span className="muted">Choose a folder</span>}</span>
-            <button onClick={() => void pick()}>Browse</button>
+            <span className="grow ellipsis" title={cwd}>{cwd ? <><strong>{baseName(cwd)}</strong> <span className="muted small">{cwd}</span></> : <span className="muted">{tr('newSessionDialog.chooseFolder')}</span>}</span>
+            <button onClick={() => void pick()}>{tr('newSessionDialog.browse')}</button>
           </div>
           {recent.length > 0 && (
             <div className="chips-row flush">
@@ -119,7 +120,7 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
         </div>
 
         <div className="launch-section">
-          <div className="launch-label">What are you doing?</div>
+          <div className="launch-label">{tr('newSessionDialog.whatDoing')}</div>
           <div className="kind-grid">
             {KINDS.map((k) => (
               <button key={k.kind} className={k.kind === kind ? 'kind active' : 'kind'} onClick={() => setKind(k.kind)}>
@@ -135,30 +136,30 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
           {kind === 'coding' && (
             <>
               <label className="field">
-                <span>Ticket</span>
-                <input autoFocus placeholder="Paste a Jira link or key (NSD-1234), a GitHub issue, or leave empty and describe it below" value={f.ticket ?? ''} onChange={(e) => set({ ticket: e.target.value })} />
+                <span>{tr('newSessionDialog.ticket')}</span>
+                <input autoFocus placeholder={tr('newSessionDialog.ticketPlaceholder')} value={f.ticket ?? ''} onChange={(e) => set({ ticket: e.target.value })} />
                 {f.ticket?.trim() && (
                   <span className="field-hint">
                     {jiraKey(f.ticket) ? (
-                      <><Icon name="check" className="ok" /> Jira {jiraKey(f.ticket)}. Claude reads the ticket and finds the related code first, so a description isn’t needed.</>
+                      <><Icon name="check" className="ok" /> {tr('newSessionDialog.jiraHint', { key: jiraKey(f.ticket) })}</>
                     ) : (
-                      <><Icon name="info" /> Claude fetches this and anything it links to, then finds the related code.</>
+                      <><Icon name="info" /> {tr('newSessionDialog.linkHint')}</>
                     )}
                   </span>
                 )}
               </label>
               <label className="field">
-                <span>{f.ticket?.trim() ? 'Notes (optional)' : 'What to build'}</span>
-                <textarea rows={3} placeholder={f.ticket?.trim() ? 'Anything the ticket doesn’t say' : 'Describe the change'} value={f.describe ?? ''} onChange={(e) => set({ describe: e.target.value })} />
+                <span>{f.ticket?.trim() ? tr('newSessionDialog.notesOptional') : tr('newSessionDialog.whatToBuild')}</span>
+                <textarea rows={3} placeholder={f.ticket?.trim() ? tr('newSessionDialog.notesPlaceholder') : tr('newSessionDialog.describePlaceholder')} value={f.describe ?? ''} onChange={(e) => set({ describe: e.target.value })} />
               </label>
               <div className="field-row">
                 <label className="field grow">
-                  <span>Branch (optional)</span>
-                  <input className="mono" placeholder="NSD-1234-short-description" value={f.branch ?? ''} onChange={(e) => set({ branch: e.target.value })} />
+                  <span>{tr('newSessionDialog.branchOptional')}</span>
+                  <input className="mono" placeholder={tr('newSessionDialog.branchPlaceholder')} value={f.branch ?? ''} onChange={(e) => set({ branch: e.target.value })} />
                 </label>
                 <div className="field">
-                  <span>Start with</span>
-                  <Segmented value={f.startWith ?? 'plan'} onChange={(v) => set({ startWith: v })} options={[{ value: 'plan', label: 'A plan to approve' }, { value: 'code', label: 'Writing code' }]} />
+                  <span>{tr('newSessionDialog.startWith')}</span>
+                  <Segmented value={f.startWith ?? 'plan'} onChange={(v) => set({ startWith: v })} options={[{ value: 'plan', label: tr('newSessionDialog.startPlan') }, { value: 'code', label: tr('newSessionDialog.startCode') }]} />
                 </div>
               </div>
             </>
@@ -167,21 +168,21 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
           {(kind === 'planning' || kind === 'prd') && (
             <>
               <label className="field">
-                <span>{kind === 'prd' ? 'Feature or product' : 'What do you want to think through?'}</span>
-                <input autoFocus placeholder={kind === 'prd' ? 'e.g. Supplier risk scoring' : 'e.g. How should we split the monolith’s notifications?'} value={f.topic ?? ''} onChange={(e) => set({ topic: e.target.value })} />
+                <span>{kind === 'prd' ? tr('newSessionDialog.featureOrProduct') : tr('newSessionDialog.thinkThrough')}</span>
+                <input autoFocus placeholder={kind === 'prd' ? tr('newSessionDialog.prdPlaceholder') : tr('newSessionDialog.planningPlaceholder')} value={f.topic ?? ''} onChange={(e) => set({ topic: e.target.value })} />
               </label>
               <label className="field">
-                <span>Context and links (optional)</span>
-                <textarea rows={3} placeholder="Background, constraints, Jira epics, Confluence pages, Figma links…" value={f.context ?? ''} onChange={(e) => set({ context: e.target.value })} />
+                <span>{tr('newSessionDialog.contextOptional')}</span>
+                <textarea rows={3} placeholder={tr('newSessionDialog.contextPlaceholder')} value={f.context ?? ''} onChange={(e) => set({ context: e.target.value })} />
               </label>
               {kind === 'prd' && (
                 <label className="check">
-                  <input type="checkbox" checked={!!f.confluence} onChange={(e) => set({ confluence: e.target.checked })} /> Publish to Confluence once I approve the draft
+                  <input type="checkbox" checked={!!f.confluence} onChange={(e) => set({ confluence: e.target.checked })} /> {tr('newSessionDialog.publishConfluence')}
                 </label>
               )}
             </>
           )}
-          {kind === 'blank' && <p className="muted small">Opens an empty session in {cwd ? baseName(cwd) : 'the folder you pick'}.</p>}
+          {kind === 'blank' && <p className="muted small">{tr('newSessionDialog.blankHint', { folder: cwd ? baseName(cwd) : tr('newSessionDialog.folderYouPick') })}</p>}
         </div>
 
         {sharing > 0 && changesFiles && (
@@ -189,11 +190,11 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
             <Icon name="warning" className="warn" />
             <div className="grow">
               <strong>
-                {sharing === 1 ? 'Another session is' : `${sharing} other sessions are`} already working in {baseName(cwd)}.
+                {tr('newSessionDialog.sharing', { count: sharing, folder: baseName(cwd) })}
               </strong>
-              <span className="muted small"> Sharing one folder, sessions see each other's changes and a branch switch in one moves the other.</span>
+              <span className="muted small"> {tr('newSessionDialog.sharingNote')}</span>
               <label className="check">
-                <input type="checkbox" checked={ownCopy} onChange={(e) => setOwnCopy(e.target.checked)} /> Give this session its own copy of the repo (a git worktree, kept inside the repo under .claude/worktrees{f.branch?.trim() ? `, on ${f.branch.trim()}` : ''})
+                <input type="checkbox" checked={ownCopy} onChange={(e) => setOwnCopy(e.target.checked)} /> {f.branch?.trim() ? tr('newSessionDialog.ownCopyOnBranch', { branch: f.branch.trim() }) : tr('newSessionDialog.ownCopy')}
               </label>
             </div>
           </div>
@@ -202,9 +203,9 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
         <div className="dialog-actions">
           {busy ? <span className="muted small"><Icon name="loading" className="codicon-modifier-spin" /> {busy}</span> : missing && <span className="muted small">{missing}</span>}
           <span className="spacer" />
-          <button onClick={onClose}>Cancel</button>
+          <button onClick={onClose}>{tr('newSessionDialog.cancel')}</button>
           <button className="primary" disabled={!valid || !!busy} onClick={() => void launch()}>
-            Start session
+            {tr('newSessionDialog.start')}
           </button>
         </div>
       </div>
@@ -261,10 +262,10 @@ function PrPicker({ cwd, selected, onSelect, worktree, onWorktree }: { cwd: stri
     <>
       <div className="search">
         <Icon name="search" />
-        <input autoFocus placeholder="Search open pull requests, or paste a PR link or number" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input autoFocus placeholder={tr('newSessionDialog.prPicker.searchPlaceholder')} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <div className="pr-list">
-        {lookup?.loading && <div className="muted small pad-x"><Icon name="loading" className="codicon-modifier-spin" /> Looking up that pull request…</div>}
+        {lookup?.loading && <div className="muted small pad-x"><Icon name="loading" className="codicon-modifier-spin" /> {tr('newSessionDialog.prPicker.lookingUp')}</div>}
         {lookup?.error && <div className="note note-error">{lookup.error}</div>}
         {lookup?.pr && (() => {
           const p = lookup.pr
@@ -275,35 +276,35 @@ function PrPicker({ cwd, selected, onSelect, worktree, onWorktree }: { cwd: stri
               <span className="grow pr-main">
                 <span className="ellipsis">{p.title}</span>
                 <span className="muted small">
-                  {same ? '' : `${p.repo} `}#{p.number} by {p.author}, updated {timeAgo(Date.parse(p.updatedAt))}
+                  {same ? tr('newSessionDialog.prPicker.meta', { number: p.number, author: p.author, when: timeAgo(Date.parse(p.updatedAt)) }) : tr('newSessionDialog.prPicker.metaOtherRepo', { repo: p.repo, number: p.number, author: p.author, when: timeAgo(Date.parse(p.updatedAt)) })}
                 </span>
               </span>
-              {p.state !== 'OPEN' && <span className="tag">{p.state === 'MERGED' ? 'Merged' : 'Closed'}</span>}
-              {!same && <span className="tag">Other repo</span>}
+              {p.state !== 'OPEN' && <span className="tag">{p.state === 'MERGED' ? tr('newSessionDialog.prPicker.merged') : tr('newSessionDialog.prPicker.closed')}</span>}
+              {!same && <span className="tag">{tr('newSessionDialog.prPicker.otherRepo')}</span>}
             </button>
           )
         })()}
-        {!prs && !error && <div className="muted small pad-x">Loading pull requests…</div>}
+        {!prs && !error && <div className="muted small pad-x">{tr('newSessionDialog.prPicker.loading')}</div>}
         {error && <div className="note note-error">{error}</div>}
-        {prs && !shown.length && !error && <div className="muted small pad-x">No open pull requests match.</div>}
+        {prs && !shown.length && !error && <div className="muted small pad-x">{tr('newSessionDialog.prPicker.noMatches')}</div>}
         {shown.map((p) => (
           <button key={p.number} className={p.url === selected ? 'pr-row selected' : 'pr-row'} onClick={() => pick({ number: p.number, title: p.title, url: p.url }, true)}>
             <Icon name={p.isDraft ? 'git-pull-request-draft' : 'git-pull-request'} className={p.reviewRequested ? 'accent' : 'muted'} />
             <span className="grow pr-main">
               <span className="ellipsis">{p.title}</span>
               <span className="muted small">
-                #{p.number} by {p.author}, updated {timeAgo(Date.parse(p.updatedAt))}
+                {tr('newSessionDialog.prPicker.meta', { number: p.number, author: p.author, when: timeAgo(Date.parse(p.updatedAt)) })}
               </span>
             </span>
-            {p.reviewRequested && <span className="tag accent">Your review</span>}
-            {p.isDraft && <span className="tag">Draft</span>}
+            {p.reviewRequested && <span className="tag accent">{tr('newSessionDialog.prPicker.yourReview')}</span>}
+            {p.isDraft && <span className="tag">{tr('newSessionDialog.prPicker.draft')}</span>}
           </button>
         ))}
       </div>
-      <label className={otherRepo ? 'check disabled' : 'check'} title={otherRepo ? 'Only pull requests from this folder’s repo can be checked out here' : undefined}>
-        <input type="checkbox" checked={worktree} disabled={otherRepo} onChange={(e) => onWorktree(e.target.checked)} /> Check it out in a separate worktree so Claude can run its tests
+      <label className={otherRepo ? 'check disabled' : 'check'} title={otherRepo ? tr('newSessionDialog.prPicker.otherRepoTip') : undefined}>
+        <input type="checkbox" checked={worktree} disabled={otherRepo} onChange={(e) => onWorktree(e.target.checked)} /> {tr('newSessionDialog.prPicker.worktree')}
       </label>
-      {otherRepo && <div className="muted small">This pull request is in another repo, so Claude reviews it from its link.</div>}
+      {otherRepo && <div className="muted small">{tr('newSessionDialog.prPicker.otherRepoNote')}</div>}
     </>
   )
 }

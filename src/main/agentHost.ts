@@ -33,6 +33,7 @@ import { cachedScan, importTargets, warmScan } from './architecture'
 import { isPublicEntry } from '../shared/architecture'
 import { isReadOnlyShell } from '../shared/readonlyShell'
 import type { BrowserBridge } from './browserTools'
+import { tr } from '../shared/i18n'
 
 const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification']
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
@@ -368,7 +369,7 @@ export class AgentHost {
       // Connectors finish connecting in the background; re-poll so statuses settle.
       for (const delay of [0, 4000, 12000]) setTimeout(() => void this.refreshMcp(), delay)
     } catch (err) {
-      if (!this.abort.signal.aborted) this.emit({ kind: 'error', message: `Session failed to start: ${String(err)}` })
+      if (!this.abort.signal.aborted) this.emit({ kind: 'error', message: tr('mainAgentHost.failedToStart', { error: String(err) }) })
     }
   }
 
@@ -503,14 +504,14 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       // session's work on the wrong branch.
       const now = (await gitInfo(this.cwd)).branch
       if (this.turnBranch && now && now !== this.turnBranch) {
-        this.emit({ kind: 'commits', commits: [], skipped: `Not committing: the branch changed from ${this.turnBranch} to ${now} during this turn (probably another session in this folder). Your changes are still in the working tree.` })
+        this.emit({ kind: 'commits', commits: [], skipped: tr('mainAgentHost.branchChanged', { from: this.turnBranch, to: now }) })
         return
       }
       // Never commit a file another session in this folder has also changed: it may hold their work.
       const peers = this.peers()
       const shared = files.filter((f) => peers.some((h) => h.owns(isAbsolute(f) ? f : resolve(this.cwd, f))))
       const mine = files.filter((f) => !shared.includes(f))
-      if (shared.length) this.emit({ kind: 'alert', level: 'warn', text: `Not auto-committing ${shared.length} file${shared.length === 1 ? '' : 's'} another session in this folder also changed: ${shared.slice(0, 4).map((p) => p.replace(/\\/g, '/').split('/').pop()).join(', ')}. Commit ${shared.length === 1 ? 'it' : 'them'} yourself once you've checked whose changes they are.` })
+      if (shared.length) this.emit({ kind: 'alert', level: 'warn', text: tr('mainAgentHost.notAutoCommitting', { count: shared.length, files: shared.slice(0, 4).map((p) => p.replace(/\\/g, '/').split('/').pop()).join(', ') }) })
       if (!mine.length) return
       const result = await autoCommit(this.cwd, mine, this.currentTask)
       if (result.commits.length || result.skipped || result.error) this.emit({ kind: 'commits', ...result })
@@ -740,8 +741,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       kind: 'alert',
       level: 'warn',
       text: this.openTools.size
-        ? `A step has been running for ${Math.round((now - oldestTool) / 60_000)} minutes. If it shouldn’t take this long, stop it.`
-        : `Nothing from Claude for ${Math.round((now - this.lastActivity) / 60_000)} minutes. It may be stuck; stop it and ask again if so.`
+        ? tr('mainAgentHost.stepRunningLong', { minutes: Math.round((now - oldestTool) / 60_000) })
+        : tr('mainAgentHost.nothingFromClaude', { minutes: Math.round((now - this.lastActivity) / 60_000) })
     })
   }
 
@@ -835,7 +836,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
           this.emit({
             kind: 'alert',
             level: 'warn',
-            text: `${theirs.length + unclear.length} file${theirs.length + unclear.length === 1 ? '' : 's'} changed during that command by another session working in this same folder${unclear.length ? ' (or while it was running a command too)' : ''}, so ${theirs.length + unclear.length === 1 ? 'it isn’t' : 'they aren’t'} counted or committed as this session’s: ${[...theirs, ...unclear].slice(0, 4).map((p) => p.replace(/\\/g, '/').split('/').pop()).join(', ')}. Give each session its own copy of the repo to keep their work apart.`
+            text: tr('mainAgentHost.changedByOtherSession', { count: theirs.length + unclear.length, alsoRunning: unclear.length ? tr('mainAgentHost.alsoRunningCommand') : '', files: [...theirs, ...unclear].slice(0, 4).map((p) => p.replace(/\\/g, '/').split('/').pop()).join(', ') })
           })
         for (const p of changed) this.editTimes.set(norm(p), now)
         if (changed.length) {

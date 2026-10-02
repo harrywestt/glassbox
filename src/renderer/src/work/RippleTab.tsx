@@ -3,6 +3,7 @@ import { useSession } from '../views/SessionView'
 import { dependentsOf, moduleOf } from '../../../shared/architecture'
 import { useArchitecture, isEditTouch } from '../architecture'
 import { Segmented } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 import './RippleTab.css'
 
 const CX = 320, CY = 230
@@ -55,14 +56,14 @@ export function RippleTab({ module, path, onPick }: { module?: string; path?: st
     return { depth, pos, mod, reached, untested }
   }, [arch, target])
 
-  if (!arch) return <div className="ripple-empty">Mapping the project…</div>
-  if (!target || !graph) return <div className="ripple-empty">Nothing changed yet. Ripple shows what depends on the code Claude changes.</div>
+  if (!arch) return <div className="ripple-empty">{tr('rippleTab.mapping')}</div>
+  if (!target || !graph) return <div className="ripple-empty">{tr('rippleTab.empty')}</div>
   const t = graph.mod(target)
 
   return (
     <div className="ripple-view">
       <div className="ripple-canvas">
-        <svg key={target} ref={svgRef} viewBox="-80 0 800 460" style={{ ['--rs' as string]: scale }} role="img" aria-label={`Modules that depend on ${t.name}`}>
+        <svg key={target} ref={svgRef} viewBox="-80 0 800 460" style={{ ['--rs' as string]: scale }} role="img" aria-label={tr('rippleTab.diagramLabel', { name: t.name })}>
           {[0, 1, 2].map((i) => <ellipse key={i} className="ripple-wave" cx={CX} cy={CY} rx={40} ry={26} style={{ animationDelay: `${i * 0.45}s` }} />)}
           {arch.edges.map((e) => {
             const a = graph.pos.get(e.from), b = graph.pos.get(e.to)
@@ -78,7 +79,7 @@ export function RippleTab({ module, path, onPick }: { module?: string; path?: st
                 <text x={p.x} y={p.y + (id === target ? 33 : 28)} textAnchor="middle">
                   <tspan className="ripple-name">{m.name}</tspan>
                   {/* The path's offset is in ems, so the two lines never collide at any zoom. */}
-                  <tspan className="ripple-path" x={p.x} dy="1.25em">{m.path || '(root)'}</tspan>
+                  <tspan className="ripple-path" x={p.x} dy="1.25em">{m.path || tr('rippleTab.root')}</tspan>
                 </text>
               </g>
             )
@@ -86,13 +87,13 @@ export function RippleTab({ module, path, onPick }: { module?: string; path?: st
         </svg>
       </div>
       <aside className="ripple-aside">
-        <h3 className="ripple-title">What depends on {t.name}</h3>
+        <h3 className="ripple-title">{tr('rippleTab.title', { name: t.name })}</h3>
         <dl className="ripple-counts">
-          <dt><span className="ripple-key changed" />Changed</dt><dd>1</dd>
-          <dt><span className="ripple-key covered" />Reached, has tests</dt><dd>{graph.reached.length - graph.untested.length}</dd>
-          <dt><span className="ripple-key untested" />Reached, no tests</dt><dd>{graph.untested.length}</dd>
+          <dt><span className="ripple-key changed" />{tr('rippleTab.changed')}</dt><dd>1</dd>
+          <dt><span className="ripple-key covered" />{tr('rippleTab.reachedTested')}</dt><dd>{graph.reached.length - graph.untested.length}</dd>
+          <dt><span className="ripple-key untested" />{tr('rippleTab.reachedUntested')}</dt><dd>{graph.untested.length}</dd>
         </dl>
-        {graph.reached.length === 0 && <p className="ripple-note">Nothing else in the project imports {t.path || 'this module'}.</p>}
+        {graph.reached.length === 0 && <p className="ripple-note">{tr('rippleTab.noDependents', { path: t.path || tr('rippleTab.thisModule') })}</p>}
         {graph.untested.length > 0 && (
           <>
             <ul className="ripple-list">
@@ -102,13 +103,13 @@ export function RippleTab({ module, path, onPick }: { module?: string; path?: st
               className="btn primary"
               onClick={() => composerRef.current?.insert(`Write tests covering how ${graph.untested.map((id) => graph.mod(id).path).join(', ')} use ${t.path} after this change.`)}
             >
-              Ask Claude to cover {graph.untested.length}
+              {tr('rippleTab.askCover', { n: graph.untested.length })}
             </button>
           </>
         )}
         {changed.length > 1 && (
           <div className="ripple-pick">
-            <span className="ripple-pick-label">Show dependencies of</span>
+            <span className="ripple-pick-label">{tr('rippleTab.showDependenciesOf')}</span>
             <Segmented<string> value={target} onChange={onPick} options={changed.slice(0, 4).map((id) => ({ value: id, label: graph.mod(id)?.name ?? arch.modules.find((m) => m.id === id)?.name ?? id }))} />
           </div>
         )}

@@ -3,6 +3,7 @@ import { useSession } from '../views/SessionView'
 import { tabTitle } from '../tabs'
 import { Icon } from '../components/ui'
 import { sessionBrief } from '../side'
+import { tr } from '../../../shared/i18n'
 
 /** Let other people see what this session is doing: a live read-only link, or a status post. */
 export function ShareMenu() {
@@ -54,7 +55,7 @@ export function ShareMenu() {
     const where = target.trim()
     runSide({
       kind: 'status',
-      title: `Status update to ${where}`,
+      title: tr('shareMenu.statusTaskTitle', { where }),
       tools: [],
       prompt: `Post a short status update about the main session to ${where} using the right connector. Cover what's done, what's in progress, what's next, and any blockers or open questions, in under eight lines, written for teammates who haven't seen the session. Glassbox will ask the user to approve the post before it goes out.`
     })
@@ -64,61 +65,61 @@ export function ShareMenu() {
 
   return (
     <div className="share" ref={ref}>
-      <button className={link ? 'run-btn live' : 'run-btn ghost'} onClick={() => setOpen(!open)} title="Share this session">
-        <Icon name={link ? 'broadcast' : 'live-share'} /> {link ? 'Live' : 'Share'}
+      <button className={link ? 'run-btn live' : 'run-btn ghost'} onClick={() => setOpen(!open)} title={tr('shareMenu.shareTitle')}>
+        <Icon name={link ? 'broadcast' : 'live-share'} /> {link ? tr('shareMenu.live') : tr('shareMenu.share')}
       </button>
       {open && (
         <div className="popover share-pop">
           <div className="pop-section">
-            <div className="pop-title">Hand it off</div>
-            <p className="muted small">A short message for a teammate: the PR, what it does in three sentences at most, and the link. Copied as soon as it’s written.</p>
+            <div className="pop-title">{tr('shareMenu.handoffTitle')}</div>
+            <p className="muted small">{tr('shareMenu.handoffNote')}</p>
             {handoff?.error && <div className="note note-error">{handoff.error}</div>}
             {handoff?.text && (
               <>
                 <textarea className="handoff-text" rows={5} value={handoff.text} onChange={(e) => setHandoff({ ...handoff, text: e.target.value })} />
-                {!handoff.prUrl && <p className="muted small">No PR found for this branch, so there’s no link. Open one and write it again to include it.</p>}
+                {!handoff.prUrl && <p className="muted small">{tr('shareMenu.noPr')}</p>}
               </>
             )}
             <div className="row-actions">
               <span className="spacer" />
               {handoff?.text && (
                 <button onClick={() => copy(handoff.text)}>
-                  <Icon name={copied ? 'check' : 'copy'} /> Copy
+                  <Icon name={copied ? 'check' : 'copy'} /> {tr('shareMenu.copy')}
                 </button>
               )}
               <button className="primary" disabled={writing} onClick={() => void writeHandoff()}>
-                {writing ? <><Icon name="loading" className="codicon-modifier-spin" /> Writing…</> : handoffCopied ? <><Icon name="check" /> Copied</> : <><Icon name="copy" /> {handoff?.text ? 'Write again' : 'Copy a handoff message'}</>}
+                {writing ? <><Icon name="loading" className="codicon-modifier-spin" /> {tr('shareMenu.writing')}</> : handoffCopied ? <><Icon name="check" /> {tr('shareMenu.copied')}</> : <><Icon name="copy" /> {handoff?.text ? tr('shareMenu.writeAgain') : tr('shareMenu.copyHandoff')}</>}
               </button>
             </div>
           </div>
           <div className="pop-section">
-            <div className="pop-title">Live view</div>
-            <p className="muted small">A read-only page anyone on your network can open to watch this session. It shows activity and decisions, never file contents.</p>
+            <div className="pop-title">{tr('shareMenu.liveViewTitle')}</div>
+            <p className="muted small">{tr('shareMenu.liveViewNote')}</p>
             {link ? (
               <>
                 {[link.lanUrl, link.url].filter(Boolean).map((u) => (
                   <div key={u} className="link-row">
                     <span className="mono small ellipsis grow">{u}</span>
-                    <button className="icon-btn" title="Copy" onClick={() => copy(u!)}><Icon name={copied ? 'check' : 'copy'} /></button>
-                    <button className="icon-btn" title="Open" onClick={() => void window.glassbox.openExternal(u!)}><Icon name="link-external" /></button>
+                    <button className="icon-btn" title={tr('shareMenu.copy')} onClick={() => copy(u!)}><Icon name={copied ? 'check' : 'copy'} /></button>
+                    <button className="icon-btn" title={tr('shareMenu.open')} onClick={() => void window.glassbox.openExternal(u!)}><Icon name="link-external" /></button>
                   </div>
                 ))}
                 <div className="row-actions">
-                  <span className="muted small">Windows may ask to allow Glassbox on private networks the first time.</span>
+                  <span className="muted small">{tr('shareMenu.firewallNote')}</span>
                   <span className="spacer" />
-                  <button onClick={() => void stop()}>Stop sharing</button>
+                  <button onClick={() => void stop()}>{tr('shareMenu.stopSharing')}</button>
                 </div>
               </>
             ) : (
-              <button className="primary" onClick={() => void share()}><Icon name="broadcast" /> Start live view</button>
+              <button className="primary" onClick={() => void share()}><Icon name="broadcast" /> {tr('shareMenu.startLiveView')}</button>
             )}
           </div>
           <div className="pop-section">
-            <div className="pop-title">Post a status update</div>
-            <p className="muted small">Claude writes it in the background, and you approve the post before it’s sent.</p>
+            <div className="pop-title">{tr('shareMenu.statusTitle')}</div>
+            <p className="muted small">{tr('shareMenu.statusNote')}</p>
             <div className="link-row">
-              <input className="grow" placeholder="#team-channel in Slack, or a Jira ticket like NSD-1234" value={target} onChange={(e) => setTarget(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && target.trim() && canSend && post()} />
-              <button className="primary" disabled={!target.trim() || !canSend} onClick={post}>Draft</button>
+              <input className="grow" placeholder={tr('shareMenu.statusPlaceholder')} value={target} onChange={(e) => setTarget(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && target.trim() && canSend && post()} />
+              <button className="primary" disabled={!target.trim() || !canSend} onClick={post}>{tr('shareMenu.draft')}</button>
             </div>
           </div>
         </div>

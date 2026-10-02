@@ -1,5 +1,6 @@
 import { deflateSync } from 'node:zlib'
 import { Menu, nativeImage, Tray, type MenuItemConstructorOptions, type NativeImage } from 'electron'
+import { tr } from '../shared/i18n'
 
 export type TrayState = 'working' | 'waiting' | 'needs-you' | 'error' | 'idle'
 export type TraySession = { tabId: string; title: string; state: TrayState }
@@ -8,11 +9,11 @@ export type TraySession = { tabId: string; title: string; state: TrayState }
 const PRIORITY: TrayState[] = ['needs-you', 'error', 'working', 'waiting', 'idle']
 
 const WORDS: Record<TrayState, string> = {
-  'needs-you': 'needs you',
-  error: 'error',
-  working: 'working',
-  waiting: 'waiting',
-  idle: 'idle'
+  'needs-you': tr('mainTray.state.needsYou'),
+  error: tr('mainTray.state.error'),
+  working: tr('mainTray.state.working'),
+  waiting: tr('mainTray.state.waiting'),
+  idle: tr('mainTray.state.idle')
 }
 
 type Rgb = [number, number, number]
@@ -123,17 +124,17 @@ export function overallState(sessions: TraySession[]): TrayState {
 }
 
 function summaryText(sessions: TraySession[]): string {
-  if (!sessions.length) return 'no sessions'
+  if (!sessions.length) return tr('mainTray.noSessions')
   const parts = PRIORITY.map((s) => [s, sessions.filter((x) => x.state === s).length] as const)
     .filter(([, n]) => n > 0)
-    .map(([s, n]) => `${n} ${WORDS[s]}`)
+    .map(([s, n]) => tr('mainTray.stateCount', { count: n, state: WORDS[s] }))
   return parts.join(', ')
 }
 
 /** Windows caps tray tooltips at 127 characters. */
 function tooltipText(sessions: TraySession[]): string {
-  const lines = [`Glassbox — ${summaryText(sessions)}`]
-  if (sessions.length > 1) for (const s of sessions) lines.push(`${s.title}: ${WORDS[s.state]}`)
+  const lines = [tr('mainTray.tooltip', { summary: summaryText(sessions) })]
+  if (sessions.length > 1) for (const s of sessions) lines.push(tr('mainTray.tooltipSession', { title: s.title, state: WORDS[s.state] }))
   let text = lines.join('\n')
   if (text.length > 127) text = text.slice(0, 126) + '…'
   return text
@@ -167,12 +168,12 @@ export class StatusTray {
     }
     this.tray.setToolTip(tooltipText(sessions))
     const items: MenuItemConstructorOptions[] = sessions.map((s) => ({
-      label: menuLabel(`${s.title} — ${WORDS[s.state]}`),
+      label: menuLabel(tr('mainTray.menuSession', { title: s.title, state: WORDS[s.state] })),
       icon: this.menuIcon(s.state),
       click: () => this.opts.onOpen(s.tabId)
     }))
     if (items.length) items.push({ type: 'separator' })
-    items.push({ label: 'Open Glassbox', click: () => this.opts.onOpen() }, { label: 'Quit', click: () => this.opts.onQuit() })
+    items.push({ label: tr('mainTray.openGlassbox'), click: () => this.opts.onOpen() }, { label: tr('mainTray.quit'), click: () => this.opts.onQuit() })
     this.tray.setContextMenu(Menu.buildFromTemplate(items))
   }
 

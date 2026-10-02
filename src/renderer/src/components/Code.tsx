@@ -5,6 +5,7 @@ import { languageFor, monacoTheme } from '../monaco'
 import { useThemeTokens } from '../App'
 import { CommentBox } from './CommentBox'
 import { Icon } from './ui'
+import { tr } from '../../../shared/i18n'
 import type { CommentTarget } from '../session'
 
 const base = { readOnly: true, minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false, automaticLayout: true }
@@ -112,8 +113,8 @@ export function useSelectionComment(path: string) {
   }
 
   const button = (
-    <button className="chip-btn" title="Select lines in the file, then comment on them" onClick={start}>
-      <Icon name="comment" /> Comment on selection
+    <button className="chip-btn" title={tr('code.commentOnSelectionTip')} onClick={start}>
+      <Icon name="comment" /> {tr('code.commentOnSelection')}
     </button>
   )
   const box = target ? <CommentBox target={target} onDone={() => setTarget(null)} /> : null
