@@ -68,6 +68,60 @@ export type CommentTarget =
   | { kind: 'message'; excerpt: string }
   | { kind: 'plan' }
 
+/**
+ * Work that runs on its own under a tool call that isn't an Agent call (a skill that forks, such as a
+ * review): its steps arrive tagged with that call. Give the call an agent node, so it shows like an
+ * agent, with its steps and progress live in the conversation, instead of one silent line.
+ */
+function asAgent(agents: Record<string, AgentNode>, toolCalls: Record<string, ToolCall>, id: string | null | undefined): Record<string, AgentNode> {
+  if (!id || agents[id]) return agents
+  const call = toolCalls[id]
+  if (!call) return agents
+  const skill = call.name === 'Skill' ? String(call.input.skill ?? call.input.command ?? '') : ''
+  return {
+    ...agents,
+    [id]: {
+      id,
+      type: skill ? 'skill' : call.name,
+      description: skill ? `/${skill.replace(/^\//, '')}` : String(call.input.description ?? ''),
+      prompt: String(call.input.args ?? call.input.prompt ?? ''),
+      parentId: call.agentId,
+      status: call.status === 'running' ? 'running' : call.status,
+      toolCalls: 0,
+      at: call.at
+    }
+  }
+}
+
+/** One item on Claude's own to-do list. `toolId` ties a TaskCreate to its result, which carries the task's id. */
+export type Todo = { id?: string; toolId?: string; label: string; status: 'pending' | 'active' | 'done'; activeForm?: string }
+
+const todoStatus = (s: unknown): Todo['status'] => (s === 'completed' ? 'done' : s === 'in_progress' ? 'active' : 'pending')
+
+/**
+ * The work in hand, for the Tasks section, the map and the dashboard: Claude's own to-do list when it
+ * keeps one (it updates that as it goes), with the files and summary from set_current_task where they
+ * match; otherwise what set_current_task said.
+ */
+export function taskOf(s: SessionState, agentId?: string): { summary: string; steps?: TaskStep[] } | undefined {
+  // A subagent's list is its own; set_current_task only ever describes Claude's main work.
+  if (agentId) {
+    const list = s.agentTodos?.[agentId] ?? []
+    if (!list.length) return undefined
+    const active = list.find((t) => t.status === 'active')
+    const done = list.filter((t) => t.status === 'done').length
+    return { summary: active?.activeForm || active?.label || (done === list.length ? 'All done' : `${done} of ${list.length} done`), steps: list.map((t) => ({ label: t.label, status: t.status })) }
+  }
+  const todos = s.todos ?? []
+  if (!todos.length) return s.task
+  const active = todos.find((t) => t.status === 'active')
+  const done = todos.filter((t) => t.status === 'done').length
+  return {
+    summary: s.task?.summary || active?.activeForm || active?.label || (done === todos.length ? 'All done' : `${done} of ${todos.length} done`),
+    steps: todos.map((t) => ({ label: t.label, status: t.status, files: s.task?.steps?.find((x) => x.label.toLowerCase() === t.label.toLowerCase())?.files }))
+  }
+}
+
 /** A command you ran yourself with "! command". */
 export type Bang = { id: string; command: string; output: string; status: 'running' | 'done' | 'failed'; code?: number | null; at: number; sent?: boolean }
 const BANG_KEEP = 200_000
@@ -190,6 +244,10 @@ export interface SessionState {
   permissions: PermissionRequest[]
   /** Questions Claude asked (AskUserQuestion) that wait for your answers. */
   userQuestions?: { id: string; questions: UserQuestion[] }[]
+  /** Claude's own to-do list (Claude Code's TodoWrite, or TaskCreate/TaskUpdate), as it keeps it. */
+  todos?: Todo[]
+  /** Each subagent's own to-do list, by the agent's id. */
+  agentTodos?: Record<string, Todo[]>
   /** Quick replies to messages you sent while Claude was tied up, by the message's uuid. */
   quickAnswers?: Record<string, { status: 'running' | 'done' | 'failed'; text?: string }>
   raw: { at: number; event: SessionEvent }[]
@@ -259,7 +317,8 @@ export const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']
 export const CHANGE_TOOLS = new Set([...EDIT_TOOLS, 'ShellEdit'])
 const FILE_TOOLS = new Set(['Read', ...EDIT_TOOLS])
 /** Glassbox's own tools are shown through their panels, not as tool rows. */
-const HIDDEN_TOOLS = new Set(['mcp__glassbox__show_progress', 'mcp__glassbox__present_file', 'mcp__glassbox__set_current_task', 'mcp__glassbox__log_decision', 'mcp__glassbox__set_acceptance_criteria', 'mcp__glassbox__report_finding', 'mcp__glassbox__check_in', 'mcp__glassbox__pin_file'])
+/** Bookkeeping steps that show elsewhere (Tasks, decisions…) or say nothing to you: kept out of the conversation and activity. */
+export const HIDDEN_TOOLS = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'ToolSearch', 'mcp__glassbox__show_progress', 'mcp__glassbox__present_file', 'mcp__glassbox__set_current_task', 'mcp__glassbox__log_decision', 'mcp__glassbox__set_acceptance_criteria', 'mcp__glassbox__report_finding', 'mcp__glassbox__check_in', 'mcp__glassbox__pin_file'])
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   const at = Date.now()
@@ -496,6 +555,8 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
       // background, whose tool call returned straight away.
       if (msg.subtype === 'task_started' || msg.subtype === 'task_progress' || msg.subtype === 'task_updated' || msg.subtype === 'task_notification') {
         const m = msg as { subtype: string; task_id: string; tool_use_id?: string; is_backgrounded?: boolean; summary?: string; last_tool_name?: string; usage?: { tool_uses: number }; status?: string; patch?: { status?: string; is_backgrounded?: boolean } }
+        // A task reporting on a call that isn't an Agent call (a forked skill): it shows as an agent from now on.
+        if (m.tool_use_id && !state.agents[m.tool_use_id] && state.toolCalls[m.tool_use_id]) state = { ...state, agents: asAgent(state.agents, state.toolCalls, m.tool_use_id) }
         const a = (m.tool_use_id && state.agents[m.tool_use_id]) || Object.values(state.agents).find((x) => x.taskId === m.task_id)
         if (!a) return state
         const next: AgentNode = { ...a, taskId: m.task_id }
@@ -542,7 +603,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         sessionId: state.sessionId ?? msg.session_id,
         timeline: [...state.timeline],
         toolCalls: { ...state.toolCalls },
-        agents: { ...state.agents },
+        agents: asAgent(state.agents, state.toolCalls, agentId),
         files: [...state.files],
         decisions: state.decisions
       }
@@ -556,6 +617,22 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
           next.toolCalls[block.id] = { id: block.id, name: block.name, input, agentId, status: 'running', at, turn: state.turn }
           if (block.name === 'mcp__glassbox__set_current_task') {
             next.task = { summary: String(input.summary ?? ''), steps: input.steps as TaskStep[] | undefined }
+          }
+          // To-do lists: Claude's own, and each agent's, kept apart.
+          if (block.name === 'TodoWrite' || block.name === 'TaskCreate' || block.name === 'TaskUpdate') {
+            const list = agentId ? (next.agentTodos?.[agentId] ?? []) : (next.todos ?? [])
+            let updated = list
+            if (block.name === 'TodoWrite' && Array.isArray(input.todos))
+              updated = (input.todos as { content?: string; status?: string; activeForm?: string }[]).map((t) => ({ label: String(t.content ?? ''), status: todoStatus(t.status), activeForm: t.activeForm }))
+            if (block.name === 'TaskCreate') updated = [...list, { toolId: block.id, label: String(input.subject ?? ''), status: 'pending', activeForm: input.activeForm as string | undefined }]
+            if (block.name === 'TaskUpdate' && input.taskId != null) {
+              const id = String(input.taskId)
+              updated = list.flatMap((t) =>
+                t.id !== id ? [t] : input.status === 'deleted' ? [] : [{ ...t, ...(input.status ? { status: todoStatus(input.status) } : {}), ...(input.subject ? { label: String(input.subject) } : {}), ...(input.activeForm ? { activeForm: String(input.activeForm) } : {}) }]
+              )
+            }
+            if (agentId) next.agentTodos = { ...next.agentTodos, [agentId]: updated }
+            else next.todos = updated
           }
           if (block.name === 'mcp__glassbox__show_diagram' && typeof input.id === 'string') {
             next.diagrams = { ...next.diagrams, [input.id]: { id: input.id, title: String(input.title ?? input.id), mermaid: String(input.mermaid ?? ''), at } }
@@ -667,6 +744,14 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         const status = block.is_error ? 'error' : 'done'
         const result = contentToText(block.content)
         toolCalls[call.id] = { ...call, status, result, endedAt: fromHistory && !when ? undefined : at }
+        // A task Claude created: its result names the id later updates use.
+        if (call.name === 'TaskCreate') {
+          const structured = (msg as { tool_use_result?: { task?: { id?: string } } }).tool_use_result?.task?.id
+          const id = structured ?? result.match(/#\s*(\w+)/)?.[1] ?? result.match(/\bid\W+(\w+)/i)?.[1]
+          const tag = (l: Todo[]) => l.map((t) => (t.toolId === call.id ? { ...t, id: String(id) } : t))
+          if (id && call.agentId) next = { ...next, agentTodos: { ...next.agentTodos, [call.agentId]: tag(next.agentTodos?.[call.agentId] ?? []) } }
+          else if (id) next = { ...next, todos: tag(next.todos ?? []) }
+        }
         // A background agent's tool result only says it has started; it ends with its own notification.
         const bg = agents[call.id]?.background || /running in the background|launched (successfully )?in the background|async agent/i.test(result.slice(0, 300))
         if (agents[call.id]) agents[call.id] = bg && status === 'done' ? { ...agents[call.id], background: true } : { ...agents[call.id], status, result, endedAt: at }

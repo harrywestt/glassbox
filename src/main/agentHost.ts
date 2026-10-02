@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import { getSessionMessages, getSubagentMessages, type SessionMessage, type CanUseTool, type HookCallback, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { query } from './claude'
 import { GLASSBOX_INSTRUCTIONS, GLASSBOX_TOOLS, createGlassboxServer } from './glassboxMcp'
@@ -27,7 +27,7 @@ import { type UserQuestion,
   type SideStep,
   type ReviewModel
 } from '../shared/events'
-import { showcaseDir } from './showcase'
+import { showcaseDir, skillDeckDir } from './showcase'
 import { loadExtras, saveExtras, type SessionExtras } from './sessionExtras'
 import { cachedScan, importTargets, warmScan } from './architecture'
 import { isPublicEntry } from '../shared/architecture'
@@ -201,7 +201,9 @@ function transcriptTimes(sessionId: string): Map<string, number> {
 /** The SDK turns the Artifact tool off by default; Glassbox sessions get it, as the CLI does. */
 // BROWSER=none: dev tools that would open a browser tab (Create React App, many CLIs) don't;
 // Glassbox shows those pages in its own preview instead.
-const SESSION_ENV = { ...process.env, CLAUDE_CODE_ARTIFACT: '1', BROWSER: 'none' }
+// CLAUDE_CODE_ENABLE_TODO_TOOLS: Claude keeps a to-do list (TaskCreate/TaskUpdate) that Glassbox shows
+// as Tasks; without it, SDK sessions on newer models have no list tools at all.
+const SESSION_ENV = { ...process.env, CLAUDE_CODE_ARTIFACT: '1', BROWSER: 'none', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' }
 
 const isClaudeOwnFile = (full: string) => CLAUDE_OWN_DIRS.some((d) => norm(full).startsWith(d + '/'))
 
@@ -802,6 +804,13 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   private onFileChange: HookCallback = async (input) => {
     void this.refreshGit()
+    // A showcase deck written without showcase_ready (the pr-showcase skill, say) still shows in the Showcase view.
+    if (input.hook_event_name === 'PostToolUse' && input.tool_name === 'Write') {
+      const p = String((input.tool_input as { file_path?: string } | undefined)?.file_path ?? '')
+      const n = p.replace(/\\/g, '/').toLowerCase()
+      if (n.endsWith('.html') && [showcaseDir(), skillDeckDir()].some((d) => n.startsWith(d.replace(/\\/g, '/').toLowerCase() + '/')))
+        this.emit({ kind: 'glassbox', signal: { type: 'showcase', path: p, title: basename(p).replace(/\.html$/i, '').replace(/[-_]+/g, ' ') } })
+    }
     if (input.hook_event_name === 'PostToolUse' && (input.tool_name === 'Bash' || input.tool_name === 'PowerShell')) {
       const before = await this.shellSnaps.get(input.tool_use_id)
       this.shellSnaps.delete(input.tool_use_id)

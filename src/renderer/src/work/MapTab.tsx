@@ -11,7 +11,7 @@ import type { SessionState } from '../session'
 import type { FileMark, PlanMap } from '../../../shared/events'
 import type { MapGroups } from '../../../main/mapGroups'
 import type { MapAnswer } from '../../../main/mapAsk'
-import { searchHits } from '../session'
+import { searchHits, taskOf } from '../session'
 import { Icon, IconButton, Segmented } from '../components/ui'
 import './MapTab.css'
 
@@ -138,7 +138,7 @@ function conversationScope(arch: Architecture, s: SessionState, plan: PlanShape 
     if (m) focus.add(m.id)
   }
   for (const f of s.files) add(f.path)
-  for (const st of s.task?.steps ?? []) for (const p of st.files ?? []) add(p)
+  for (const st of taskOf(s)?.steps ?? []) for (const p of st.files ?? []) add(p)
   // Anything Claude has pointed at on the map (show_on_map) is part of the conversation too.
   if (s.open?.target.view === 'map') for (const p of s.open.target.paths) add(p)
   // And everything the plan touches, including modules it hasn't created yet.
@@ -301,7 +301,7 @@ export function MapTab() {
   const [showPlan, setShowPlan] = useState(true)
   const planAll = useMemo(() => (arch ? planShape(arch, s.planMap) : null), [arch, s.planMap])
   const plan = showPlan ? planAll : null
-  const scope = useMemo(() => (arch ? conversationScope(arch, s, plan) : null), [arch, s.files, s.task, s.open, plan])
+  const scope = useMemo(() => (arch ? conversationScope(arch, s, plan) : null), [arch, s.files, s.task, s.todos, s.open, plan])
   const planPending = s.permissions.some((p) => p.toolName === 'ExitPlanMode')
   // Modules Claude has edited this session: those parts of the plan are under way.
   const editedMods = useMemo(() => {
@@ -558,7 +558,7 @@ export function MapTab() {
       const f = s.requirements.files.find((x) => (x.mark === 'avoid' || x.mark === 'ask' || x.mark === 'api') && norm(x.path) === norm(`${arch.root}/${b.path}`))
       if (f && !isGhost(b.id)) bounds.set(b.id, f.mark as Bound)
     }
-    const steps = (s.task?.steps ?? []).map((st, i) => {
+    const steps = (taskOf(s)?.steps ?? []).map((st, i) => {
       const m = st.files?.map((p) => moduleOf(arch, p.includes(':') || p.startsWith('/') ? p : `${arch.root}/${p}`)).find(Boolean)
       return { n: i + 1, status: st.status, label: st.label, mod: m?.id }
     })

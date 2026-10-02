@@ -9,7 +9,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "resolveJsonModule": true
   },
   "include": ["src/**/*", "electron.vite.config.ts"]
 }
