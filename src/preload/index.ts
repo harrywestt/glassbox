@@ -229,6 +229,7 @@ const api = {
     pathFor: (file: File): string => webUtils.getPathForFile(file)
   },
   openExternal: (url: string): Promise<void> => invoke('shell:openExternal', url),
+  appVersion: (): Promise<string> => invoke('app:version'),
   setTitleBar: (color: string, symbolColor: string): Promise<void> => invoke('window:titleBar', color, symbolColor),
   setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
   setNotifications: (on: boolean): Promise<void> => invoke('settings:notifications', on),
