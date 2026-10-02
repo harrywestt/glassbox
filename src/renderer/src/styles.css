@@ -1693,3 +1693,6 @@ button.update-chip.ready:hover:not(:disabled) { background: color-mix(in srgb, v
 
 /* Raw events, held still while you read one. */
 .raw-held { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: var(--s-2); justify-content: space-between; padding: var(--s-2) var(--s-3); background: var(--elevated); border-bottom: 1px solid var(--border); }
+
+/* Which Glassbox this is, at the foot of the dashboard. */
+.dash-version { display: flex; justify-content: center; align-items: center; gap: var(--s-2); padding: var(--s-6) 0 var(--s-2); }

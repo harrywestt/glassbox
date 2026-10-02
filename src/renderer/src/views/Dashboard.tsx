@@ -162,6 +162,7 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
           </div>
 
         </div>
+        <AppVersion />
       </div>
     </div>
   )
@@ -322,5 +323,20 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
         ))}
       </div>
     </>
+  )
+}
+
+/** Which Glassbox this is, at the foot of the dashboard. */
+function AppVersion() {
+  const [version, setVersion] = useState<string>()
+  useEffect(() => void window.glassbox.appVersion().then(setVersion), [])
+  if (!version) return null
+  return (
+    <footer className="dash-version muted small">
+      Glassbox {version}{' '}
+      <button className="link small" onClick={() => void window.glassbox.openExternal(`https://github.com/harrywestt/glassbox/releases/tag/v${version}`)} title="What's in this version">
+        Release notes
+      </button>
+    </footer>
   )
 }

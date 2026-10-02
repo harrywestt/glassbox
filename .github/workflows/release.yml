@@ -14,13 +14,30 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-env:
-  # Each build gets its own version (0.1.<run number>), so releases sort and installers upgrade in place.
-  VERSION: 0.1.${{ github.run_number }}
-
 jobs:
+  # Each build gets its own version, so releases sort and installed copies update in place. The major
+  # and minor come from package.json; the patch is one more than the last release of that line (or 0
+  # for the first), so nothing needs editing per release. To start 1.1 or 2.0, change package.json.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - id: v
+        run: |
+          LINE=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          LAST=$(git tag -l "v$LINE.*" | sed "s/^v$LINE\.//" | grep -E '^[0-9]+$' | sort -n | tail -1)
+          echo "version=$LINE.$(( ${LAST:--1} + 1 ))" >> "$GITHUB_OUTPUT"
+
   windows:
+    needs: version
     runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,8 +65,10 @@ jobs:
         include:
           - runner: macos-latest
             arch: arm64
+    needs: version
     runs-on: ${{ matrix.runner }}
     env:
+      VERSION: ${{ needs.version.outputs.version }}
       # No Apple Developer certificate yet: the app is ad-hoc signed (package.json), so don't look for one.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
@@ -76,8 +95,10 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [windows, mac]
+    needs: [version, windows, mac]
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/download-artifact@v4
         with:

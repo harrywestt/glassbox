@@ -1,6 +1,6 @@
 {
   "name": "glassbox",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A desktop app for Claude Code: watch every plan, edit and command as it happens, and steer it while it works.",
   "private": true,
   "type": "module",

@@ -345,6 +345,7 @@ ipcMain.handle('session:sideShowcase', (_e, tabId: string, req: ShowcaseRequest,
   host(tabId).runSide({ kind: 'showcase', title: 'Build a showcase', prompt: `${showcasePrompt(req)}\n\n## What happened in the main session\n${context}`, tools: ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'Edit', 'Artifact', 'Skill'] })
 )
 ipcMain.handle('session:exitPlan', (_e, tabId: string) => host(tabId).exitPlan())
+ipcMain.handle('app:version', () => app.getVersion())
 ipcMain.handle('update:state', () => updates.state)
 ipcMain.handle('update:install', () => updates.install())
 ipcMain.handle('session:interrupt', (_e, tabId: string) => host(tabId).interrupt())
