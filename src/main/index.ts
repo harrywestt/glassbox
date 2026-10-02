@@ -538,6 +538,9 @@ app.setAppUserModelId(APP_ID)
  */
 function registerShortcut() {
   if (process.platform !== 'win32' || !app.isPackaged) return
+  // Only the installed copy (the installer leaves its uninstaller beside it), never a build folder
+  // run for testing: that would point your Start menu and taskbar at the test build.
+  if (!existsSync(join(dirname(process.execPath), 'Uninstall Glassbox.exe'))) return
   const icon = taskbarIcon()
   const lnk = join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Glassbox.lnk')
   shell.writeShortcutLink(lnk, existsSync(lnk) ? 'replace' : 'create', {

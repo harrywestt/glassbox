@@ -406,9 +406,9 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
       )
     case 'result':
       return (
-        <div className={item.isError ? 'turn-end error' : 'turn-end'}>
+        <div className={item.isError && !item.stopped ? 'turn-end error' : 'turn-end'}>
           <span title={`Finished ${new Date(item.at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}. The time includes any wait for your answers or approvals.`}>
-            {item.isError ? 'Stopped with an error after ' : 'Done in '}
+            {item.stopped ? 'You stopped it after ' : item.isError ? 'Stopped with an error after ' : 'Done in '}
             {formatDuration(item.durationMs)}
             {/* Past a minute, the clock time says more than the length alone. */}
             {item.durationMs >= 60_000 && <span className="turn-end-at">, at {new Date(item.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
