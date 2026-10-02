@@ -697,7 +697,15 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
   const a = s.agents[call.id]
   if (!a) return null
   const running = a.status === 'running'
+  // While it works, its latest few steps show right here, so you can see what it's doing without following it.
+  const recent = running
+    ? Object.values(s.toolCalls)
+        .filter((c) => c.agentId === a.id)
+        .sort((x, y) => x.at - y.at)
+        .slice(-3)
+    : []
   return (
+    <>
     <div className="agent-step">
       {running ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name="organization" className="muted" />}
       <span className="agent-step-text">
@@ -711,6 +719,7 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
         </span>
         {running && a.progress && <span className="agent-step-now">{a.progress}</span>}
       </span>
+      <StepTime at={a.at} endedAt={a.endedAt} running={running} />
       {running && a.taskId && (
         <button className="btn quiet" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title="Stop just this agent. Claude and the other agents carry on">
           Stop
@@ -720,6 +729,18 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
         {running ? 'Follow it' : 'See its work'}
       </button>
     </div>
+    {recent.length > 0 && (
+      <div className="agent-feed" aria-label={`What ${a.type} is doing`}>
+        {recent.map((c) => (
+          <div key={c.id} className={`agent-feed-row tool-${c.status}`}>
+            {c.status === 'running' ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name={c.status === 'error' ? 'error' : toolIcon(c.name)} className={c.status === 'error' ? 'err' : 'muted'} />}
+            <span className="grow ellipsis">{describeTool(c)}</span>
+            <StepTime at={c.at} endedAt={c.endedAt} running={c.status === 'running'} />
+          </div>
+        ))}
+      </div>
+    )}
+    </>
   )
 }
 
@@ -762,11 +783,31 @@ function Steps({ calls, s }: { calls: ToolCall[]; s: SessionState }) {
           {running ? <>{describeTool(running)}<span className="muted"> ({calls.length} steps so far)</span></> : summarizeTools(calls)}
           {failed > 0 && <span className="err"> {failed} failed</span>}
         </span>
+        <StepTime at={calls[0].at} endedAt={running ? undefined : Math.max(...calls.map((c) => c.endedAt ?? 0)) || undefined} running={!!running} />
         <span className="muted small">{calls.length} steps</span>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />
       </div>
       {open && rows}
     </div>
+  )
+}
+
+/** When a step started, and how long it took (counting up while it runs). Hover for the full time. */
+function StepTime({ at, endedAt, running }: { at: number; endedAt?: number; running: boolean }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [running])
+  if (!at) return null
+  const took = running ? now - at : endedAt ? endedAt - at : undefined
+  const start = new Date(at)
+  return (
+    <span className="step-time" title={`Started ${start.toLocaleString()}${took !== undefined ? `, ${running ? 'running for' : 'took'} ${formatDuration(took)}` : ''}`}>
+      <span className="step-time-at">{start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
+      {took !== undefined && <span className={running ? 'step-time-took live' : 'step-time-took'}>{formatDuration(took)}</span>}
+    </span>
   )
 }
 
@@ -793,6 +834,7 @@ function ToolRow({ call, isAgent, guarded }: { call: ToolCall; isAgent: boolean;
           {describeTool(call)}
         </span>
         {guarded && <Icon name="shield" className={guarded === 'block' ? 'err' : 'warn'} title={guarded === 'block' ? 'Blocked by a guardrail' : 'Stopped for your approval by a guardrail'} />}
+        <StepTime at={call.at} endedAt={call.endedAt} running={call.status === 'running'} />
         <span className="tool-actions">
           <button className="icon-btn" title="Comment on this step" onClick={(e) => (e.stopPropagation(), setCommenting(true))}>
             <Icon name="comment" />

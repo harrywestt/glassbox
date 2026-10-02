@@ -1680,3 +1680,13 @@ button.user-option.on { border-color: var(--accent); background: var(--accent-so
 .update-chip { -webkit-app-region: no-drag; display: inline-flex; align-items: center; gap: var(--s-1); height: 24px; margin-right: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-md); font-size: 12px; white-space: nowrap; }
 button.update-chip.ready { border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--accent-soft); color: var(--fg); font-weight: 500; }
 button.update-chip.ready:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* When a step started and how long it took, at the right of its row. */
+.step-time { display: inline-flex; align-items: baseline; gap: var(--s-2); flex-shrink: 0; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.step-time-took { min-width: 3.5em; text-align: right; color: color-mix(in srgb, var(--fg) 70%, var(--muted)); }
+.step-time-took.live { color: var(--accent); }
+
+/* A running agent's latest steps, under its line in the conversation. */
+.agent-feed { display: flex; flex-direction: column; margin: 0 0 var(--s-1) 7px; padding-left: var(--s-4); border-left: 1px solid var(--border); }
+.agent-feed-row { display: flex; align-items: center; gap: var(--s-2); min-height: 24px; font-size: 12px; color: var(--muted); animation: pop-in .12s var(--ease); }
+.agent-feed-row .codicon { font-size: 13px; }
