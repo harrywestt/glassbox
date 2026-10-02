@@ -97,7 +97,8 @@ export type TimelineItem =
   | { kind: 'finding'; id: string; at: number }
   | { kind: 'checkin'; id: string; at: number }
   | { kind: 'note'; text: string; tone: 'info' | 'warn' | 'error'; at: number }
-  | { kind: 'result'; costUsd: number; durationMs: number; turns: number; isError: boolean; at: number }
+  /** `stopped`: you stopped it (Stop or Esc), rather than it failing. */
+  | { kind: 'result'; costUsd: number; durationMs: number; turns: number; isError: boolean; stopped?: boolean; at: number }
   | { kind: 'commits'; commits: GlassboxCommit[]; skipped?: string; error?: string; at: number }
   /** A running service logged an error; `after` is Claude's most recent edit before it. */
   /** `count`: how many times it logged since your last message (one card, not one each); `lastAt`: the latest. */
@@ -317,6 +318,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
   const at = Date.now()
   switch (event.kind) {
     case 'status':
+      if (event.status === 'stopped') state = settleRunning({ ...state, backgroundTasks: [], backgroundAgents: 0 }, at, () => false)
       return { ...state, status: event.status, busySince: event.status === 'running' ? (state.busySince ?? at) : undefined, drafts: event.status === 'running' ? state.drafts : {} }
     case 'error':
       return note(state, event.message, 'error')
@@ -477,6 +479,13 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
       if (msg.subtype === 'background_tasks_changed' && !fromHistory) {
         const tasks = ((msg as { tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[] }).tasks ?? []).filter((t) => !t.ambient)
         const before = new Map((state.backgroundTasks ?? []).map((t) => [t.id, t.since]))
+        const listed = new Set(tasks.map((t) => t.task_id))
+        // A background agent Claude no longer lists has ended, whether or not its own notice arrived.
+        if (state.status !== 'running') state = settleRunning(state, at, (a) => !a.background || !a.taskId || listed.has(a.taskId), 'done')
+        else {
+          const gone = Object.values(state.agents).filter((a) => a.status === 'running' && a.background && a.taskId && !listed.has(a.taskId)).map((a) => a.id)
+          if (gone.length) state = settleRunning(state, at, (a) => !gone.includes(a.id), 'done')
+        }
         return {
           ...state,
           backgroundAgents: tasks.filter((t) => t.task_type === 'local_agent').length,
@@ -667,7 +676,10 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
 
     case 'prompt_suggestion':
       return fromHistory ? state : { ...state, suggestion: msg.suggestion.trim() || undefined }
-    case 'result':
+    case 'result': {
+      // The turn is over: only background agents Claude still lists as running carry on.
+      const still = new Set((state.backgroundTasks ?? []).map((t) => t.id))
+      state = fromHistory ? state : settleRunning(state, at, (a) => !!a.background && (!a.taskId || still.has(a.taskId)))
       return {
         ...state,
         status: 'ready',
@@ -676,13 +688,38 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         usage: { ...state.usage, costUsd: (state.usage.costBase ?? 0) + msg.total_cost_usd, turns: state.usage.turns + msg.num_turns },
         timeline: [
           ...state.timeline,
-          { kind: 'result', costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, turns: msg.num_turns, isError: msg.is_error, at }
+          { kind: 'result', costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, turns: msg.num_turns, isError: msg.is_error, stopped: /^aborted/.test(String((msg as { terminal_reason?: string }).terminal_reason ?? '')), at }
         ]
       }
+    }
 
     default:
       return state
   }
+}
+
+/**
+ * Agents and steps that are over but never said so (an interrupt, a crash, an agent that was killed
+ * without a final notice) would otherwise spin for ever. `keep` says which running agents really
+ * are still going; every other running agent, and every running step outside those, is closed.
+ */
+function settleRunning(state: SessionState, at: number, keep: (a: AgentNode) => boolean, ended: 'stopped' | 'done' = 'stopped'): SessionState {
+  const live = new Set(Object.values(state.agents).filter((a) => a.status === 'running' && keep(a)).map((a) => a.id))
+  let changed = false
+  const agents = { ...state.agents }
+  for (const a of Object.values(agents))
+    if (a.status === 'running' && !live.has(a.id)) {
+      agents[a.id] = ended === 'done' ? { ...a, status: 'done', endedAt: at, progress: undefined } : { ...a, status: 'error', stopped: true, endedAt: at, progress: undefined }
+      changed = true
+    }
+  const toolCalls = { ...state.toolCalls }
+  for (const c of Object.values(toolCalls))
+    // A step belongs to an agent still going (or is the call that started one): leave it.
+    if (c.status === 'running' && !(c.agentId && live.has(c.agentId)) && !live.has(c.id)) {
+      toolCalls[c.id] = { ...c, status: 'done', endedAt: at }
+      changed = true
+    }
+  return changed ? { ...state, agents, toolCalls } : state
 }
 
 /** Transcript user text: show real prompts and slash commands, skip harness-injected wrappers. */
