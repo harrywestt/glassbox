@@ -4,10 +4,11 @@ import type { SessionState } from '../session'
 import { useSession } from '../views/SessionView'
 import { renderMarkdown } from '../lib'
 import { Icon } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 export type PlanShown = { text: string; status?: NonNullable<SessionState['plan']>['status'] }
 
-const STATUS = { approved: 'Approved', proposed: 'Waiting for you', 'changes-requested': 'Changes requested' } as const
+const STATUS = { approved: 'planTab.status.approved', proposed: 'planTab.status.proposed', 'changes-requested': 'planTab.status.changesRequested' } as const
 
 /**
  * Claude's plan, as a view of its own: it opens when Claude presents one, and waits there while you
@@ -36,7 +37,7 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
   if (!text)
     return (
       <div className="plan-tab">
-        <div className="plan-tab-empty muted">No plan yet. Use Plan first in the message box and Claude proposes a plan before changing anything.</div>
+        <div className="plan-tab-empty muted">{tr('planTab.empty')}</div>
       </div>
     )
 
@@ -44,34 +45,35 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
     <div className="plan-tab">
       <div className="plan-tab-head">
         <Icon name="checklist" className={waiting ? 'accent' : 'muted'} />
-        <strong>Claude’s plan</strong>
-        {status && <span className={status === 'approved' ? 'tag accent' : 'tag'}>{STATUS[status]}</span>}
+        <strong>{tr('planTab.title')}</strong>
+        {status && <span className={status === 'approved' ? 'tag accent' : 'tag'}>{tr(STATUS[status])}</span>}
         <span className="spacer" />
-        {waiting && <span className="muted small">Nothing has been changed yet</span>}
+        {waiting && <span className="muted small">{tr('planTab.nothingChangedYet')}</span>}
       </div>
       {shape && (
         <div className="plan-shape">
           <span className="plan-shape-key" aria-hidden />
           <span className="grow">
-            Touches {shape.modules.length} module{shape.modules.length === 1 ? '' : 's'}
-            {shape.modules.some((m) => m.change === 'new') ? `, ${shape.modules.filter((m) => m.change === 'new').length} of them new` : ''}
-            {shape.connections.length ? `, and changes ${shape.connections.length} connection${shape.connections.length === 1 ? '' : 's'} between modules` : ''}.
+            {tr('planTab.shape.touchesModules', { count: shape.modules.length })}
+            {shape.modules.some((m) => m.change === 'new') ? tr('planTab.shape.newOfThem', { count: shape.modules.filter((m) => m.change === 'new').length }) : ''}
+            {shape.connections.length ? tr('planTab.shape.changesConnections', { count: shape.connections.length }) : ''}
+            {tr('planTab.shape.end')}
           </span>
-          <button onClick={showMap}>See it on the map</button>
+          <button onClick={showMap}>{tr('planTab.seeOnMap')}</button>
         </div>
       )}
       <div className="plan-tab-body markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
       {waiting && (
         <div className="plan-tab-actions">
           {asking && (
-            <textarea autoFocus rows={3} placeholder="What should change in the plan?" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+            <textarea autoFocus rows={3} placeholder={tr('planTab.feedbackPlaceholder')} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
           )}
           <div className="dialog-actions">
-            <span className="muted small">Approving lets Claude start editing</span>
+            <span className="muted small">{tr('planTab.approveHint')}</span>
             <span className="spacer" />
             {asking ? (
               <>
-                <button onClick={() => setAsking(false)}>Back</button>
+                <button onClick={() => setAsking(false)}>{tr('planTab.back')}</button>
                 <button
                   className="primary"
                   disabled={!feedback.trim()}
@@ -82,14 +84,14 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
                     setFeedback('')
                   }}
                 >
-                  Send feedback
+                  {tr('planTab.sendFeedback')}
                 </button>
               </>
             ) : (
               <>
-                <button onClick={() => setAsking(true)}>Request changes</button>
+                <button onClick={() => setAsking(true)}>{tr('planTab.requestChanges')}</button>
                 <button className="primary" onClick={approve}>
-                  Approve plan
+                  {tr('planTab.approvePlan')}
                 </button>
               </>
             )}

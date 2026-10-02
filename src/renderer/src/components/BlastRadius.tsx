@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BlastRadiusResult } from '../../../main/deps'
 import { baseName, relPath } from '../lib'
 import { Icon, Section } from './ui'
+import { tr } from '../../../shared/i18n'
 
 type DepsApi = { find: (cwd: string, files: string[]) => Promise<BlastRadiusResult> }
 
@@ -69,13 +70,13 @@ export function BlastRadius({ cwd, files, onOpen }: { cwd: string; files: string
     <Section
       id="blast-radius"
       className="br-section"
-      title="Blast radius"
-      meta={result && rows.length > 0 && <span className="count">{total} dependent file{total === 1 ? '' : 's'}</span>}
+      title={tr('blastRadius.title')}
+      meta={result && rows.length > 0 && <span className="count">{tr('blastRadius.dependentFiles', { count: total })}</span>}
       actions={
         loading ? (
-          <Icon name="loading" className="codicon-modifier-spin muted" title="Searching" />
+          <Icon name="loading" className="codicon-modifier-spin muted" title={tr('blastRadius.searching')} />
         ) : (
-          <button className="icon-btn br-refresh" title="Search again" aria-label="Search again" onClick={() => run(key.split('\n'))}>
+          <button className="icon-btn br-refresh" title={tr('blastRadius.searchAgain')} aria-label={tr('blastRadius.searchAgain')} onClick={() => run(key.split('\n'))}>
             <Icon name="refresh" />
           </button>
         )
@@ -83,18 +84,18 @@ export function BlastRadius({ cwd, files, onOpen }: { cwd: string; files: string
     >
 
       {!api ? (
-        <div className="muted small">Blast radius isn’t available in this build. It needs the dependency search from the main process.</div>
+        <div className="muted small">{tr('blastRadius.unavailable')}</div>
       ) : !key ? (
-        <div className="muted small">Nothing edited yet. Once Claude changes a file, the files that import it show up here.</div>
+        <div className="muted small">{tr('blastRadius.nothingEdited')}</div>
       ) : !result ? (
-        <div className="muted small">Looking for files that import the changes…</div>
+        <div className="muted small">{tr('blastRadius.looking')}</div>
       ) : (
         <>
           {result.error && <div className="br-error small">{result.error}</div>}
-          {rows.length === 0 && !result.error && <div className="muted small">No edited files could be checked.</div>}
+          {rows.length === 0 && !result.error && <div className="muted small">{tr('blastRadius.noneChecked')}</div>}
           {rows.length > 0 && total === 0 && (
             <div className="muted small br-none">
-              Nothing in the project imports these files by name. Dynamic imports, config wiring and reflection aren’t detected, so a quick check is still worth it.
+              {tr('blastRadius.noImporters')}
             </div>
           )}
           <div className="br-list">
@@ -116,13 +117,13 @@ export function BlastRadius({ cwd, files, onOpen }: { cwd: string; files: string
                       {dir && <span className="muted small br-dir">{dir}</span>}
                     </span>
                     <span className={n ? 'br-count' : 'br-count muted'}>
-                      {n ? `${n}${f.truncated ? '+' : ''} dependent${n === 1 && !f.truncated ? '' : 's'}` : 'None found'}
+                      {n ? (f.truncated ? tr('blastRadius.dependentsTruncated', { count: n }) : tr('blastRadius.dependents', { count: n })) : tr('blastRadius.noneFound')}
                     </span>
                   </div>
                   {expanded && (
                     <div className="br-deps">
                       {f.dependents.map((d) => (
-                        <button key={`${d.path}:${d.line}`} className="br-dep" onClick={() => onOpen(d.path)} title={`Open ${d.path}`}>
+                        <button key={`${d.path}:${d.line}`} className="br-dep" onClick={() => onOpen(d.path)} title={tr('blastRadius.openPath', { path: d.path })}>
                           <span className="br-dep-path">
                             <span className="mono">{baseName(d.path)}</span>
                             <span className="muted small">:{d.line}</span>
@@ -131,7 +132,7 @@ export function BlastRadius({ cwd, files, onOpen }: { cwd: string; files: string
                           <code className="br-dep-code">{d.text}</code>
                         </button>
                       ))}
-                      {f.truncated && <div className="muted small br-more">Showing the first {n}. More files reference it.</div>}
+                      {f.truncated && <div className="muted small br-more">{tr('blastRadius.showingFirst', { count: n })}</div>}
                     </div>
                   )}
                 </div>

@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useSession } from '../views/SessionView'
 import { Icon } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 /**
  * Your own shell in the session's folder, for commands you'd rather run yourself. Each session has
@@ -24,7 +25,7 @@ function listen() {
       if (data) sh.term.write(data)
       if (exit !== undefined) {
         sh.exited = exit
-        sh.term.write(`\r\n\x1b[2m[The shell exited with code ${exit}. Press Enter to start a new one.]\x1b[0m\r\n`)
+        sh.term.write(`\r\n\x1b[2m${tr('terminalTab.exited', { code: exit })}\x1b[0m\r\n`)
       }
     }
   })
@@ -52,7 +53,7 @@ export function TerminalTab() {
     try {
       sh.pty = await window.glassbox.terminal.open(tab.id, tab.cwd, sh.term.cols, sh.term.rows)
     } catch (e) {
-      sh.term.write(`\x1b[31mCouldn't start a shell: ${String(e)}\x1b[0m\r\n`)
+      sh.term.write(`\x1b[31m${tr('terminalTab.couldntStart', { error: String(e) })}\x1b[0m\r\n`)
     } finally {
       sh.opening = false
       rerender((n) => n + 1)
@@ -122,13 +123,13 @@ export function TerminalTab() {
       <div className="work-bar">
         <Icon name="terminal" className="muted" />
         <span className="small muted ellipsis grow" title={tab.cwd}>
-          Your shell in {tab.cwd}. Claude doesn’t see it unless you send it something.
+          {tr('terminalTab.shellIn', { cwd: tab.cwd })}
         </span>
-        <button className="chip-btn" disabled={!selection.trim()} onClick={() => composerRef.current?.insert(`\n\`\`\`\n${selection.trim()}\n\`\`\`\n`)} title="Put the selected output in your message to Claude">
-          <Icon name="comment" /> Send selection to Claude
+        <button className="chip-btn" disabled={!selection.trim()} onClick={() => composerRef.current?.insert(`\n\`\`\`\n${selection.trim()}\n\`\`\`\n`)} title={tr('terminalTab.sendSelectionTip')}>
+          <Icon name="comment" /> {tr('terminalTab.sendSelection')}
         </button>
-        <button className="chip-btn" onClick={() => sh?.term.clear()} title="Clear the screen (the shell keeps running)">
-          <Icon name="clear-all" /> Clear
+        <button className="chip-btn" onClick={() => sh?.term.clear()} title={tr('terminalTab.clearTip')}>
+          <Icon name="clear-all" /> {tr('terminalTab.clear')}
         </button>
         <button
           className="chip-btn"
@@ -139,9 +140,9 @@ export function TerminalTab() {
             sh.term.reset()
             void start(sh)
           }}
-          title="Close this shell and start a fresh one"
+          title={tr('terminalTab.newShellTip')}
         >
-          <Icon name="refresh" /> New shell
+          <Icon name="refresh" /> {tr('terminalTab.newShell')}
         </button>
       </div>
       <div className="work-body terminal-body" ref={box} />

@@ -3,6 +3,7 @@ import { useSession } from '../views/SessionView'
 import type { DecisionKind } from '../../../shared/events'
 import { DecisionCard } from '../session-ui/Timeline'
 import { Empty, PanelHeader, Segmented } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 type Filter = 'all' | DecisionKind
 
@@ -15,24 +16,24 @@ export function DecisionsPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Decisions" />
+      <PanelHeader title={tr('decisionsPanel.title')} />
       {s.decisions.length > 0 && (
         <div className="panel-toolbar">
           <Segmented<Filter>
             value={filter}
             onChange={setFilter}
             options={[
-              { value: 'all', label: `All ${s.decisions.length}` },
-              { value: 'question', label: `Questions ${count('question')}` },
-              { value: 'assumption', label: `Assumptions ${count('assumption')}` },
-              { value: 'decision', label: `Decisions ${count('decision')}` }
+              { value: 'all', label: tr('decisionsPanel.filterAll', { n: s.decisions.length }) },
+              { value: 'question', label: tr('decisionsPanel.filterQuestions', { n: count('question') }) },
+              { value: 'assumption', label: tr('decisionsPanel.filterAssumptions', { n: count('assumption') }) },
+              { value: 'decision', label: tr('decisionsPanel.filterDecisions', { n: count('decision') }) }
             ]}
           />
         </div>
       )}
       <div className="panel-scroll decisions-list">
         {list.length === 0 ? (
-          <Empty title={s.decisions.length ? 'Nothing in this filter.' : 'No decisions yet.'}>Claude's choices, assumptions and questions appear here as it makes them.</Empty>
+          <Empty title={s.decisions.length ? tr('decisionsPanel.nothingInFilter') : tr('decisionsPanel.emptyTitle')}>{tr('decisionsPanel.emptyBody')}</Empty>
         ) : (
           list.map((d) => <DecisionCard key={d.id} d={d} />)
         )}

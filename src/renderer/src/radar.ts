@@ -2,6 +2,7 @@ import { relPath } from './lib'
 import { diffLines } from './linediff'
 import { EDIT_TOOLS, isClaudeOwnFile, type SessionState } from './session'
 import { editText } from './edits'
+import { tr } from '../../shared/i18n'
 
 export type Dependency = { name: string; version: string; ecosystem: 'npm' | 'NuGet' | 'PyPI' | 'Go'; file: string }
 export type RadarItem = { file: string; detail: string; toolId: string }
@@ -15,14 +16,14 @@ export type Radar = {
 }
 
 const SECRET_PATTERNS: [RegExp, string][] = [
-  [/AKIA[0-9A-Z]{16}/, 'AWS access key'],
-  [/\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/, 'API secret key'],
-  [/\bgh[pousr]_[A-Za-z0-9]{30,}/, 'GitHub token'],
-  [/\bxox[baprs]-[A-Za-z0-9-]{10,}/, 'Slack token'],
-  [/AIza[0-9A-Za-z_-]{35}/, 'Google API key'],
-  [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/, 'private key'],
-  [/\b(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|client[_-]?secret)\b["']?\s*[:=]\s*["'][^"'\s]{8,}["']/i, 'hard-coded credential'],
-  [/Password=[^;"'\s]{4,}/i, 'password in a connection string']
+  [/AKIA[0-9A-Z]{16}/, tr('radar.secret.awsAccessKey')],
+  [/\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/, tr('radar.secret.apiSecretKey')],
+  [/\bgh[pousr]_[A-Za-z0-9]{30,}/, tr('radar.secret.gitHubToken')],
+  [/\bxox[baprs]-[A-Za-z0-9-]{10,}/, tr('radar.secret.slackToken')],
+  [/AIza[0-9A-Za-z_-]{35}/, tr('radar.secret.googleApiKey')],
+  [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/, tr('radar.secret.privateKey')],
+  [/\b(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|client[_-]?secret)\b["']?\s*[:=]\s*["'][^"'\s]{8,}["']/i, tr('radar.secret.hardCodedCredential')],
+  [/Password=[^;"'\s]{4,}/i, tr('radar.secret.connectionStringPassword')]
 ]
 
 /** What looks like a secret in some text, if anything. */
@@ -108,18 +109,18 @@ export function changeRadar(s: SessionState, cwd: string): Radar {
 
     if (isConfig(rel) && !seenFile.config.has(rel)) {
       seenFile.config.add(rel)
-      radar.config.push({ file: rel, detail: `${added.length} line${added.length === 1 ? '' : 's'} added`, toolId: call.id })
+      radar.config.push({ file: rel, detail: tr('radar.linesAdded', { count: added.length }), toolId: call.id })
     }
     if (isMigration(rel) && !seenFile.migrations.has(rel)) {
       seenFile.migrations.add(rel)
-      radar.migrations.push({ file: rel, detail: call.name === 'Write' && !before ? 'new migration' : 'migration changed', toolId: call.id })
+      radar.migrations.push({ file: rel, detail: call.name === 'Write' && !before ? tr('radar.newMigration') : tr('radar.migrationChanged'), toolId: call.id })
     }
 
     // Public signatures removed or changed (a new one on its own isn't breaking).
     const changedSig = removed.filter((l) => SIGNATURE.test(l))
     if ((changedSig.length || (isContractPath(rel) && added.some((l) => SIGNATURE.test(l)))) && !seenFile.contracts.has(rel)) {
       seenFile.contracts.add(rel)
-      radar.contracts.push({ file: rel, detail: changedSig.length ? `changed or removed: ${changedSig[0].trim().slice(0, 80)}` : 'new endpoint or contract', toolId: call.id })
+      radar.contracts.push({ file: rel, detail: changedSig.length ? tr('radar.changedOrRemoved', { signature: changedSig[0].trim().slice(0, 80) }) : tr('radar.newContract'), toolId: call.id })
     }
 
     for (const l of added) {

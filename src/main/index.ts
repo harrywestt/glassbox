@@ -42,6 +42,7 @@ import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
 import { adminState, dismissAdminPrompt, elevateAtStartupIfWanted, setRunAsAdmin } from './admin'
 import type { AccessMode, DiffMode, GuardRule, SideTaskSpec, PermissionDecision, Requirements, ReviewModel, SendOptions, ServicesEvent, SessionEvent, TabEvent } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 // Development builds keep their own profile (settings, tabs, rates), so running from source never
 // touches the installed app's data.
@@ -138,14 +139,14 @@ ipcMain.handle('settings:notifications', (_e, on: boolean) => {
 function notifyFor(tabId: string, cwd: string, event: SessionEvent) {
   if (!notificationsOn || !win || win.isDestroyed() || win.isFocused()) return
   let body: string | undefined
-  if (event.kind === 'user-questions') body = event.questions.length > 1 ? `Claude has ${event.questions.length} questions for you.` : `Claude asks: ${event.questions[0]?.question ?? 'a question'}`
-  else if (event.kind === 'permission') body = event.toolName === 'ExitPlanMode' ? 'Claude has a plan ready for your review.' : `Claude wants to use ${event.toolName}.`
-  else if (event.kind === 'checkin') body = `Claude is checking in: ${event.checkin.about}`
+  if (event.kind === 'user-questions') body = event.questions.length > 1 ? tr('mainIndex.notify.questions', { count: event.questions.length }) : tr('mainIndex.notify.asks', { question: event.questions[0]?.question ?? tr('mainIndex.notify.aQuestion') })
+  else if (event.kind === 'permission') body = event.toolName === 'ExitPlanMode' ? tr('mainIndex.notify.planReady') : tr('mainIndex.notify.wantsTool', { tool: event.toolName })
+  else if (event.kind === 'checkin') body = tr('mainIndex.notify.checkingIn', { about: event.checkin.about })
   else if (event.kind === 'alert') body = event.text
-  else if (event.kind === 'guard' && event.hit.action === 'block') body = `Blocked: ${event.hit.label}`
-  else if (event.kind === 'sdk' && event.msg.type === 'result') body = event.msg.is_error ? 'Claude stopped with an error.' : (backgroundAgents.get(tabId) ?? 0) > 0 ? undefined : 'Claude finished and is waiting for you.'
+  else if (event.kind === 'guard' && event.hit.action === 'block') body = tr('mainIndex.notify.blocked', { label: event.hit.label })
+  else if (event.kind === 'sdk' && event.msg.type === 'result') body = event.msg.is_error ? tr('mainIndex.notify.stoppedWithError') : (backgroundAgents.get(tabId) ?? 0) > 0 ? undefined : tr('mainIndex.notify.finished')
   // Runs before trackTray, so the map still holds the count from before this change.
-  else if (backgroundCount(event) === 0 && turnOver.has(tabId) && (backgroundAgents.get(tabId) ?? 0) > 0) body = 'Claude’s background agents finished; it’s waiting for you.'
+  else if (backgroundCount(event) === 0 && turnOver.has(tabId) && (backgroundAgents.get(tabId) ?? 0) > 0) body = tr('mainIndex.notify.backgroundFinished')
   else if (event.kind === 'error') body = event.message
   if (!body) return
   if (event.kind === 'permission' || event.kind === 'user-questions') win.flashFrame(true)
@@ -350,7 +351,7 @@ ipcMain.handle('session:setMode', (_e, tabId: string, mode: AccessMode) => host(
 ipcMain.handle('session:side', (_e, tabId: string, spec: SideTaskSpec) => host(tabId).runSide(spec))
 ipcMain.handle('session:stopSide', (_e, tabId: string, id: string) => host(tabId).stopSide(id))
 ipcMain.handle('session:sideShowcase', (_e, tabId: string, req: ShowcaseRequest, context: string) =>
-  host(tabId).runSide({ kind: 'showcase', title: 'Build a showcase', prompt: `${showcasePrompt(req)}\n\n## What happened in the main session\n${context}`, tools: ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'Edit', 'Artifact', 'Skill'] })
+  host(tabId).runSide({ kind: 'showcase', title: tr('mainIndex.buildShowcase'), prompt: `${showcasePrompt(req)}\n\n## What happened in the main session\n${context}`, tools: ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'Edit', 'Artifact', 'Skill'] })
 )
 ipcMain.handle('session:exitPlan', (_e, tabId: string) => host(tabId).exitPlan())
 ipcMain.handle('app:version', () => app.getVersion())
@@ -482,7 +483,7 @@ ipcMain.handle('shell:openPath', (_e, path: string) => shell.openPath(path))
 ipcMain.handle('shell:showItem', (_e, path: string) => shell.showItemInFolder(path))
 // Attachments: files you pick, and pasted images (which have no file yet) saved to Glassbox's folder.
 ipcMain.handle('attachments:pick', async () => {
-  const r = win ? await dialog.showOpenDialog(win, { title: 'Attach files', properties: ['openFile', 'multiSelections'] }) : { canceled: true, filePaths: [] }
+  const r = win ? await dialog.showOpenDialog(win, { title: tr('mainIndex.attachFiles'), properties: ['openFile', 'multiSelections'] }) : { canceled: true, filePaths: [] }
   return r.canceled ? [] : r.filePaths
 })
 ipcMain.handle('attachments:save', (_e, name: string, data: ArrayBuffer) => {
@@ -501,13 +502,13 @@ const TOOL_OUTPUT_MAX = 8 * 1024 * 1024
 ipcMain.handle('tool:fullOutput', (_e, path: string): { text?: string; size?: number; error?: string } => {
   const full = resolve(path)
   const root = resolve(homedir(), '.claude', 'projects') + sep
-  if (!full.toLowerCase().startsWith(root.toLowerCase()) || !full.toLowerCase().includes(`${sep}tool-results${sep}`)) return { error: 'Not a saved tool output' }
+  if (!full.toLowerCase().startsWith(root.toLowerCase()) || !full.toLowerCase().includes(`${sep}tool-results${sep}`)) return { error: tr('mainIndex.notSavedToolOutput') }
   try {
     const size = statSync(full).size
     const text = readFileSync(full, 'utf8')
     return { text: text.length > TOOL_OUTPUT_MAX ? text.slice(0, TOOL_OUTPUT_MAX) : text, size }
   } catch {
-    return { error: 'The saved output is no longer there' }
+    return { error: tr('mainIndex.savedOutputGone') }
   }
 })
 ipcMain.handle('fs:stat', (_e, path: string) => {
@@ -549,7 +550,7 @@ function registerShortcut() {
     appUserModelId: APP_ID,
     icon,
     iconIndex: 0,
-    description: 'Glassbox: run Claude with full visibility'
+    description: tr('mainIndex.shortcutDescription')
   })
   // A taskbar pin keeps its own copy of the icon; point it at the same versioned file.
   const pinned = join(app.getPath('appData'), 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar', 'Glassbox.lnk')

@@ -3,12 +3,13 @@ import { useSession } from '../views/SessionView'
 import { baseName } from '../lib'
 import { DiffView } from '../components/Code'
 import { Icon } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 const STATUS: Record<string, { cls: string; title: string }> = {
-  A: { cls: 'ok', title: 'Added' },
-  M: { cls: 'warn', title: 'Modified' },
-  D: { cls: 'err', title: 'Deleted' },
-  R: { cls: 'info', title: 'Renamed' }
+  A: { cls: 'ok', title: 'commitTab.status.added' },
+  M: { cls: 'warn', title: 'commitTab.status.modified' },
+  D: { cls: 'err', title: 'commitTab.status.deleted' },
+  R: { cls: 'info', title: 'commitTab.status.renamed' }
 }
 
 /** One commit: its files on the left, the selected file's diff (parent → commit) on the right. */
@@ -47,16 +48,16 @@ export function CommitTab({ sha }: { sha: string }) {
         </div>
         {files?.map((f) => (
           <button key={f.path} className={f.path === pick ? 'live-file active' : 'live-file'} onClick={() => setPick(f.path)} title={f.path}>
-            <span className={`status-letter ${STATUS[f.status]?.cls ?? 'muted'}`} title={STATUS[f.status]?.title}>{f.status}</span>
+            <span className={`status-letter ${STATUS[f.status]?.cls ?? 'muted'}`} title={STATUS[f.status] && tr(STATUS[f.status].title)}>{f.status}</span>
             <span className="live-file-main">
               <span className="ellipsis">{baseName(f.path)}</span>
-              <span className="muted small ellipsis">{f.path.split('/').slice(0, -1).join('/') || 'project root'}</span>
+              <span className="muted small ellipsis">{f.path.split('/').slice(0, -1).join('/') || tr('commitTab.projectRoot')}</span>
             </span>
           </button>
         ))}
       </aside>
       <div className="work-page">
-        {pair && pair.path === pick ? <DiffView path={pair.path} original={pair.before} modified={pair.after} inline /> : <div className="muted pad">Loading…</div>}
+        {pair && pair.path === pick ? <DiffView path={pair.path} original={pair.before} modified={pair.after} inline /> : <div className="muted pad">{tr('commitTab.loading')}</div>}
       </div>
     </div>
   )

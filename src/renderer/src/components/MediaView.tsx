@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { mediaKind, mediaUrl } from '../lib'
+import { tr } from '../../../shared/i18n'
 
 /**
  * An image, video or audio file, shown as itself. Images fit the tab (click for actual size) on a
@@ -17,7 +18,7 @@ export function MediaView({ path, version = 0 }: { path: string; version?: numbe
     setSize(null)
   }, [src])
 
-  if (failed) return <div className="media-view media-failed">Couldn’t show this file.</div>
+  if (failed) return <div className="media-view media-failed">{tr('mediaView.failed')}</div>
   return (
     <div className="media-view">
       <div className={`media-stage${kind === 'image' ? ' checker' : ''}${actual ? ' actual' : ''}`}>
@@ -28,7 +29,7 @@ export function MediaView({ path, version = 0 }: { path: string; version?: numbe
             onClick={() => setActual(!actual)}
             onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
             onError={() => setFailed(true)}
-            title={actual ? 'Fit to the tab' : 'Actual size'}
+            title={actual ? tr('mediaView.fitToTab') : tr('mediaView.actualSize')}
           />
         )}
         {kind === 'video' && <video src={src} controls onLoadedMetadata={(e) => setSize({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })} onError={() => setFailed(true)} />}
@@ -36,8 +37,8 @@ export function MediaView({ path, version = 0 }: { path: string; version?: numbe
       </div>
       {size && size.w > 0 && (
         <div className="media-meta">
-          {size.w} × {size.h}
-          {kind === 'image' && <span>{actual ? 'Actual size. Click to fit.' : 'Click for actual size.'}</span>}
+          {tr('mediaView.dimensions', { width: size.w, height: size.h })}
+          {kind === 'image' && <span>{actual ? tr('mediaView.actualSizeClickToFit') : tr('mediaView.clickForActualSize')}</span>}
         </div>
       )}
     </div>

@@ -7,6 +7,7 @@ import { CallDiff, GitFileDiff } from '../panels/ChangesPanel'
 import { Icon, IconButton } from '../components/ui'
 import type { DiffMode } from '../../../shared/events'
 import { Select } from '../components/Select'
+import { tr } from '../../../shared/i18n'
 
 /**
  * A changed file, full size. Session edits can be viewed as the whole file against the base branch
@@ -39,25 +40,25 @@ export function DiffTab({ path, base: givenBase, diffMode, source }: { path: str
           <Select
             value={view}
             onChange={setView}
-            aria-label="What to compare"
+            aria-label={tr('diffTab.compareLabel')}
             options={[
-              ...(base ? [{ value: 'base', label: `Whole file against ${base}` }] : []),
+              ...(base ? [{ value: 'base', label: tr('diffTab.wholeFile', { base }) }] : []),
               ...calls.map((c, i) => ({
                 value: String(i),
-                label: `Change ${i + 1} of ${calls.length}: ${c!.name === 'Write' ? 'wrote the file' : 'edited'} at ${new Date(c!.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                label: tr(c!.name === 'Write' ? 'diffTab.changeWrote' : 'diffTab.changeEdited', { n: i + 1, total: calls.length, time: new Date(c!.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
               }))
             ]}
           />
         ) : (
-          base && <span className="muted small">against {base}{diffMode === 'merge-base' ? ', since branching' : ''}</span>
+          base && <span className="muted small">{tr(diffMode === 'merge-base' ? 'diffTab.againstSinceBranching' : 'diffTab.against', { base })}</span>
         )}
         {whole && comment.button}
-        <IconButton icon="go-to-file" title="Open in your default editor" onClick={() => void window.glassbox.openPath(path)} />
+        <IconButton icon="go-to-file" title={tr('diffTab.openInEditor')} onClick={() => void window.glassbox.openPath(path)} />
       </div>
       {comment.box}
       <div className="work-body">
         {whole || source === 'branch' ? (
-          base ? <GitFileDiff path={path} base={base} diffMode={diffMode} onEditor={comment.bind} version={latest} /> : s.git?.isRepo === false ? <CallDiff call={calls.at(-1)} path={path} /> : <div className="muted pad">Loading…</div>
+          base ? <GitFileDiff path={path} base={base} diffMode={diffMode} onEditor={comment.bind} version={latest} /> : s.git?.isRepo === false ? <CallDiff call={calls.at(-1)} path={path} /> : <div className="muted pad">{tr('diffTab.loading')}</div>
         ) : (
           <CallDiff call={view === 'base' ? calls.at(-1) : calls[Number(view)]} path={path} />
         )}

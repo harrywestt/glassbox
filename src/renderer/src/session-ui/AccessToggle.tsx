@@ -1,6 +1,7 @@
 import { useSession } from '../views/SessionView'
 import type { AccessMode } from '../../../shared/events'
 import { Select } from '../components/Select'
+import { tr } from '../../../shared/i18n'
 
 const KEY = 'glassbox.access'
 
@@ -24,9 +25,9 @@ function saveAccess(mode: AccessMode) {
 }
 
 const MODES: { value: AccessMode; label: string; hint: string }[] = [
-  { value: 'default', label: 'Ask first', hint: 'Ask before running commands and editing files' },
-  { value: 'acceptEdits', label: 'Auto-edit', hint: 'Edit files without asking; ask before commands' },
-  { value: 'bypassPermissions', label: 'Full access', hint: 'Never ask. Guardrails still block or check dangerous actions' }
+  { value: 'default', label: tr('accessToggle.askFirst'), hint: tr('accessToggle.askFirstHint') },
+  { value: 'acceptEdits', label: tr('accessToggle.autoEdit'), hint: tr('accessToggle.autoEditHint') },
+  { value: 'bypassPermissions', label: tr('accessToggle.fullAccess'), hint: tr('accessToggle.fullAccessHint') }
 ]
 
 /** How much Claude may do without asking, for this session and as the default for new ones. */
@@ -38,8 +39,8 @@ export function AccessToggle() {
   return (
     <Select<AccessMode>
       className={`access access-${current}`}
-      aria-label="Permissions"
-      title={`${MODES.find((m) => m.value === current)?.hint}. New sessions start in the mode you pick.`}
+      aria-label={tr('accessToggle.permissions')}
+      title={tr('accessToggle.title', { hint: MODES.find((m) => m.value === current)?.hint })}
       value={current}
       options={MODES}
       disabled={!live}

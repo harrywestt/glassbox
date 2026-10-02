@@ -4,6 +4,7 @@ import { sessionBrief } from '../side'
 import { Empty, Icon, IconButton, Toggle } from '../components/ui'
 import { Select } from '../components/Select'
 import { SideTaskSteps } from '../session-ui/SideTasks'
+import { tr } from '../../../shared/i18n'
 
 /**
  * The Showcase work tab: build a shareable deck of this session's work (published as a Claude
@@ -45,32 +46,31 @@ export function ShowcasePanel() {
     <div className="showcase-page">
       <aside className="showcase-side">
         <section className="card">
-          <div className="card-title">Showcase this work</div>
+          <div className="card-title">{tr('showcasePanel.title')}</div>
           <p className="muted small">
-            A slide deck for teammates who weren’t here: an overview with the change stats, UI before and after, code highlights and the decisions made, with
-            why. It’s published as a Claude Artifact you can share.
+            {tr('showcasePanel.intro')}
           </p>
           <label className="field">
-            <span>Compare against</span>
-            <Select value={base} onChange={setBase} disabled={!branches.length} placeholder="(not a git repo)" aria-label="Compare against" options={branches.map((b) => ({ value: b, label: b }))} />
+            <span>{tr('showcasePanel.compareAgainst')}</span>
+            <Select value={base} onChange={setBase} disabled={!branches.length} placeholder={tr('showcasePanel.notRepo')} aria-label={tr('showcasePanel.compareAgainst')} options={branches.map((b) => ({ value: b, label: b }))} />
           </label>
           <label className="field">
-            <span>Notes (optional)</span>
-            <textarea rows={3} placeholder="Audience, focus, anything to include or leave out" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <span>{tr('showcasePanel.notes')}</span>
+            <textarea rows={3} placeholder={tr('showcasePanel.notesPlaceholder')} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
           <label className="setting-inline">
-            <span className="grow small">Add the link to the PR description and the Jira ticket</span>
+            <span className="grow small">{tr('showcasePanel.linkIt')}</span>
             <Toggle checked={linkIt} onChange={setLinkIt} />
           </label>
           <div className="row-actions">
             <span className="spacer" />
             {building ? (
               <button onClick={() => void window.glassbox.session.stopSide(tab.id, latestRun.id)}>
-                <Icon name="debug-stop" /> Stop
+                <Icon name="debug-stop" /> {tr('showcasePanel.stop')}
               </button>
             ) : (
               <button className="primary" disabled={!canSend} onClick={() => void generate()}>
-                <Icon name="preview" /> {deck ? 'Regenerate' : 'Generate showcase'}
+                <Icon name="preview" /> {deck ? tr('showcasePanel.regenerate') : tr('showcasePanel.generate')}
               </button>
             )}
           </div>
@@ -81,17 +81,17 @@ export function ShowcasePanel() {
             <div className="card-title">
               {building ? (
                 <>
-                  <Icon name="loading" className="codicon-modifier-spin accent" /> Building
+                  <Icon name="loading" className="codicon-modifier-spin accent" /> {tr('showcasePanel.building')}
                 </>
               ) : latestRun.status === 'done' ? (
-                'Last build'
+                tr('showcasePanel.lastBuild')
               ) : latestRun.status === 'stopped' ? (
-                'Build stopped'
+                tr('showcasePanel.buildStopped')
               ) : (
-                'Build failed'
+                tr('showcasePanel.buildFailed')
               )}
             </div>
-            {building && <div className="muted small">Running in the background; your main session carries on as normal.</div>}
+            {building && <div className="muted small">{tr('showcasePanel.runningInBackground')}</div>}
             <SideTaskSteps task={latestRun} />
           </section>
         )}
@@ -106,28 +106,28 @@ export function ShowcasePanel() {
               {deck.artifactUrl && (
                 <>
                   <button className="chip-btn" onClick={() => void navigator.clipboard.writeText(deck.artifactUrl!)}>
-                    <Icon name="copy" /> Copy link
+                    <Icon name="copy" /> {tr('showcasePanel.copyLink')}
                   </button>
-                  <IconButton icon="link-external" title="Open the Artifact in claude.ai" onClick={() => void window.glassbox.openExternal(deck.artifactUrl!)} />
+                  <IconButton icon="link-external" title={tr('showcasePanel.openArtifact')} onClick={() => void window.glassbox.openExternal(deck.artifactUrl!)} />
                 </>
               )}
-              <IconButton icon="go-to-file" title="Open the local HTML file in your browser" onClick={() => void window.glassbox.openPath(deck.path)} />
-              <IconButton icon="refresh" title="Reload preview" onClick={() => setReload((n) => n + 1)} />
+              <IconButton icon="go-to-file" title={tr('showcasePanel.openLocal')} onClick={() => void window.glassbox.openPath(deck.path)} />
+              <IconButton icon="refresh" title={tr('showcasePanel.reload')} onClick={() => setReload((n) => n + 1)} />
             </div>
             {deck.artifactUrl ? (
               <div className="callout callout-info small">
-                <Icon name="info" /> Published privately. In claude.ai, open it, then Share → your org, so teammates can view it.
+                <Icon name="info" /> {tr('showcasePanel.publishedPrivately')}
               </div>
             ) : (
               <div className="callout callout-warn small">
-                <Icon name="warning" /> Not published as an Artifact, so this is only a local file. The build’s steps on the left say why.
+                <Icon name="warning" /> {tr('showcasePanel.notPublished')}
               </div>
             )}
             <iframe className="showcase-frame" src={src} sandbox="allow-scripts" title={deck.title} />
           </>
         ) : (
-          <Empty icon="preview" title={building ? 'Building the showcase…' : 'No showcase yet'}>
-            {building ? 'It previews here as soon as it’s ready.' : 'Generate one on the left; it previews here once it’s built.'}
+          <Empty icon="preview" title={building ? tr('showcasePanel.buildingShowcase') : tr('showcasePanel.emptyTitle')}>
+            {building ? tr('showcasePanel.previewSoon') : tr('showcasePanel.emptyBody')}
           </Empty>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { tr } from '../../../shared/i18n'
 
 /**
  * How a panel's header renders. On its own ('solo') the tab or work tab already names it, so only
@@ -72,7 +73,7 @@ export function Toggle({ checked, onChange, title, disabled }: { checked: boolea
 /** Placeholder bars shown while content loads, shaped roughly like what will appear. */
 export function Skeleton({ lines = 3, widths }: { lines?: number; widths?: string[] }) {
   return (
-    <div className="skeleton" aria-busy="true" aria-label="Loading">
+    <div className="skeleton" aria-busy="true" aria-label={tr('ui.loading')}>
       {Array.from({ length: lines }, (_, i) => (
         <span key={i} className="skeleton-bar" style={{ width: widths?.[i % widths.length] ?? `${92 - ((i * 17) % 35)}%` }} />
       ))}
@@ -83,7 +84,7 @@ export function Skeleton({ lines = 3, widths }: { lines?: number; widths?: strin
 /** Skeleton rows for lists: an icon-sized block, a line of text and a short meta block. */
 export function SkeletonRows({ rows = 5 }: { rows?: number }) {
   return (
-    <div className="skeleton" aria-busy="true" aria-label="Loading">
+    <div className="skeleton" aria-busy="true" aria-label={tr('ui.loading')}>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="skeleton-row">
           <span className="skeleton-bar sq" />

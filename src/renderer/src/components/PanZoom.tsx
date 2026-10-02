@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon, IconButton } from './ui'
+import { tr } from '../../../shared/i18n'
 
 type View = { x: number; y: number; k: number }
 const MIN = 0.1
@@ -113,15 +114,15 @@ export function PanZoom({ children, contentKey, toolbar }: { children: ReactNode
         </div>
       </div>
       <div className="panzoom-controls">
-        <IconButton icon="zoom-out" title="Zoom out (-)" onClick={() => zoomAt(0.8)} />
-        <span className="panzoom-level num" title="Zoom level">{Math.round(view.k * 100)}%</span>
-        <IconButton icon="zoom-in" title="Zoom in (+)" onClick={() => zoomAt(1.25)} />
-        <IconButton icon="screen-normal" title="Fit to view (0)" onClick={fit} />
-        <button className="chip-btn" title="Actual size (1)" onClick={set100}>100%</button>
+        <IconButton icon="zoom-out" title={tr('panZoom.zoomOut')} onClick={() => zoomAt(0.8)} />
+        <span className="panzoom-level num" title={tr('panZoom.zoomLevel')}>{tr('panZoom.level', { percent: Math.round(view.k * 100) })}</span>
+        <IconButton icon="zoom-in" title={tr('panZoom.zoomIn')} onClick={() => zoomAt(1.25)} />
+        <IconButton icon="screen-normal" title={tr('panZoom.fit')} onClick={fit} />
+        <button className="chip-btn" title={tr('panZoom.actualSizeTip')} onClick={set100}>{tr('panZoom.actualSize')}</button>
         {toolbar}
       </div>
       <div className="panzoom-hint muted small">
-        <Icon name="move" /> Drag to pan, scroll to zoom, double-click to zoom in
+        <Icon name="move" /> {tr('panZoom.hint')}
       </div>
     </div>
   )

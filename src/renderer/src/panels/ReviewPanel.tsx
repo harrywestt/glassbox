@@ -11,8 +11,9 @@ import type { DiffResult, ReviewModel, RewindResult } from '../../../shared/even
 import { Select } from '../components/Select'
 import { TestsSummary } from '../session-ui/TestSignals'
 import { RadarCard } from '../session-ui/RadarCard'
+import { tr } from '../../../shared/i18n'
 
-const CHECK_LABEL: Record<CheckKind, string> = { test: 'Tests', lint: 'Lint and types', build: 'Build' }
+const CHECK_LABEL: Record<CheckKind, string> = { test: tr('reviewPanel.checkTests'), lint: tr('reviewPanel.checkLint'), build: tr('reviewPanel.checkBuild') }
 
 /**
  * Everything a reviewer would ask, answered continuously while Claude works. `compact` is the version
@@ -54,46 +55,46 @@ export function ReviewPanel({ compact }: { compact?: boolean } = {}) {
 
   return (
     <div className="panel">
-      {!compact && <PanelHeader title="Review" />}
+      {!compact && <PanelHeader title={tr('reviewPanel.title')} />}
       <div className="panel-scroll">
         {/* Sections only show when they have something in them; each folds away. */}
         {(openAssumptions.length > 0 || risky.length > 0 || s.guardHits.length > 0) && (
-          <Section id="needs-a-look" title="Needs a look">
+          <Section id="needs-a-look" title={tr('reviewPanel.needsALook')}>
             {openAssumptions.length > 0 && (
               <Attention icon="warning" tone="warn" onClick={() => showPanel('decisions')}>
-                {`${openAssumptions.length} assumption${openAssumptions.length > 1 ? 's' : ''} or question${openAssumptions.length > 1 ? 's' : ''} not yet reviewed`}
+                {tr('reviewPanel.assumptionsNotReviewed', { count: openAssumptions.length })}
               </Attention>
             )}
             {(risky.length > 0 || s.guardHits.length > 0) && (
               <Attention icon="shield" tone="warn" onClick={() => showPanel('guardrails')}>
-                {`${risky.length} high-risk action${risky.length === 1 ? '' : 's'}, ${s.guardHits.length} guardrail stop${s.guardHits.length === 1 ? '' : 's'}`}
+                {tr('reviewPanel.riskSummary', { actions: tr('reviewPanel.highRiskActions', { count: risky.length }), stops: tr('reviewPanel.guardrailStops', { count: s.guardHits.length }) })}
               </Attention>
             )}
           </Section>
         )}
         <CriteriaList />
         <Findings />
-        {!compact && s.git?.isRepo && (!diff || files.length > 0) && <Section id="changeset" title="Changeset" meta={base && <span className="muted small">against {base}</span>}>
+        {!compact && s.git?.isRepo && (!diff || files.length > 0) && <Section id="changeset" title={tr('reviewPanel.changeset')} meta={base && <span className="muted small">{tr('reviewPanel.against', { base })}</span>}>
           {!s.git?.isRepo ? (
-            <div className="muted small">Not a git repository.</div>
+            <div className="muted small">{tr('reviewPanel.notRepo')}</div>
           ) : !diff ? (
-            <div className="muted small">Comparing…</div>
+            <div className="muted small">{tr('reviewPanel.comparing')}</div>
           ) : (
             <>
               <div className="review-stats">
-                <div><span className="big">{files.length}</span><span className="muted small">files</span></div>
-                <div><span className="big ok">+{adds}</span><span className="muted small">added</span></div>
-                <div><span className="big err">−{dels}</span><span className="muted small">removed</span></div>
+                <div><span className="big">{files.length}</span><span className="muted small">{tr('reviewPanel.statFiles')}</span></div>
+                <div><span className="big ok">+{adds}</span><span className="muted small">{tr('reviewPanel.statAdded')}</span></div>
+                <div><span className="big err">−{dels}</span><span className="muted small">{tr('reviewPanel.statRemoved')}</span></div>
               </div>
               {files.slice(0, 8).map((f) => (
-                <div key={f.path} className="list-row clickable" onClick={() => openChanged(f.path)} title={`${f.path}\nOpen the diff`}>
+                <div key={f.path} className="list-row clickable" onClick={() => openChanged(f.path)} title={`${f.path}\n${tr('reviewPanel.openDiff')}`}>
                   <span className="status-letter muted">{f.status === '?' ? 'U' : f.status}</span>
                   <span className="grow ellipsis">{baseName(f.path)} <span className="muted small">{f.path.split('/').slice(0, -1).join('/')}</span></span>
                   {f.additions !== undefined && <span className="small"><span className="ok">+{f.additions}</span> <span className="err">−{f.deletions}</span></span>}
                 </div>
               ))}
-              {files.length > 8 && <button className="link small" onClick={() => showPanel('changes')}>All {files.length} files</button>}
-              {strays > 0 && <div className="muted small changes-untracked">{strays} untracked file{strays > 1 ? 's' : ''} git has never tracked {strays > 1 ? 'aren’t' : 'isn’t'} counted. See Changes to show them.</div>}
+              {files.length > 8 && <button className="link small" onClick={() => showPanel('changes')}>{tr('reviewPanel.allFiles', { n: files.length })}</button>}
+              {strays > 0 && <div className="muted small changes-untracked">{tr('reviewPanel.untrackedNotCounted', { count: strays })}</div>}
             </>
           )}
         </Section>}
@@ -103,13 +104,13 @@ export function ReviewPanel({ compact }: { compact?: boolean } = {}) {
         <BlastRadius cwd={tab.cwd} files={edited} onOpen={openFile} />
 
         {!compact && latest('test') && (
-          <Section id="review-tests" title="Tests">
+          <Section id="review-tests" title={tr('reviewPanel.tests')}>
             <TestsSummary />
           </Section>
         )}
 
         {(latest('lint') || latest('build')) && (
-        <Section id="lint-build" title="Lint and build">
+        <Section id="lint-build" title={tr('reviewPanel.lintAndBuild')}>
           {(['lint', 'build'] as CheckKind[]).filter((kind) => latest(kind)).map((kind) => {
             const c = latest(kind)
             return (
@@ -117,7 +118,7 @@ export function ReviewPanel({ compact }: { compact?: boolean } = {}) {
                 <Icon name={!c ? 'circle-large-outline' : c.passed === null ? 'loading' : c.passed ? 'pass-filled' : 'error'} className={!c ? 'muted' : c.passed === null ? 'codicon-modifier-spin accent' : c.passed ? 'ok' : 'err'} />
                 <div className="grow">
                   <div>{CHECK_LABEL[kind]} {c && <span className="muted small">{timeAgo(c.call.at)}</span>}</div>
-                  <div className={c ? 'muted small ellipsis mono' : 'muted small'} title={c?.call.input.command as string | undefined}>{c ? c.summary || String(c.call.input.command) : 'Not run this session'}</div>
+                  <div className={c ? 'muted small ellipsis mono' : 'muted small'} title={c?.call.input.command as string | undefined}>{c ? c.summary || String(c.call.input.command) : tr('reviewPanel.notRun')}</div>
                 </div>
               </div>
             )
@@ -126,15 +127,15 @@ export function ReviewPanel({ compact }: { compact?: boolean } = {}) {
         )}
 
         {checkpoints(s).some((c) => c.uuid) && (
-          <Section id="checkpoints" title="Checkpoints" tip="Each message you send is a checkpoint. Rewinding restores the files Claude changed after it; the conversation stays as it is.">
+          <Section id="checkpoints" title={tr('reviewPanel.checkpoints')} tip={tr('reviewPanel.checkpointsTip')}>
             <Checkpoints selected={checkpoint} onSelect={setCheckpoint} />
           </Section>
         )}
 
         {/* Always on hand, whatever has run so far. */}
         <div className="row-actions review-checks">
-          <button className="chip-btn" disabled={!canSend} onClick={() => runSide({ kind: 'checks', title: 'Run tests, lint and build', prompt: "Run this project's tests, lint or typecheck, and build, and report each result with the failures that matter. Don't change any files.", tools: [...READ_TOOLS, ...SHELL_TOOLS] })}>
-            <Icon name="play" /> Run tests, lint and build
+          <button className="chip-btn" disabled={!canSend} onClick={() => runSide({ kind: 'checks', title: tr('reviewPanel.runChecks'), prompt: "Run this project's tests, lint or typecheck, and build, and report each result with the failures that matter. Don't change any files.", tools: [...READ_TOOLS, ...SHELL_TOOLS] })}>
+            <Icon name="play" /> {tr('reviewPanel.runChecks')}
           </button>
         </div>
       </div>
@@ -175,21 +176,21 @@ function Findings() {
   // Nothing to show until there are edits to review or something was found.
   if (!open.length && !r.pending && !r.busy && !r.error && !r.reviewedEdits) return null
   return (
-    <Section id="findings" title="Findings" meta={open.length > 0 && <span className="count">{open.length}</span>} actions={r.reviewedEdits > 0 && <span className="small muted">{r.reviewedEdits} edits reviewed</span>}>
+    <Section id="findings" title={tr('reviewPanel.findings')} meta={open.length > 0 && <span className="count">{open.length}</span>} actions={r.reviewedEdits > 0 && <span className="small muted">{tr('reviewPanel.editsReviewed', { n: r.reviewedEdits })}</span>}>
       <div className="review-run">
-        <Select<ReviewModel> value={model} onChange={pickModel} aria-label="Review model" title="Which model reviews the edits" options={REVIEW_MODELS} />
+        <Select<ReviewModel> value={model} onChange={pickModel} aria-label={tr('reviewPanel.reviewModel')} title={tr('reviewPanel.reviewModelTitle')} options={REVIEW_MODELS} />
         <button
           className="primary"
           disabled={r.busy || r.pending === 0}
           onClick={() => void window.glassbox.session.review(tab.id, model)}
-          title={r.pending ? `A second model reviews the ${r.pending} edit${r.pending > 1 ? 's' : ''} made since the last review, against the current files` : 'No new edits to review'}
+          title={r.pending ? tr('reviewPanel.reviewTitle', { count: r.pending }) : tr('reviewPanel.noNewEdits')}
         >
-          {r.busy ? <><Icon name="loading" className="codicon-modifier-spin" /> Reviewing…</> : <><Icon name="checklist" /> {r.pending ? `Review ${r.pending} new edit${r.pending > 1 ? 's' : ''}` : 'Review edits'}</>}
+          {r.busy ? <><Icon name="loading" className="codicon-modifier-spin" /> {tr('reviewPanel.reviewing')}</> : <><Icon name="checklist" /> {r.pending ? tr('reviewPanel.reviewNewEdits', { count: r.pending }) : tr('reviewPanel.reviewEdits')}</>}
         </button>
       </div>
       {r.error && <div className="note note-error">{r.error}</div>}
       {open.length === 0 ? (
-        <div className="muted small">{r.reviewedEdits ? 'Nothing flagged in the edits reviewed so far.' : 'Not reviewed yet.'}</div>
+        <div className="muted small">{r.reviewedEdits ? tr('reviewPanel.nothingFlagged') : tr('reviewPanel.notReviewed')}</div>
       ) : (
         <div className="findings">{[...open].reverse().map((f) => <FindingCard key={f.id} f={f} />)}</div>
       )}
@@ -201,7 +202,7 @@ function Findings() {
             onClick={() =>
               runSide({
                 kind: 'review',
-                title: 'Draft the GitHub review',
+                title: tr('reviewPanel.draftReview'),
                 tools: [...READ_TOOLS, ...SHELL_TOOLS],
                 prompt: `Draft a GitHub review for ${tab.title.replace(/^Review /, 'PR ')} from these findings: a short summary, then each finding as an inline comment on its file and line. Return the draft as your final message. Don't post anything.\n\n${open
                   .filter((f) => f.source === 'claude')
@@ -210,7 +211,7 @@ function Findings() {
               })
             }
           >
-            <Icon name="github" /> Draft the GitHub review
+            <Icon name="github" /> {tr('reviewPanel.draftReview')}
           </button>
         </div>
       )}
@@ -255,7 +256,7 @@ function Checkpoints({ selected, onSelect }: { selected: string | null; onSelect
     }
   }
 
-  if (!list.length) return <Empty icon="discard" title="No checkpoints yet">Checkpoints appear once you send a message in this Glassbox session.</Empty>
+  if (!list.length) return <Empty icon="discard" title={tr('reviewPanel.noCheckpoints')}>{tr('reviewPanel.noCheckpointsBody')}</Empty>
 
   return (
     <div className="checkpoints">
@@ -264,29 +265,29 @@ function Checkpoints({ selected, onSelect }: { selected: string | null; onSelect
           <div className="list-row clickable" onClick={() => void dryRun(c.uuid!)}>
             <Icon name="discard" />
             <span className="grow ellipsis">{c.text}</span>
-            <span className="muted small">{c.files.length ? `${c.files.length} file${c.files.length > 1 ? 's' : ''}` : 'no edits'}</span>
+            <span className="muted small">{c.files.length ? tr('reviewPanel.checkpointFiles', { count: c.files.length }) : tr('reviewPanel.noEdits')}</span>
           </div>
           {preview && preview.uuid === c.uuid && (
             <div className="checkpoint-detail small">
               {preview.error ? (
                 <div className="err">{preview.error}</div>
               ) : !preview.result ? (
-                <div className="muted">Checking what would change…</div>
+                <div className="muted">{tr('reviewPanel.checkingChanges')}</div>
               ) : preview.result.canRewind && !preview.done && !preview.result.filesChanged?.length ? (
-                <div className="muted">No file changes since this message, so there’s nothing to restore.</div>
+                <div className="muted">{tr('reviewPanel.nothingToRestore')}</div>
               ) : !preview.result.canRewind ? (
-                <div className="muted">{preview.result.error ?? 'Nothing to rewind from this point.'}</div>
+                <div className="muted">{preview.result.error ?? tr('reviewPanel.nothingToRewind')}</div>
               ) : preview.done ? (
-                <div className="ok"><Icon name="pass" /> Restored {preview.result.filesChanged?.length ?? 0} files. Tell Claude what you changed so it doesn't redo the work.</div>
+                <div className="ok"><Icon name="pass" /> {tr('reviewPanel.restored', { n: preview.result.filesChanged?.length ?? 0 })}</div>
               ) : (
                 <>
                   <div>
-                    Rewinding restores <strong>{preview.result.filesChanged?.length ?? 0} files</strong> (<span className="ok">+{preview.result.insertions ?? 0}</span> <span className="err">−{preview.result.deletions ?? 0}</span>)
+                    {tr('reviewPanel.rewindingRestores')} <strong>{tr('reviewPanel.rewindFiles', { n: preview.result.filesChanged?.length ?? 0 })}</strong> (<span className="ok">+{preview.result.insertions ?? 0}</span> <span className="err">−{preview.result.deletions ?? 0}</span>)
                   </div>
                   <div className="muted mono ellipsis">{preview.result.filesChanged?.map((f) => relPath(tab.cwd, f)).join(', ')}</div>
                   <div className="row-actions">
-                    <button onClick={() => (setPreview(null), onSelect(null))}>Cancel</button>
-                    <button className="danger" onClick={() => void rewind(c.uuid!)}>Rewind files</button>
+                    <button onClick={() => (setPreview(null), onSelect(null))}>{tr('reviewPanel.cancel')}</button>
+                    <button className="danger" onClick={() => void rewind(c.uuid!)}>{tr('reviewPanel.rewindFilesButton')}</button>
                   </div>
                 </>
               )}

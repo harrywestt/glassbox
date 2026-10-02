@@ -2,20 +2,21 @@ import { useMemo, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import type { SlashCommand } from '../../../shared/events'
 import { Empty, Icon, PanelHeader, Segmented } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 type Scope = 'all' | 'project' | 'user' | 'plugin' | 'builtin'
 const SCOPE_ORDER: Record<Scope, number> = { project: 0, user: 1, plugin: 2, builtin: 3, all: 4 }
 
 /** Claude Code appends the source in parentheses, e.g. "… (project)" or "… (plugin:shopify)". */
 function sourceOf(c: SlashCommand): { scope: Scope; label: string; description: string } {
-  if (c.builtin) return { scope: 'builtin', label: 'built-in', description: c.description }
+  if (c.builtin) return { scope: 'builtin', label: tr('skillsPanel.tagBuiltin'), description: c.description }
   const m = c.description.match(/\s*\(([^()]+)\)\s*$/)
   const raw = m?.[1] ?? ''
   const description = m ? c.description.slice(0, m.index) : c.description
-  if (raw === 'project') return { scope: 'project', label: 'project', description }
-  if (raw === 'user') return { scope: 'user', label: 'user', description }
-  if (raw.startsWith('plugin') || c.name.includes(':')) return { scope: 'plugin', label: raw || 'plugin', description }
-  return { scope: 'builtin', label: raw || 'built-in', description }
+  if (raw === 'project') return { scope: 'project', label: tr('skillsPanel.tagProject'), description }
+  if (raw === 'user') return { scope: 'user', label: tr('skillsPanel.tagUser'), description }
+  if (raw.startsWith('plugin') || c.name.includes(':')) return { scope: 'plugin', label: raw || tr('skillsPanel.tagPlugin'), description }
+  return { scope: 'builtin', label: raw || tr('skillsPanel.tagBuiltin'), description }
 }
 
 export function SkillsPanel() {
@@ -45,27 +46,27 @@ export function SkillsPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Skills and commands" />
+      <PanelHeader title={tr('skillsPanel.title')} />
       <div className="panel-toolbar wrap">
         <div className="search grow">
           <Icon name="search" />
-          <input placeholder={`Search ${s.commands.length} skills and commands`} value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <input placeholder={tr('skillsPanel.search', { n: s.commands.length })} value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
         <Segmented<Scope>
           value={scope}
           onChange={setScope}
           options={[
-            { value: 'all', label: 'All' },
-            { value: 'project', label: 'Project' },
-            { value: 'user', label: 'Mine' },
-            { value: 'plugin', label: 'Plugins' },
-            { value: 'builtin', label: 'Built-in' }
+            { value: 'all', label: tr('skillsPanel.scopeAll') },
+            { value: 'project', label: tr('skillsPanel.scopeProject') },
+            { value: 'user', label: tr('skillsPanel.scopeMine') },
+            { value: 'plugin', label: tr('skillsPanel.scopePlugins') },
+            { value: 'builtin', label: tr('skillsPanel.scopeBuiltin') }
           ]}
         />
       </div>
       <div className="panel-scroll flush">
-        {s.commands.length === 0 && <Empty icon="sparkle" title="Loading skills…" />}
-        {s.commands.length > 0 && commands.length === 0 && <Empty icon="search" title="No matching skills" />}
+        {s.commands.length === 0 && <Empty icon="sparkle" title={tr('skillsPanel.loading')} />}
+        {s.commands.length > 0 && commands.length === 0 && <Empty icon="search" title={tr('skillsPanel.noMatching')} />}
         {commands.map((c) => (
           <div key={c.name} className={armed === c.name ? 'skill armed' : 'skill'}>
             <div className="skill-main" onDoubleClick={() => canSend && (c.argumentHint ? setArmed(c.name) : run(c.name, ''))}>
@@ -79,21 +80,21 @@ export function SkillsPanel() {
             <div className="skill-actions">
               <button
                 className={pinned.has(c.name) ? 'icon-btn active' : 'icon-btn'}
-                title={pinned.has(c.name) ? 'Preferred for this session. Click to remove' : 'Prefer this skill for the session'}
+                title={pinned.has(c.name) ? tr('skillsPanel.preferredTitle') : tr('skillsPanel.preferTitle')}
                 onClick={() =>
                   updateRequirements((r) => ({ ...r, skills: r.skills.includes(c.name) ? r.skills.filter((x) => x !== c.name) : [...r.skills, c.name] }))
                 }
               >
                 <Icon name={pinned.has(c.name) ? 'pinned' : 'pin'} />
               </button>
-              <button className="primary run" disabled={!canSend} title={`Run /${c.name}`} onClick={() => (c.argumentHint ? setArmed(armed === c.name ? null : c.name) : run(c.name, ''))}>
-                <Icon name="play" /> Run
+              <button className="primary run" disabled={!canSend} title={tr('skillsPanel.runTitle', { name: c.name })} onClick={() => (c.argumentHint ? setArmed(armed === c.name ? null : c.name) : run(c.name, ''))}>
+                <Icon name="play" /> {tr('skillsPanel.run')}
               </button>
             </div>
             {armed === c.name && (
               <div className="skill-args">
-                <input autoFocus placeholder={c.argumentHint || 'arguments (optional)'} value={args} onChange={(e) => setArgs(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && run(c.name, args)} />
-                <button className="primary" onClick={() => run(c.name, args)}>Run</button>
+                <input autoFocus placeholder={c.argumentHint || tr('skillsPanel.argsPlaceholder')} value={args} onChange={(e) => setArgs(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && run(c.name, args)} />
+                <button className="primary" onClick={() => run(c.name, args)}>{tr('skillsPanel.run')}</button>
               </div>
             )}
           </div>

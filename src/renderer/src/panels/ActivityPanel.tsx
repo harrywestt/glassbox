@@ -8,6 +8,7 @@ import { SideTasks } from '../session-ui/SideTasks'
 import { toolIcon } from '../session-ui/Timeline'
 import { describeTool } from '../session-ui/describe'
 import { TestsSummary } from '../session-ui/TestSignals'
+import { tr } from '../../../shared/i18n'
 
 const shortSummary = (c: ToolCall) => {
   const p = c.input.file_path ?? c.input.notebook_path
@@ -28,7 +29,7 @@ export function ActivityPanel() {
       : []
   const agentName = (id: string) => {
     const a = s.agents[id]
-    return a ? `${a.type ? a.type[0].toUpperCase() + a.type.slice(1) : 'An'} agent: ${a.description}` : 'This agent'
+    return a ? (a.type ? tr('activityPanel.agentNamed', { type: a.type[0].toUpperCase() + a.type.slice(1), description: a.description }) : tr('activityPanel.agentUnnamed', { description: a.description })) : tr('activityPanel.thisAgent')
   }
   const [commentOn, setCommentOn] = useState<string | null>(null)
   const [showPlan, setShowPlan] = useState(false)
@@ -51,41 +52,41 @@ export function ActivityPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Now" />
+      <PanelHeader title={tr('activityPanel.title')} />
       <div className="panel-scroll">
         {s.alerts.map((a) => (
           <div key={a.at} className="callout callout-warn">
             <Icon name="warning" />
             <span className="grow">{a.text}</span>
-            <button className="icon-btn" title="Dismiss" onClick={() => actions.dismissAlert(tab.id, a.at)}>
+            <button className="icon-btn" title={tr('activityPanel.dismiss')} onClick={() => actions.dismissAlert(tab.id, a.at)}>
               <Icon name="close" />
             </button>
           </div>
         ))}
         {waitingOnYou.map((c) => (
           <div key={c.id} className="callout callout-warn">
-            <Icon name="debug-pause" /> Claude is paused, waiting for your answer: {c.about}
+            <Icon name="debug-pause" /> {tr('activityPanel.pausedWaiting', { about: c.about })}
           </div>
         ))}
         {s.permissions.length > 0 && (
           <div className="callout callout-warn">
-            <Icon name="bell-dot" /> {s.permissions.length} tool call{s.permissions.length > 1 ? 's' : ''} waiting for your approval
+            <Icon name="bell-dot" /> {tr('activityPanel.permissionsWaiting', { count: s.permissions.length })}
           </div>
         )}
 
         {/* Sections with nothing in them aren't shown; each can be folded away. */}
         {(task || agentLists.length > 0) && (
-          <Section id="task" title="Tasks" meta={task?.steps?.length ? <span className="muted small">{task.steps.filter((x) => x.status === 'done').length} of {task.steps.length} done</span> : undefined}>
+          <Section id="task" title={tr('activityPanel.tasks')} meta={task?.steps?.length ? <span className="muted small">{tr('activityPanel.stepsDone', { done: task.steps.filter((x) => x.status === 'done').length, total: task.steps.length })}</span> : undefined}>
             <>
               {viewing && <div className="task-owner small muted">{agentName(viewing)}</div>}
               {task && <div className="task-summary">{task.summary}</div>}
-              {!task && <div className="muted small">Claude hasn’t made a list for this yet.</div>}
+              {!task && <div className="muted small">{tr('activityPanel.noList')}</div>}
               {task?.steps?.map((step, i) => (
                 <div key={i}>
                   <div className={`step step-${step.status}`}>
                     <Icon name={step.status === 'done' ? 'pass-filled' : step.status === 'active' ? 'circle-large-filled' : 'circle-large-outline'} />
                     <span className="grow">{step.label}</span>
-                    <button className="icon-btn hover-action" title="Comment on this step" onClick={() => setCommentOn(step.label)}>
+                    <button className="icon-btn hover-action" title={tr('activityPanel.commentOnStep')} onClick={() => setCommentOn(step.label)}>
                       <Icon name="comment" />
                     </button>
                   </div>
@@ -101,9 +102,9 @@ export function ActivityPanel() {
               ))}
               {agentLists.map(({ id, agent, task: t }) => (
                 <div key={id} className="task-agent">
-                  <button className="task-owner link small" onClick={() => setFilter(id)} title="Show only this agent">
+                  <button className="task-owner link small" onClick={() => setFilter(id)} title={tr('activityPanel.showOnlyAgent')}>
                     {agentName(id)}
-                    <span className="muted"> {t.steps?.filter((x) => x.status === 'done').length ?? 0} of {t.steps?.length ?? 0} done{agent.status !== 'running' ? ', finished' : ''}</span>
+                    <span className="muted"> {tr(agent.status !== 'running' ? 'activityPanel.stepsDoneFinished' : 'activityPanel.stepsDone', { done: t.steps?.filter((x) => x.status === 'done').length ?? 0, total: t.steps?.length ?? 0 })}</span>
                   </button>
                   {t.steps?.map((step, i) => (
                     <div key={i} className={`step step-${step.status}`}>
@@ -120,12 +121,12 @@ export function ActivityPanel() {
         {s.plan && (
           <Section
             id="plan"
-            title="Plan"
-            meta={<span className={`tag ${s.plan.status === 'approved' ? 'accent' : ''}`}>{s.plan.status === 'approved' ? 'approved' : s.plan.status === 'proposed' ? 'waiting for you' : 'changes requested'}</span>}
+            title={tr('activityPanel.plan')}
+            meta={<span className={`tag ${s.plan.status === 'approved' ? 'accent' : ''}`}>{s.plan.status === 'approved' ? tr('activityPanel.planApproved') : s.plan.status === 'proposed' ? tr('activityPanel.planProposed') : tr('activityPanel.planChangesRequested')}</span>}
             actions={
               <>
-                <button className="link small" onClick={() => setShowPlan(!showPlan)}>{showPlan ? 'Hide the text' : 'Show the text'}</button>
-                <button className="link small" onClick={() => openPlan()}>Open</button>
+                <button className="link small" onClick={() => setShowPlan(!showPlan)}>{showPlan ? tr('activityPanel.hideText') : tr('activityPanel.showText')}</button>
+                <button className="link small" onClick={() => openPlan()}>{tr('activityPanel.open')}</button>
               </>
             }
           >
@@ -134,7 +135,7 @@ export function ActivityPanel() {
               <CommentBox target={{ kind: 'plan' }} onDone={() => setCommentOn(null)} />
             ) : (
               <button className="chip-btn" onClick={() => setCommentOn(':plan')}>
-                <Icon name="comment" /> Comment on the plan
+                <Icon name="comment" /> {tr('activityPanel.commentOnPlan')}
               </button>
             )}
           </Section>
@@ -142,14 +143,14 @@ export function ActivityPanel() {
 
         <TestsNow />
 
-        {running.length + agents.length > 0 && <Section id="running" title="Running" meta={<span className="count">{running.length + agents.length}</span>}>
+        {running.length + agents.length > 0 && <Section id="running" title={tr('activityPanel.running')} meta={<span className="count">{running.length + agents.length}</span>}>
           {agents.map((a) => (
             <div key={a.id} className="list-row clickable" onClick={() => (setFilter(a.id), showPanel('agents'))}>
               <Icon name="organization" className="accent" />
               <span className="grow ellipsis">
                 <strong>{a.type}</strong> {a.description}
               </span>
-              <span className="muted small">{a.toolCalls} tools</span>
+              <span className="muted small">{tr('activityPanel.tools', { n: a.toolCalls })}</span>
               <span className="muted small num">{secs(a.at)}</span>
             </div>
           ))}
@@ -169,24 +170,24 @@ export function ActivityPanel() {
 
 
         {recent.length > 0 && (
-          <Section id="recent" title="Recent activity">
+          <Section id="recent" title={tr('activityPanel.recentActivity')}>
             {recent.map((c) => (
               <div key={c.id} className="list-row" title={toolSummary(c)}>
                 <Icon name={c.status === 'error' ? 'error' : toolIcon(c.name)} className={c.status === 'error' ? 'err' : ''} />
                 <span className="grow ellipsis">
                   {describeTool(c)}
                 </span>
-                <span className="activity-time muted small" title={`Started ${new Date(c.at).toLocaleString()}${c.endedAt ? `, took ${took(c.endedAt - c.at)}` : ''}`}>
+                <span className="activity-time muted small" title={c.endedAt ? tr('activityPanel.startedTook', { time: new Date(c.at).toLocaleString(), duration: took(c.endedAt - c.at) }) : tr('activityPanel.started', { time: new Date(c.at).toLocaleString() })}>
                   <span className="num">{clock(c.at)}</span>
-                  {!c.endedAt && c.status === 'running' && <span>running</span>}
+                  {!c.endedAt && c.status === 'running' && <span>{tr('activityPanel.runningStatus')}</span>}
                 </span>
               </div>
             ))}
           </Section>
         )}
         {!task && !agentLists.length && !s.plan && !recent.length && !running.length && !agents.length && !s.alerts.length && !waitingOnYou.length && !s.permissions.length && (
-          <Empty icon="pulse" title={s.status === 'running' ? 'Claude is starting' : 'Nothing happening yet'}>
-            The task, what’s running and recent tool calls show up here once Claude starts.
+          <Empty icon="pulse" title={s.status === 'running' ? tr('activityPanel.starting') : tr('activityPanel.nothingYet')}>
+            {tr('activityPanel.emptyBody')}
           </Empty>
         )}
       </div>
@@ -212,7 +213,7 @@ function TestsNow() {
   const any = Object.values(s.toolCalls).some((c) => (c.name === 'Bash' || c.name === 'PowerShell') && /test/i.test(String(c.input.command ?? '')))
   if (!any) return null
   return (
-    <Section id="tests" title="Tests">
+    <Section id="tests" title={tr('activityPanel.tests')}>
       <TestsSummary compact />
     </Section>
   )

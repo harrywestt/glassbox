@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useSession } from '../views/SessionView'
 import { Icon } from '../components/ui'
 import type { BranchList } from '../../../main/git'
+import { tr } from '../../../shared/i18n'
 
 /** The branch chip in the session header; click it to switch to another branch or start a new one. */
 export function BranchMenu() {
@@ -23,14 +24,14 @@ export function BranchMenu() {
         className={open ? 'sh-branch open' : 'sh-branch'}
         disabled={busy}
         onClick={() => setOpen(!open)}
-        title={busy ? 'Wait for Claude to finish before switching branch' : `${git.branch} @ ${git.head}${git.upstream ? `\ntracking ${git.upstream}` : ''}\nClick to switch branch`}
+        title={busy ? tr('branchMenu.busy') : git.upstream ? tr('branchMenu.chipTitleTracking', { branch: git.branch, head: git.head, upstream: git.upstream }) : tr('branchMenu.chipTitle', { branch: git.branch, head: git.head })}
       >
         <Icon name="git-branch" /> {git.branch}
         {/* The branch's changed files, the number the Changes panel shows; uncommitted ones are in the tooltip. */}
         {(git.changed ?? git.dirty) ? (
           <span
             className={git.dirty ? 'chip-extra warn' : 'chip-extra'}
-            title={`${git.changed ?? git.dirty} file${(git.changed ?? git.dirty) === 1 ? '' : 's'} changed${git.base ? ` against ${git.base}` : ''}${git.dirty ? `, ${git.dirty} not committed yet` : ', all committed'}`}
+            title={tr('branchMenu.changedTitle', { files: tr(git.base ? 'branchMenu.filesChangedAgainst' : 'branchMenu.filesChanged', { count: git.changed ?? git.dirty, base: git.base }), state: git.dirty ? tr('branchMenu.notCommitted', { count: git.dirty }) : tr('branchMenu.allCommitted') })}
           >
             ●{git.changed ?? git.dirty}
           </span>
@@ -85,9 +86,7 @@ function Popover({ anchor, cwd, tabId, dirty, shared, onClose }: { anchor: HTMLE
 
   const go = async (branch: string, create = false) => {
     // Another session in this same folder would have its files switched too.
-    if (shared && !window.confirm(`Another session is working in this same folder. Switching to ${branch} changes the files for it too, mid-task.
-
-Switch anyway?`)) return
+    if (shared && !window.confirm(tr('branchMenu.confirmShared', { branch }))) return
     setSwitching(branch)
     setError(null)
     try {
@@ -101,12 +100,12 @@ Switch anyway?`)) return
   }
 
   return (
-    <div ref={box} className="branch-pop" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label="Switch branch">
+    <div ref={box} className="branch-pop" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label={tr('branchMenu.switchBranch')}>
       <div className="search">
         <Icon name="search" />
         <input
           autoFocus
-          placeholder="Find or create a branch"
+          placeholder={tr('branchMenu.searchPlaceholder')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -119,13 +118,13 @@ Switch anyway?`)) return
       </div>
       {dirty > 0 && (
         <div className="branch-note small">
-          <Icon name="warning" className="warn" /> {dirty} uncommitted change{dirty > 1 ? 's' : ''} will come with you. Git won’t switch if they’d be overwritten.
+          <Icon name="warning" className="warn" /> {tr('branchMenu.dirtyNote', { count: dirty })}
         </div>
       )}
       {error && <div className="note note-error branch-error">{error}</div>}
       <div className="branch-list">
-        {!list && !error && <div className="muted small pad">Loading branches…</div>}
-        {local.length > 0 && <div className="branch-group">Local</div>}
+        {!list && !error && <div className="muted small pad">{tr('branchMenu.loading')}</div>}
+        {local.length > 0 && <div className="branch-group">{tr('branchMenu.local')}</div>}
         {local.map((b) => {
           const current = b.name === list?.current
           return (
@@ -137,18 +136,18 @@ Switch anyway?`)) return
             </button>
           )
         })}
-        {remote.length > 0 && <div className="branch-group">Remote, not checked out yet</div>}
+        {remote.length > 0 && <div className="branch-group">{tr('branchMenu.remote')}</div>}
         {remote.map((b) => (
-          <button key={b} className="branch-row" disabled={!!switching} onClick={() => void go(b)} title={`Create a local branch tracking ${b} and switch to it`}>
+          <button key={b} className="branch-row" disabled={!!switching} onClick={() => void go(b)} title={tr('branchMenu.remoteTitle', { branch: b })}>
             <span className="branch-mark">{switching === b ? <Icon name="loading" className="codicon-modifier-spin" /> : null}</span>
             <span className="grow ellipsis">{b}</span>
           </button>
         ))}
-        {list && !local.length && !remote.length && !canCreate && <div className="muted small pad">No matching branches.</div>}
+        {list && !local.length && !remote.length && !canCreate && <div className="muted small pad">{tr('branchMenu.noMatches')}</div>}
       </div>
       {canCreate && (
         <button className="branch-create" disabled={!!switching} onClick={() => void go(newName, true)}>
-          <Icon name="add" /> Create <strong>{newName}</strong> from the current commit
+          <Icon name="add" /> {tr('branchMenu.createBefore')}<strong>{newName}</strong>{tr('branchMenu.createAfter')}
         </button>
       )}
     </div>

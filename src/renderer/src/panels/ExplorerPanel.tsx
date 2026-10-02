@@ -4,6 +4,7 @@ import { CHANGE_TOOLS, searchHits } from '../session'
 import { relPath } from '../lib'
 import { Empty, Icon, IconButton, PanelHeader } from '../components/ui'
 import type { FileMark } from '../../../shared/events'
+import { tr } from '../../../shared/i18n'
 
 type Node = { name: string; path: string; children?: Map<string, Node> }
 
@@ -47,17 +48,16 @@ function saveHeatPref(on: boolean) {
   }
 }
 
-const times = (n: number, verb: string) => `${verb} ${n} time${n === 1 ? '' : 's'}`
 function heatLabel(h: Heat, folder: boolean): string {
-  const parts = [h.reads && times(h.reads, 'read'), h.edits && times(h.edits, 'edited'), h.searches && times(h.searches, 'searched')].filter(Boolean) as string[]
-  const text = (folder ? 'Files in here ' : '') + parts.join(', ')
+  const parts = [h.reads && tr('explorerPanel.readTimes', { count: h.reads }), h.edits && tr('explorerPanel.editedTimes', { count: h.edits }), h.searches && tr('explorerPanel.searchedTimes', { count: h.searches })].filter(Boolean) as string[]
+  const text = folder ? tr('explorerPanel.filesInHere', { list: parts.join(', ') }) : parts.join(', ')
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 const MARKS: { mark: FileMark; icon: string; label: string }[] = [
-  { mark: 'read', icon: 'eye', label: 'Must read' },
-  { mark: 'edit', icon: 'edit', label: 'Must edit' },
-  { mark: 'avoid', icon: 'lock', label: "Don't touch" }
+  { mark: 'read', icon: 'eye', label: tr('explorerPanel.mustRead') },
+  { mark: 'edit', icon: 'edit', label: tr('explorerPanel.mustEdit') },
+  { mark: 'avoid', icon: 'lock', label: tr('explorerPanel.dontTouch') }
 ]
 
 export function ExplorerPanel() {
@@ -203,13 +203,13 @@ export function ExplorerPanel() {
         <Icon name="file" className="tree-file" />
         <span className={`tree-name${touch ? ` touched-${touch}` : ''}`}>{node.name}</span>
         {heatOn && h && <span className="heat-count">{h.total}</span>}
-        {touch && <span className={`touch-dot touch-${touch}`} title={touch === 'edit' ? 'Edited by Claude' : 'Read by Claude'} />}
+        {touch && <span className={`touch-dot touch-${touch}`} title={touch === 'edit' ? tr('explorerPanel.editedByClaude') : tr('explorerPanel.readByClaude')} />}
         <span className="tree-actions">
           {MARKS.map((m) => (
             <button
               key={m.mark}
               className={mark === m.mark ? `mark-btn on mark-${m.mark}` : 'mark-btn'}
-              title={mark === m.mark ? `Remove "${m.label}"` : m.label}
+              title={mark === m.mark ? tr('explorerPanel.removeMark', { label: m.label }) : m.label}
               onClick={(e) => {
                 e.stopPropagation()
                 markFile(node.path, mark === m.mark ? null : m.mark)
@@ -225,29 +225,29 @@ export function ExplorerPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Heatmap">
+      <PanelHeader title={tr('explorerPanel.title')}>
         {/* Stacked, the heading row is shown, so the clear link sits on it; the toolbar keeps search and icons. */}
         {s.requirements.files.length > 0 && (
           <button className="link small" onClick={() => updateRequirements((r) => ({ ...r, files: [] }))}>
-            Clear {s.requirements.files.length} mark{s.requirements.files.length > 1 ? 's' : ''}
+            {tr('explorerPanel.clearMarks', { count: s.requirements.files.length })}
           </button>
         )}
       </PanelHeader>
       <div className="panel-toolbar">
         <div className="search">
           <Icon name="search" />
-          <input placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <input placeholder={tr('explorerPanel.filterFiles')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
-        <IconButton icon="flame" title={heatOn ? 'Hide attention heatmap' : 'Show attention heatmap: how much Claude read, edited and searched each file'} active={heatOn} onClick={toggleHeat} />
-        <IconButton icon="refresh" title="Reload file list" onClick={load} />
+        <IconButton icon="flame" title={heatOn ? tr('explorerPanel.hideHeatmap') : tr('explorerPanel.showHeatmap')} active={heatOn} onClick={toggleHeat} />
+        <IconButton icon="refresh" title={tr('explorerPanel.reload')} onClick={load} />
       </div>
       <div className="hint small muted">
-        Hover a file to mark it <Icon name="eye" /> must read, <Icon name="edit" /> must edit or <Icon name="lock" /> don’t touch. Claude sees your marks with every message.
-        {heatOn && heat.byFile.size > 0 && ' Shading shows how much attention Claude gave each file this session.'}
+        {tr('explorerPanel.hintBefore')} <Icon name="eye" /> {tr('explorerPanel.hintRead')} <Icon name="edit" /> {tr('explorerPanel.hintEdit')} <Icon name="lock" /> {tr('explorerPanel.hintAfter')}
+        {heatOn && heat.byFile.size > 0 && ` ${tr('explorerPanel.hintShading')}`}
       </div>
       {heatOn && hot.length > 0 && (
         <div className="hot-list">
-          <div className="hot-title small muted">Most attention this session</div>
+          <div className="hot-title small muted">{tr('explorerPanel.mostAttention')}</div>
           {hot.map(([path, h]) => (
             <div key={path} className="hot-row" onClick={() => openFile(path)} title={`${path}\n${heatLabel(h, false)}`}>
               <Icon name={h.edits ? 'edit' : h.reads ? 'eye' : 'search'} className={h.edits ? 'warn' : 'accent'} />
@@ -263,8 +263,8 @@ export function ExplorerPanel() {
       <div className="split-v single">
         <div className="tree">
           {error && <div className="note note-error">{error}</div>}
-          {!files && !error && <div className="muted pad">Loading files…</div>}
-          {files && visibleFiles.length === 0 && <Empty icon="search" title="No matching files" />}
+          {!files && !error && <div className="muted pad">{tr('explorerPanel.loadingFiles')}</div>}
+          {files && visibleFiles.length === 0 && <Empty icon="search" title={tr('explorerPanel.noMatching')} />}
           {sorted(tree.children!).map((n) => renderNode(n, 0))}
         </div>
       </div>

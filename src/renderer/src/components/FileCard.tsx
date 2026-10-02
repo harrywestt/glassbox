@@ -3,6 +3,7 @@ import { useSession } from '../views/SessionView'
 import { fileKind, formatSize, KIND_ICON, KIND_LABEL, opensInside } from '../attachments'
 import { baseName, mediaUrl } from '../lib'
 import { Icon, IconButton } from './ui'
+import { tr } from '../../../shared/i18n'
 
 /**
  * A file as a card: a preview when it's an image or video, what it is and how big, and one click to
@@ -24,7 +25,7 @@ export function FileCard({ path, title, why, compact }: { path: string; title?: 
   return (
     <div className={`file-card${compact ? ' compact' : ''}${missing ? ' missing' : ''}`}>
       {!compact && !missing && kind === 'image' && (
-        <button className="file-card-preview checker" onClick={() => openAttachment(path)} title="Open">
+        <button className="file-card-preview checker" onClick={() => openAttachment(path)} title={tr('fileCard.open')}>
           <img src={mediaUrl(path)} alt="" />
         </button>
       )}
@@ -37,10 +38,10 @@ export function FileCard({ path, title, why, compact }: { path: string; title?: 
             {title || baseName(path)}
           </button>
           <span className="file-card-meta">
-            {missing ? 'Not found on disk any more' : [title ? baseName(path) : KIND_LABEL[kind], formatSize(info?.size)].filter(Boolean).join(', ')}
+            {missing ? tr('fileCard.notFound') : [title ? baseName(path) : KIND_LABEL[kind], formatSize(info?.size)].filter(Boolean).join(', ')}
             <span className="file-card-folder" title={folder}>
               {' '}
-              in {folder.split('/').slice(-2).join('/') || folder}
+              {tr('fileCard.inFolder', { folder: folder.split('/').slice(-2).join('/') || folder })}
             </span>
           </span>
           {why && !compact && <span className="file-card-why">{why}</span>}
@@ -48,9 +49,9 @@ export function FileCard({ path, title, why, compact }: { path: string; title?: 
         {!missing && (
           <span className="file-card-actions">
             <button className="btn" onClick={() => openAttachment(path)}>
-              {opensInside(kind) ? 'Open' : 'Open externally'}
+              {opensInside(kind) ? tr('fileCard.open') : tr('fileCard.openExternally')}
             </button>
-            <IconButton icon="folder-opened" title="Show in folder" onClick={() => void window.glassbox.showInFolder(path)} />
+            <IconButton icon="folder-opened" title={tr('fileCard.showInFolder')} onClick={() => void window.glassbox.showInFolder(path)} />
           </span>
         )}
       </div>

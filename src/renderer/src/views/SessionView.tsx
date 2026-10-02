@@ -49,6 +49,7 @@ import { TicketPanel } from '../panels/TicketPanel'
 import { MapTab } from '../work/MapTab'
 import { RippleTab } from '../work/RippleTab'
 import { FlowTab } from '../work/FlowTab'
+import { tr } from '../../../shared/i18n'
 
 /** Places a component can ask to show. Each maps to a side tab, or to a work-area tab. */
 export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' | 'decisions' | 'guardrails' | 'services' | 'explorer' | 'context' | 'changes' | 'agents' | 'diagrams' | 'connectors' | 'skills' | 'showcase' | 'raw' | 'git' | 'preview' | 'ticket' | 'live' | 'ripple' | 'flows'
@@ -57,11 +58,11 @@ export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' |
 type SideTab = 'route' | 'decisions' | 'changes' | 'ticket' | 'git' | 'context' | 'heatmap' | 'safety' | 'connectors' | 'skills' | 'raw'
 // Changes holds git too (the branch's commits, what's uncommitted); Context holds the heatmap.
 const SIDE_TABS: { id: SideTab; label: string }[] = [
-  { id: 'route', label: 'Route' },
-  { id: 'decisions', label: 'Decisions' },
-  { id: 'changes', label: 'Changes' },
-  { id: 'context', label: 'Context' },
-  { id: 'ticket', label: 'Ticket' }
+  { id: 'route', label: tr('sessionView.sideTabs.route') },
+  { id: 'decisions', label: tr('sessionView.sideTabs.decisions') },
+  { id: 'changes', label: tr('sessionView.sideTabs.changes') },
+  { id: 'context', label: tr('sessionView.sideTabs.context') },
+  { id: 'ticket', label: tr('sessionView.sideTabs.ticket') }
 ]
 /** Older names for tabs that were merged into another. */
 const MERGED: Partial<Record<SideTab, SideTab>> = { git: 'changes', heatmap: 'context' }
@@ -86,11 +87,21 @@ function saveSide(cwd: string, tab: SideTab) {
 }
 type MoreItem = { side: SideTab; label: string } | { work: 'ripple' | 'flows' | 'diagrams' | 'showcase' | 'replay' | 'preview' | 'live' | 'attachments'; label: string }
 const MORE: { group: string; items: MoreItem[] }[] = [
-  { group: 'Look closer', items: [{ side: 'safety', label: 'Safety and side effects' }, { side: 'raw', label: 'Raw events' }] },
-  { group: 'Set up', items: [{ side: 'connectors', label: 'Connectors' }, { side: 'skills', label: 'Skills' }] }
+  { group: tr('sessionView.more.lookCloser'), items: [{ side: 'safety', label: tr('sessionView.more.safety') }, { side: 'raw', label: tr('sessionView.more.raw') }] },
+  { group: tr('sessionView.more.setUp'), items: [{ side: 'connectors', label: tr('sessionView.more.connectors') }, { side: 'skills', label: tr('sessionView.more.skills') }] }
 ]
 /** What the More tab says while one of its panels is showing: short, so the tab row still fits. */
-const MORE_LABEL: Partial<Record<SideTab, string>> = { changes: 'Changes', ticket: 'Ticket', git: 'Git', context: 'Context', heatmap: 'Heatmap', safety: 'Safety', raw: 'Raw', connectors: 'Connectors', skills: 'Skills' }
+const MORE_LABEL: Partial<Record<SideTab, string>> = {
+  changes: tr('sessionView.moreLabel.changes'),
+  ticket: tr('sessionView.moreLabel.ticket'),
+  git: tr('sessionView.moreLabel.git'),
+  context: tr('sessionView.moreLabel.context'),
+  heatmap: tr('sessionView.moreLabel.heatmap'),
+  safety: tr('sessionView.moreLabel.safety'),
+  raw: tr('sessionView.moreLabel.raw'),
+  connectors: tr('sessionView.moreLabel.connectors'),
+  skills: tr('sessionView.moreLabel.skills')
+}
 
 const ROUTES: Partial<Record<PanelId, SideTab>> = {
   activity: 'route',
@@ -195,18 +206,18 @@ const isFixed = (t: WorkTab) => t.kind === 'conversation'
 /** The views the + in the tab strip opens, with what each is for. */
 type ViewKind = 'plan' | 'terminal' | 'map' | 'erd' | 'ripple' | 'flows' | 'live' | 'diagrams' | 'replay' | 'attachments' | 'preview' | 'showcase'
 const VIEWS: { kind: ViewKind; label: string; note: string; everyday?: boolean }[] = [
-  { kind: 'plan', label: 'Plan', note: 'Claude’s plan: approve it while you look around, or read it again later', everyday: true },
-  { kind: 'map', label: 'Map', note: 'The parts of the project this conversation works in, and how they connect' },
-  { kind: 'terminal', label: 'Terminal', note: 'Your own shell in this folder, for commands you want to run yourself' },
-  { kind: 'erd', label: 'Database', note: 'Tables and how they connect, read from the code. Ask for an area.' },
-  { kind: 'live', label: 'Live changes', note: 'Each file as Claude edits it, with its full diff' },
-  { kind: 'ripple', label: 'Ripple', note: 'What the changes could affect, and what is tested' },
-  { kind: 'flows', label: 'Flow', note: 'How a request moves through the system, before and after' },
-  { kind: 'diagrams', label: 'Diagrams', note: 'Diagrams Claude drew in this conversation', everyday: true },
-  { kind: 'attachments', label: 'Attachments', note: 'Files you attached and files Claude made', everyday: true },
-  { kind: 'preview', label: 'Browser', note: 'Web pages inside Glassbox, in tabs. Keeps your sign-ins; Claude browses here too.', everyday: true },
-  { kind: 'showcase', label: 'Showcase', note: 'A shareable deck of the work', everyday: true },
-  { kind: 'replay', label: 'Replay', note: 'Step back through the session' }
+  { kind: 'plan', label: tr('sessionView.views.plan.label'), note: tr('sessionView.views.plan.note'), everyday: true },
+  { kind: 'map', label: tr('sessionView.views.map.label'), note: tr('sessionView.views.map.note') },
+  { kind: 'terminal', label: tr('sessionView.views.terminal.label'), note: tr('sessionView.views.terminal.note') },
+  { kind: 'erd', label: tr('sessionView.views.erd.label'), note: tr('sessionView.views.erd.note') },
+  { kind: 'live', label: tr('sessionView.views.live.label'), note: tr('sessionView.views.live.note') },
+  { kind: 'ripple', label: tr('sessionView.views.ripple.label'), note: tr('sessionView.views.ripple.note') },
+  { kind: 'flows', label: tr('sessionView.views.flows.label'), note: tr('sessionView.views.flows.note') },
+  { kind: 'diagrams', label: tr('sessionView.views.diagrams.label'), note: tr('sessionView.views.diagrams.note'), everyday: true },
+  { kind: 'attachments', label: tr('sessionView.views.attachments.label'), note: tr('sessionView.views.attachments.note'), everyday: true },
+  { kind: 'preview', label: tr('sessionView.views.preview.label'), note: tr('sessionView.views.preview.note'), everyday: true },
+  { kind: 'showcase', label: tr('sessionView.views.showcase.label'), note: tr('sessionView.views.showcase.note'), everyday: true },
+  { kind: 'replay', label: tr('sessionView.views.replay.label'), note: tr('sessionView.views.replay.note') }
 ]
 const viewTab = (kind: ViewKind): WorkTab => ({ id: kind, kind }) as WorkTab
 
@@ -613,8 +624,8 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
           <div className="drop-overlay" onDragLeave={() => setDragging(false)}>
             <div className="drop-card">
               <Icon name="attach" />
-              <strong>Drop to attach</strong>
-              <span className="muted">They go with your next message to Claude</span>
+              <strong>{tr('sessionView.dropToAttach')}</strong>
+              <span className="muted">{tr('sessionView.dropNote')}</span>
             </div>
           </div>
         )}
@@ -640,15 +651,15 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
             />
             {claudeNote && claudeNote.work === current.id && (
               <div className="claude-note" role="status">
-                <span className="claude-note-who">Claude</span>
+                <span className="claude-note-who">{tr('sessionView.claude')}</span>
                 <span className="grow">{claudeNote.text}</span>
-                <IconButton icon="close" title="Dismiss" onClick={() => setClaudeNote(null)} />
+                <IconButton icon="close" title={tr('sessionView.dismiss')} onClick={() => setClaudeNote(null)} />
               </div>
             )}
             <div className="work-content" ref={workContent}>
               {/* Only shown while the view is full screen. */}
-              <button className="fs-exit" onClick={() => void document.exitFullscreen().catch(() => {})} title="Exit full screen (Esc)">
-                <Icon name="screen-normal" /> Exit full screen
+              <button className="fs-exit" onClick={() => void document.exitFullscreen().catch(() => {})} title={tr('sessionView.exitFullScreenTitle')}>
+                <Icon name="screen-normal" /> {tr('sessionView.exitFullScreen')}
               </button>
               {current.kind === 'map' && <MapTab />}
               {current.kind === 'ripple' && <RippleTab key={current.module ?? current.path ?? 'latest'} module={current.module} path={current.path} onPick={(m) => openWork({ id: 'ripple', kind: 'ripple', module: m })} />}
@@ -681,7 +692,7 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
             <>
               <div className="splitter" onMouseDown={startResize} />
               <aside className="side" style={{ width }}>
-                <nav className="side-tabs" role="tablist" aria-label="Side panel">
+                <nav className="side-tabs" role="tablist" aria-label={tr('sessionView.sidePanel')}>
                   {SIDE_TABS.filter((x) => (!everyday || EVERYDAY_SIDE.has(x.id)) && sideApplies(x.id)).map((x) => (
                     <button key={x.id} role="tab" aria-selected={side === x.id} className={side === x.id ? 'side-tab active' : 'side-tab'} onClick={() => setSide(x.id)}>
                       {x.label}
@@ -690,7 +701,7 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
                   ))}
                   <div className="side-more">
                     <button className={inMore ? 'side-tab active' : 'side-tab'} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
-                      <span className="ellipsis">{inMore ? MORE_LABEL[side] : 'More'}</span>
+                      <span className="ellipsis">{inMore ? MORE_LABEL[side] : tr('sessionView.more.more')}</span>
                       <Icon name="chevron-down" />
                     </button>
                     {moreOpen && (
@@ -722,7 +733,7 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
                     )}
                   </div>
                   <span className="spacer" />
-                  <button className="icon-btn" title="Hide the side panel (Ctrl+B)" aria-label="Hide the side panel" onClick={() => setSideOpen(false)}>
+                  <button className="icon-btn" title={tr('sessionView.hideSideTitle')} aria-label={tr('sessionView.hideSide')} onClick={() => setSideOpen(false)}>
                     <Icon name="layout-sidebar-right-off" />
                   </button>
                 </nav>
@@ -731,7 +742,7 @@ export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; se
             </>
           )}
           {!sideOpen && (
-            <button className="side-reveal" title="Show the side panel (Ctrl+B)" aria-label="Show the side panel" onClick={() => setSideOpen(true)}>
+            <button className="side-reveal" title={tr('sessionView.showSideTitle')} aria-label={tr('sessionView.showSide')} onClick={() => setSideOpen(true)}>
               <Icon name="layout-sidebar-right" />
               {Object.values(count).some((c) => c?.urgent) && <span className="side-reveal-dot" />}
             </button>
@@ -801,37 +812,37 @@ const WORK_ICON: Record<WorkTab['kind'], string> = { plan: 'checklist', terminal
 function workTitle(t: WorkTab): string {
   switch (t.kind) {
     case 'attachments':
-      return 'Attachments'
+      return tr('sessionView.work.attachments')
     case 'erd':
-      return 'Database'
+      return tr('sessionView.work.database')
     case 'terminal':
-      return 'Terminal'
+      return tr('sessionView.work.terminal')
     case 'map':
-      return 'Map'
+      return tr('sessionView.work.map')
     case 'ripple':
-      return 'Ripple'
+      return tr('sessionView.work.ripple')
     case 'flows':
-      return 'Flow'
+      return tr('sessionView.work.flow')
     case 'conversation':
-      return 'Conversation'
+      return tr('sessionView.work.conversation')
     case 'live':
-      return 'Live'
+      return tr('sessionView.work.live')
     case 'diagrams':
-      return 'Diagrams'
+      return tr('sessionView.work.diagrams')
     case 'replay':
-      return 'Replay'
+      return tr('sessionView.work.replay')
     case 'showcase':
-      return 'Showcase'
+      return tr('sessionView.work.showcase')
     case 'file':
       return baseName(t.path)
     case 'diff':
-      return `${baseName(t.path)} changes`
+      return tr('sessionView.work.diffChanges', { name: baseName(t.path) })
     case 'commit':
       return t.title
     case 'preview':
-      return 'Browser'
+      return tr('sessionView.work.browser')
     case 'plan':
-      return 'Plan'
+      return tr('sessionView.work.plan')
   }
 }
 
@@ -874,16 +885,16 @@ function WorkTabs({
             className={t.id === active ? 'work-tab active' : 'work-tab'}
             onClick={() => onActivate(t.id)}
             onAuxClick={(e) => e.button === 1 && !isFixed(t) && onClose(t.id)}
-            title={t.kind === 'file' || t.kind === 'diff' ? t.path : t.kind === 'map' ? 'Shaded: edited this session. Red edge: being edited now. Amber edge: waiting for you. Hatched: fenced.' : undefined}
+            title={t.kind === 'file' || t.kind === 'diff' ? t.path : t.kind === 'map' ? tr('sessionView.mapLegend') : undefined}
           >
             <Icon name={WORK_ICON[t.kind]} />
             <span className="ellipsis">{workTitle(t)}</span>
             {t.kind === 'diagrams' && diagramCount > 0 && <span className="count">{diagramCount}</span>}
-            {unseen.has(t.id) && t.id !== active && <span className="unseen-dot" title="New since you last looked" />}
+            {unseen.has(t.id) && t.id !== active && <span className="unseen-dot" title={tr('sessionView.unseen')} />}
             {isView(t) && (
               <button
                 className={kept.includes(t.kind) ? 'work-tab-keep on' : 'work-tab-keep'}
-                title={kept.includes(t.kind) ? 'Kept open in this project. Click to stop keeping it.' : 'Keep open: open this view in every session in this project'}
+                title={kept.includes(t.kind) ? tr('sessionView.keptTitle') : tr('sessionView.keepTitle')}
                 aria-pressed={kept.includes(t.kind)}
                 onClick={(e) => (e.stopPropagation(), onKeep(t.kind, !kept.includes(t.kind)))}
               >
@@ -891,7 +902,7 @@ function WorkTabs({
               </button>
             )}
             {!isFixed(t) && !(isView(t) && kept.includes(t.kind)) && (
-              <button className="work-tab-close" title="Close" onClick={(e) => (e.stopPropagation(), onClose(t.id))}>
+              <button className="work-tab-close" title={tr('sessionView.close')} onClick={(e) => (e.stopPropagation(), onClose(t.id))}>
                 <Icon name="close" />
               </button>
             )}
@@ -899,10 +910,10 @@ function WorkTabs({
         ))}
       </div>
       <span className="spacer" />
-      <IconButton icon="screen-full" title="Show this view full screen (Esc to exit)" onClick={onFullScreen} />
+      <IconButton icon="screen-full" title={tr('sessionView.fullScreenTitle')} onClick={onFullScreen} />
       {/* Outside the scrolling list, so its menu isn't clipped. */}
       <div className="work-tab-add">
-          <IconButton icon="add" title="Open a view" onClick={() => setPicking((p) => !p)} active={picking} />
+          <IconButton icon="add" title={tr('sessionView.openView')} onClick={() => setPicking((p) => !p)} active={picking} />
           {picking && (
             <>
               <div className="menu-scrim" onMouseDown={() => setPicking(false)} />
@@ -922,8 +933,8 @@ function WorkTabs({
                       <span className="view-picker-text">
                         <span className="view-picker-label">
                           {v.label}
-                          {open && <span className="view-picker-state">open</span>}
-                          {!v.has && <span className="view-picker-state">nothing yet</span>}
+                          {open && <span className="view-picker-state">{tr('sessionView.viewOpen')}</span>}
+                          {!v.has && <span className="view-picker-state">{tr('sessionView.viewNothingYet')}</span>}
                         </span>
                         <span className="view-picker-note">{v.note}</span>
                       </span>
@@ -958,15 +969,15 @@ function SharedFolderBanner() {
     <div className="shared-banner" role="status">
       <Icon name="warning" className="warn" />
       <div className="grow">
-        <strong>Shares this folder with {others.map((o) => `“${tabTitle(o.tab, o.s)}”`).join(', ')}.</strong>{' '}
+        <strong>{tr('sessionView.sharesFolder', { names: others.map((o) => tr('sessionView.quotedName', { name: tabTitle(o.tab, o.s) })).join(', ') })}</strong>{' '}
         <span className="muted">
-          You see each other's changes, and switching branch here switches it there too. Glassbox won't credit or auto-commit the other session's files here.
+          {tr('sessionView.sharedNote')}
         </span>
         {error && <div className="err small">{error}</div>}
       </div>
       {fresh && (
         <span className="shared-move">
-          <input className="mono" value={name} onChange={(e) => setName(e.target.value)} aria-label="Branch for its own copy" />
+          <input className="mono" value={name} onChange={(e) => setName(e.target.value)} aria-label={tr('sessionView.branchForCopy')} />
           <button
             className="btn primary"
             disabled={busy || !name.trim()}
@@ -984,11 +995,11 @@ function SharedFolderBanner() {
               }
             }}
           >
-            {busy ? 'Making a copy…' : 'Give this session its own copy'}
+            {busy ? tr('sessionView.makingCopy') : tr('sessionView.giveOwnCopy')}
           </button>
         </span>
       )}
-      <IconButton icon="close" title="Hide" onClick={() => setHidden(true)} />
+      <IconButton icon="close" title={tr('sessionView.hide')} onClick={() => setHidden(true)} />
     </div>
   )
 }

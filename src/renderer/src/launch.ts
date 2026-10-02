@@ -1,13 +1,14 @@
 import type { Requirements } from '../../shared/events'
+import { tr } from '../../shared/i18n'
 
 export type SessionKind = 'coding' | 'review' | 'planning' | 'prd' | 'blank'
 
 export const KINDS: { kind: SessionKind; icon: string; title: string; blurb: string }[] = [
-  { kind: 'coding', icon: 'code', title: 'Build from a ticket', blurb: 'From a Jira ticket, an issue or a description.' },
-  { kind: 'review', icon: 'git-pull-request', title: 'Review a pull request', blurb: 'Findings by severity and a draft review.' },
-  { kind: 'planning', icon: 'lightbulb', title: 'Plan or explore an idea', blurb: 'Think it through; nothing is changed.' },
-  { kind: 'prd', icon: 'book', title: 'Write a PRD', blurb: 'Claude interviews you and drafts it.' },
-  { kind: 'blank', icon: 'comment-discussion', title: 'Blank session', blurb: 'Just a session in the folder.' }
+  { kind: 'coding', icon: 'code', title: tr('launch.kinds.coding.title'), blurb: tr('launch.kinds.coding.blurb') },
+  { kind: 'review', icon: 'git-pull-request', title: tr('launch.kinds.review.title'), blurb: tr('launch.kinds.review.blurb') },
+  { kind: 'planning', icon: 'lightbulb', title: tr('launch.kinds.planning.title'), blurb: tr('launch.kinds.planning.blurb') },
+  { kind: 'prd', icon: 'book', title: tr('launch.kinds.prd.title'), blurb: tr('launch.kinds.prd.blurb') },
+  { kind: 'blank', icon: 'comment-discussion', title: tr('launch.kinds.blank.title'), blurb: tr('launch.kinds.blank.blurb') }
 ]
 
 export const KIND_ICON: Record<SessionKind, string> = Object.fromEntries(KINDS.map((k) => [k.kind, k.icon])) as Record<SessionKind, string>
@@ -83,8 +84,8 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
         .filter(Boolean)
         .join('\n\n')
       return {
-        title: ticket ? (key ?? ticket.replace(/^https?:\/\/\S+\/(browse|issues)\//, '')) : (f.describe ?? 'Coding').slice(0, 40),
-        start: { prompt, display: ticket ? `Implement ${key ?? ticket}${plan ? ' (plan first)' : ''}` : prompt.slice(0, 200), plan },
+        title: ticket ? (key ?? ticket.replace(/^https?:\/\/\S+\/(browse|issues)\//, '')) : (f.describe ?? tr('launch.codingTitle')).slice(0, 40),
+        start: { prompt, display: ticket ? tr(plan ? 'launch.implementDisplayPlanFirst' : 'launch.implementDisplay', { ticket: key ?? ticket }) : prompt.slice(0, 200), plan },
         requirements: ticket && isJira(ticket) ? { connectors: ['claude.ai Atlassian'] } : undefined
       }
     }
@@ -98,7 +99,7 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
         '4. Check the change against its ticket or description, and note anything missing or untested.',
         '5. Finish with what the PR does, the overall risk, and your recommendation: approve, request changes or comment. Don’t post anything to GitHub unless I ask.'
       ].join('\n\n')
-      return { title: pr.repo ? `Review ${pr.repo.split('/')[1]}#${pr.number}` : `Review #${pr.number}`, start: { prompt, display: `Review PR #${pr.number}: ${pr.title}` } }
+      return { title: pr.repo ? tr('launch.reviewTitleRepo', { repo: pr.repo.split('/')[1], number: pr.number }) : tr('launch.reviewTitle', { number: pr.number }), start: { prompt, display: tr('launch.reviewDisplay', { number: pr.number, title: pr.title }) } }
     }
     case 'planning': {
       const prompt = [
@@ -109,10 +110,10 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
       ]
         .filter(Boolean)
         .join('\n\n')
-      return { title: (f.topic ?? 'Planning').slice(0, 40), start: { prompt, display: `Plan: ${f.topic?.trim()}`, plan: true } }
+      return { title: (f.topic ?? tr('launch.planningTitle')).slice(0, 40), start: { prompt, display: tr('launch.planDisplay', { topic: f.topic?.trim() }), plan: true } }
     }
     case 'prd': {
-      const title = f.topic?.trim() ?? 'New feature'
+      const title = f.topic?.trim() ?? tr('launch.newFeature')
       const prompt = [
         `We’re writing a product requirements doc for: ${title}`,
         f.context?.trim() ? `Context and links: ${f.context.trim()}` : '',
@@ -123,12 +124,12 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
         .filter(Boolean)
         .join('\n\n')
       return {
-        title: `PRD: ${title}`.slice(0, 40),
-        start: { prompt, display: `Write a PRD: ${title}` },
+        title: tr('launch.prdTitle', { title }).slice(0, 40),
+        start: { prompt, display: tr('launch.prdDisplay', { title }) },
         requirements: f.confluence ? { connectors: ['claude.ai Atlassian'] } : undefined
       }
     }
     case 'blank':
-      return { title: 'New session' }
+      return { title: tr('launch.newSession') }
   }
 }

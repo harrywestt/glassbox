@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
+import { tr } from '../shared/i18n'
 
 type EditInput = { file_path?: string; old_string?: string; new_string?: string; replace_all?: boolean; edits?: { old_string: string; new_string: string; replace_all?: boolean }[]; content?: string }
 
@@ -13,11 +14,11 @@ const count = (hay: string, needle: string) => (needle ? hay.split(needle).lengt
 export function undoEdit(cwd: string, tool: string, input: EditInput, createdFile: boolean): { deleted?: boolean } {
   const path = resolve(cwd, String(input.file_path ?? ''))
   const rel = relative(resolve(cwd), path)
-  if (!input.file_path || rel.startsWith('..') || isAbsolute(rel)) throw new Error('That file is outside the project, so Glassbox won’t change it.')
-  if (!existsSync(path)) throw new Error('The file no longer exists.')
+  if (!input.file_path || rel.startsWith('..') || isAbsolute(rel)) throw new Error(tr('mainUndo.outsideProject'))
+  if (!existsSync(path)) throw new Error(tr('mainUndo.fileGone'))
 
   if (tool === 'Write') {
-    if (!createdFile) throw new Error('This edit rewrote an existing file, so there’s nothing safe to restore it to. Ask Claude to put it back instead.')
+    if (!createdFile) throw new Error(tr('mainUndo.rewroteFile'))
     rmSync(path)
     return { deleted: true }
   }
@@ -26,8 +27,8 @@ export function undoEdit(cwd: string, tool: string, input: EditInput, createdFil
   let text = readFileSync(path, 'utf8')
   for (const e of steps) {
     const n = count(text, e.new_string)
-    if (n === 0) throw new Error('The edited text isn’t in the file any more (it has changed since), so it can’t be undone automatically.')
-    if (n > 1 && !e.replace_all) throw new Error('The edited text now appears more than once in the file, so Glassbox can’t tell which one to undo.')
+    if (n === 0) throw new Error(tr('mainUndo.textGone'))
+    if (n > 1 && !e.replace_all) throw new Error(tr('mainUndo.textAmbiguous'))
     text = e.replace_all ? text.split(e.new_string).join(e.old_string) : text.replace(e.new_string, () => e.old_string)
   }
   writeFileSync(path, text)

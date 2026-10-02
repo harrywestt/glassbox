@@ -5,6 +5,7 @@ import { app, shell } from 'electron'
 import { type Query } from '@anthropic-ai/claude-agent-sdk'
 import { claudeExecutable, query } from './claude'
 import type { AccountItem, AccountsResult } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 /**
  * Everything Glassbox needs you signed in to, in one place: Claude, the GitHub CLI, and the
@@ -37,15 +38,15 @@ async function claudeStatus(): Promise<AccountItem> {
   } catch {
     /* not JSON: treat as signed out */
   }
-  return { id: 'claude', name: 'Claude', kind: 'claude', status: 'signin', detail: 'Not signed in' }
+  return { id: 'claude', name: 'Claude', kind: 'claude', status: 'signin', detail: tr('mainAccounts.notSignedIn') }
 }
 
 async function githubStatus(): Promise<AccountItem> {
   const r = await run('gh', ['auth', 'status', '--hostname', 'github.com'])
-  if (r.missing) return { id: 'github', name: 'GitHub', kind: 'github', status: 'missing', detail: 'GitHub CLI isn’t installed' }
+  if (r.missing) return { id: 'github', name: 'GitHub', kind: 'github', status: 'missing', detail: tr('mainAccounts.ghMissing') }
   const user = (r.out + r.err).match(/account\s+(\S+)/)?.[1]
   if (r.code === 0) return { id: 'github', name: 'GitHub', kind: 'github', status: 'ok', detail: user }
-  return { id: 'github', name: 'GitHub', kind: 'github', status: 'signin', detail: 'Not signed in' }
+  return { id: 'github', name: 'GitHub', kind: 'github', status: 'signin', detail: tr('mainAccounts.notSignedIn') }
 }
 
 /** The claude.ai connectors and whether each is connected, read from an idle (model-free) query. */
@@ -68,7 +69,7 @@ async function connectorStatus(): Promise<AccountItem[]> {
         const name = s.name.replace(/^claude\.ai\s+/i, '')
         const jira = /atlassian/i.test(name)
         const status = s.status === 'connected' ? 'ok' : s.status === 'needs-auth' ? 'signin' : s.status === 'failed' ? 'error' : 'signin'
-        return { id: `connector:${s.name}`, name: jira ? 'Jira (Atlassian)' : name, kind: 'connector', status, detail: status === 'ok' ? 'Connected' : status === 'error' ? 'Couldn’t connect' : 'Needs sign-in' }
+        return { id: `connector:${s.name}`, name: jira ? tr('mainAccounts.jiraName') : name, kind: 'connector', status, detail: status === 'ok' ? tr('mainAccounts.connected') : status === 'error' ? tr('mainAccounts.couldNotConnect') : tr('mainAccounts.needsSignIn') }
       })
     // Jira first (the Ticket tab needs it), then anything needing attention, then the rest by name.
     const rank = (a: AccountItem) => (/jira/i.test(a.name) ? 0 : a.status === 'ok' ? 2 : 1)
@@ -97,8 +98,8 @@ export function getAccounts(force = false): Promise<AccountsResult> {
 /** Open wherever that account signs in: a terminal for the Claude and GitHub CLIs, claude.ai for connectors. */
 export async function signIn(id: string): Promise<void> {
   cached = null
-  if (id === 'claude') return openTerminal('Sign in to Claude', claudeExe(), ['auth', 'login'])
-  if (id === 'github') return openTerminal('Sign in to GitHub', 'gh', ['auth', 'login', '--web', '--hostname', 'github.com'])
+  if (id === 'claude') return openTerminal(tr('mainAccounts.signInClaude'), claudeExe(), ['auth', 'login'])
+  if (id === 'github') return openTerminal(tr('mainAccounts.signInGitHub'), 'gh', ['auth', 'login', '--web', '--hostname', 'github.com'])
   if (id === 'github-install') return void shell.openExternal('https://cli.github.com')
   if (id.startsWith('connector:')) return void shell.openExternal(CONNECTORS_URL)
 }

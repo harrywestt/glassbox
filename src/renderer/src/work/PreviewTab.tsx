@@ -4,6 +4,7 @@ import { useServices } from '../services'
 import { CHANGE_TOOLS } from '../session'
 import { Empty, Icon, IconButton, Toggle } from '../components/ui'
 import { Select } from '../components/Select'
+import { tr } from '../../../shared/i18n'
 import type { WebviewTag } from 'electron'
 
 const RELOAD_DELAY_MS = 1500
@@ -45,7 +46,7 @@ export function PreviewTab({ url: asked }: { url?: string } = {}) {
     const onFail = (e: { errorCode: number; errorDescription: string; validatedURL: string; isMainFrame: boolean }) => {
       // -3 is a navigation superseded by another (a redirect): not a failure.
       if (!e.isMainFrame || e.errorCode === -3) return
-      setFailed(`${e.errorDescription || 'The page didn’t load'} (${e.validatedURL})`)
+      setFailed(tr('previewTab.loadFailed', { reason: e.errorDescription || tr('previewTab.didntLoad'), url: e.validatedURL }))
     }
     wv.addEventListener('did-navigate', onNav as never)
     wv.addEventListener('did-navigate-in-page', onNav as never)
@@ -90,7 +91,7 @@ export function PreviewTab({ url: asked }: { url?: string } = {}) {
     <div className="work-page">
       <div className="work-bar preview-bar-wide">
         {withUrl.length > 0 && (
-          <Select value={service} onChange={setService} aria-label="Service" options={withUrl.map((x) => ({ value: x.name, label: x.name, hint: x.status }))} />
+          <Select value={service} onChange={setService} aria-label={tr('previewTab.service')} options={withUrl.map((x) => ({ value: x.name, label: x.name, hint: x.status }))} />
         )}
         <input
           className="mono grow preview-address"
@@ -105,23 +106,23 @@ export function PreviewTab({ url: asked }: { url?: string } = {}) {
             }
           }}
           placeholder="http://localhost:3000"
-          aria-label="Address"
+          aria-label={tr('previewTab.address')}
         />
-        <IconButton icon="refresh" title="Reload" onClick={reload} />
-        <label className="live-follow" title="Reload the page shortly after each of Claude's edits">
-          Reload after edits <Toggle checked={follow} onChange={setFollow} />
+        <IconButton icon="refresh" title={tr('previewTab.reload')} onClick={reload} />
+        <label className="live-follow" title={tr('previewTab.reloadAfterEditsTip')}>
+          {tr('previewTab.reloadAfterEdits')} <Toggle checked={follow} onChange={setFollow} />
         </label>
-        <IconButton icon="link-external" title="Open in your browser" disabled={!url} onClick={() => void window.glassbox.openExternal(url)} />
+        <IconButton icon="link-external" title={tr('previewTab.openExternal')} disabled={!url} onClick={() => void window.glassbox.openExternal(url)} />
       </div>
       {!url ? (
-        <Empty icon="globe" title="Nothing to preview yet">
-          Give a service a <span className="mono">url</span> in services.json, or type an address above.{' '}
-          <button className="link" onClick={() => showPanel('services')}>Open services</button>
+        <Empty icon="globe" title={tr('previewTab.nothingToPreview')}>
+          {tr('previewTab.noUrlBefore')} <span className="mono">url</span> {tr('previewTab.noUrlAfter')}{' '}
+          <button className="link" onClick={() => showPanel('services')}>{tr('previewTab.openServices')}</button>
         </Empty>
       ) : current && !running ? (
-        <Empty icon="debug-start" title={`${current.name} isn’t running`}>
-          Start it from the Services panel and the page appears here.{' '}
-          <button className="link" onClick={() => showPanel('services')}>Open services</button>
+        <Empty icon="debug-start" title={tr('previewTab.notRunning', { name: current.name })}>
+          {tr('previewTab.notRunningBody')}{' '}
+          <button className="link" onClick={() => showPanel('services')}>{tr('previewTab.openServices')}</button>
         </Empty>
       ) : (
         <div className="preview-stage">
@@ -131,7 +132,7 @@ export function PreviewTab({ url: asked }: { url?: string } = {}) {
               <Icon name="warning" />
               <span className="grow">{failed}</span>
               <button className="btn" onClick={reload}>
-                Try again
+                {tr('previewTab.tryAgain')}
               </button>
             </div>
           )}

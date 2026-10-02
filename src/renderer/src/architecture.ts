@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Architecture } from '../../shared/architecture'
 import type { FileTouch, SessionState } from './session'
 import { CHANGE_TOOLS, isClaudeOwnFile } from './session'
+import { tr } from '../../shared/i18n'
 
 // Kept across tab switches (the map tab unmounts): the last map per folder, and the file-count
 // version it was last rebuilt for, so remounting never redraws and never forces a rebuild again.
@@ -56,20 +57,20 @@ export function touchVerb(tool: string): string {
   switch (tool) {
     case 'Read':
     case 'NotebookRead':
-      return 'Reading'
+      return tr('architecture.reading')
     case 'Write':
-      return 'Writing'
+      return tr('architecture.writing')
     case 'Edit':
     case 'MultiEdit':
     case 'NotebookEdit':
-      return 'Editing'
+      return tr('architecture.editing')
     case 'ShellEdit':
-      return 'Changing'
+      return tr('architecture.changing')
     case 'Grep':
     case 'Glob':
-      return 'Searching'
+      return tr('architecture.searching')
     default:
-      return 'Looking at'
+      return tr('architecture.lookingAt')
   }
 }
 

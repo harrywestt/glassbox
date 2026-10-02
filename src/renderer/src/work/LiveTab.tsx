@@ -5,6 +5,7 @@ import { baseName, relPath, timeAgo } from '../lib'
 import { editCounts } from '../session-ui/EditCard'
 import { CallDiff, GitFileDiff } from '../panels/ChangesPanel'
 import { Empty, Icon, Toggle } from '../components/ui'
+import { tr } from '../../../shared/i18n'
 
 type LiveFile = { path: string; edits: number; added: number; removed: number; last: number; lastCallId: string }
 
@@ -57,8 +58,8 @@ export function LiveTab() {
   if (!files.length)
     return (
       <div className="work-page">
-        <Empty icon="pulse" title="Nothing changed yet">
-          When Claude edits a file it shows up here straight away, with its full diff, and updates after every edit.
+        <Empty icon="pulse" title={tr('liveTab.nothingChanged')}>
+          {tr('liveTab.nothingChangedBody')}
         </Empty>
       </div>
     )
@@ -67,10 +68,10 @@ export function LiveTab() {
     <div className="live-view">
       <aside className="live-files">
         <div className="live-files-head">
-          <span className="small muted">{files.length} file{files.length > 1 ? 's' : ''} changed this session</span>
+          <span className="small muted">{tr('liveTab.filesChanged', { count: files.length })}</span>
           <span className="spacer" />
-          <label className="live-follow" title="Show each file as Claude edits it">
-            Follow Claude <Toggle checked={follow} onChange={(on) => setFollow(on)} />
+          <label className="live-follow" title={tr('liveTab.followTip')}>
+            {tr('liveTab.follow')} <Toggle checked={follow} onChange={(on) => setFollow(on)} />
           </label>
         </div>
         {files.map((f) => (
@@ -86,7 +87,7 @@ export function LiveTab() {
             <Icon name="edit" className={f.path === files[0].path && Date.now() - f.last < 15_000 ? 'accent' : 'warn'} />
             <span className="live-file-main">
               <span className="ellipsis">{baseName(f.path)}</span>
-              <span className="muted small ellipsis">{relPath(tab.cwd, f.path).split('/').slice(0, -1).join('/') || 'project root'}</span>
+              <span className="muted small ellipsis">{relPath(tab.cwd, f.path).split('/').slice(0, -1).join('/') || tr('liveTab.projectRoot')}</span>
             </span>
             <span className="live-file-meta small">
               <span><span className="ok">+{f.added}</span> <span className="err">−{f.removed}</span></span>
@@ -101,15 +102,14 @@ export function LiveTab() {
             {writing ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name="git-compare" className="muted" />}
             <strong className="ellipsis">{baseName(current.path)}</strong>
             <span className="muted small ellipsis grow">
-              {current.edits} edit{current.edits > 1 ? 's' : ''} by Claude, last {timeAgo(current.last)}
-              {base ? `, shown against ${base}` : ''}
+              {base ? tr('liveTab.editsAgainst', { count: current.edits, when: timeAgo(current.last), base }) : tr('liveTab.edits', { count: current.edits, when: timeAgo(current.last) })}
             </span>
-            {writing && <span className="pill pill-accent">Claude is editing {baseName(String(writing.input.file_path ?? ''))}</span>}
+            {writing && <span className="pill pill-accent">{tr('liveTab.editing', { file: baseName(String(writing.input.file_path ?? '')) })}</span>}
             {/* Ask Claude why it made the latest edit here; the answer comes back in the conversation. */}
             <button
               className="chip-btn"
               disabled={asked === current.lastCallId || !s.toolCalls[current.lastCallId] || s.status === 'new' || s.status === 'stopped'}
-              title="Ask Claude why it made this edit. It answers in the conversation, then carries on."
+              title={tr('liveTab.askTip')}
               onClick={() => {
                 const call = s.toolCalls[current.lastCallId]
                 if (!call) return
@@ -117,10 +117,10 @@ export function LiveTab() {
                 void actions.comment(tab.id, { kind: 'tool', toolId: call.id, label: `Edit to ${baseName(current.path)}` }, `Why did you make this edit to ${relPath(tab.cwd, current.path)}? Say briefly what it's for and why you did it this way.`)
               }}
             >
-              <Icon name="question" /> {asked === current.lastCallId ? 'Asked, see the conversation' : 'Ask why'}
+              <Icon name="question" /> {asked === current.lastCallId ? tr('liveTab.asked') : tr('liveTab.askWhy')}
             </button>
             <button className="chip-btn" onClick={() => openDiff({ path: current.path, base, diffMode: 'merge-base', source: 'session' })}>
-              <Icon name="list-selection" /> Each change
+              <Icon name="list-selection" /> {tr('liveTab.eachChange')}
             </button>
           </div>
           <div className="work-body">

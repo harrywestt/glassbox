@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { Icon, IconButton } from '../components/ui'
 import type { UserQuestion } from '../../../shared/events'
+import { tr } from '../../../shared/i18n'
 
 /**
  * Claude's questions (AskUserQuestion), answered here: pick an option per question, or type your own,
@@ -39,13 +40,13 @@ function Questions({ tabId, id, questions }: { tabId: string; id: string; questi
   }, [picked])
 
   return (
-    <div className="user-questions" role="group" aria-label="Claude's questions">
+    <div className="user-questions" role="group" aria-label={tr('questionsCard.ariaLabel')}>
       <div className="user-questions-head">
         <span className="tally-lamp tally-wait" aria-hidden />
-        <strong>{questions.length > 1 ? `Claude has ${questions.length} questions` : 'Claude has a question'}</strong>
-        <span className="muted small">It's waiting for your answer</span>
+        <strong>{tr('questionsCard.questions', { count: questions.length })}</strong>
+        <span className="muted small">{tr('questionsCard.waiting')}</span>
         <span className="spacer" />
-        <IconButton icon="close" title="Close without answering (Claude carries on with its best guess)" onClick={() => void window.glassbox.session.answerQuestions(tabId, id, null)} />
+        <IconButton icon="close" title={tr('questionsCard.close')} onClick={() => void window.glassbox.session.answerQuestions(tabId, id, null)} />
       </div>
       {questions.map((q) => (
         <div key={q.question} className="user-question">
@@ -67,7 +68,7 @@ function Questions({ tabId, id, questions }: { tabId: string; id: string; questi
           </div>
           <input
             className="user-question-own"
-            placeholder="Or type your own answer"
+            placeholder={tr('questionsCard.ownAnswer')}
             value={own[q.question] ?? ''}
             onChange={(e) => setOwn((p) => ({ ...p, [q.question]: e.target.value }))}
             onKeyDown={(e) => e.key === 'Enter' && void send()}
@@ -76,10 +77,10 @@ function Questions({ tabId, id, questions }: { tabId: string; id: string; questi
       ))}
       {!instant && (
         <div className="user-questions-foot">
-          <span className="muted small">{ready ? 'All answered' : `${questions.filter((q) => answerOf(q)).length} of ${questions.length} answered`}</span>
+          <span className="muted small">{ready ? tr('questionsCard.allAnswered') : tr('questionsCard.answeredCount', { answered: questions.filter((q) => answerOf(q)).length, total: questions.length })}</span>
           <span className="spacer" />
           <button className="primary" disabled={!ready || sending} onClick={() => void send()}>
-            {sending ? 'Sending…' : 'Send answers'}
+            {sending ? tr('questionsCard.sending') : tr('questionsCard.sendAnswers')}
           </button>
         </div>
       )}

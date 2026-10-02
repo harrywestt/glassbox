@@ -1,6 +1,7 @@
 import type { SessionState } from './session'
 import { CHANGE_TOOLS, isClaudeOwnFile } from './session'
 import { absPath, baseName } from './lib'
+import { tr } from '../../shared/i18n'
 
 /**
  * Files that go with a conversation: the ones you attach to a message, and the ones Claude makes
@@ -34,7 +35,7 @@ export const KIND_ICON: Record<FileKind, string> = {
 }
 
 export const KIND_LABEL: Record<FileKind, string> = {
-  image: 'Image', video: 'Video', audio: 'Audio', pdf: 'PDF', web: 'Web page', doc: 'Document', sheet: 'Spreadsheet', slides: 'Slides', text: 'Text', archive: 'Archive', other: 'File'
+  image: tr('attachments.kind.image'), video: tr('attachments.kind.video'), audio: tr('attachments.kind.audio'), pdf: tr('attachments.kind.pdf'), web: tr('attachments.kind.web'), doc: tr('attachments.kind.doc'), sheet: tr('attachments.kind.sheet'), slides: tr('attachments.kind.slides'), text: tr('attachments.kind.text'), archive: tr('attachments.kind.archive'), other: tr('attachments.kind.other')
 }
 
 /** Kinds worth listing as something Claude made for you (code and config aren't). */
@@ -92,9 +93,9 @@ export function opensInside(kind: FileKind): boolean {
 
 export function formatSize(bytes?: number): string {
   if (bytes === undefined) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes < 1024) return tr('attachments.bytes', { n: bytes })
+  if (bytes < 1024 * 1024) return tr('attachments.kilobytes', { n: Math.round(bytes / 1024) })
+  return tr('attachments.megabytes', { n: (bytes / 1024 / 1024).toFixed(1) })
 }
 
 /** Paths on disk for dropped or pasted files; ones with no file behind them (a pasted screenshot) are saved first. */

@@ -7,6 +7,7 @@ import { getSessionMessages, listSessions, type SDKMessage } from '@anthropic-ai
 import { query } from './claude'
 import { findIssues, type IssueBrief } from './jira'
 import type { Standup, StandupGroup } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 /**
  * The morning stand-up: what you did on the last working day, grouped by Jira epic.
@@ -18,7 +19,7 @@ import type { Standup, StandupGroup } from '../shared/events'
 
 const run = promisify(execFile)
 const KEY = /(?<![A-Z0-9])([A-Z][A-Z0-9]+-\d+)(?!\d)/g
-const OTHER = 'Other work'
+const OTHER = tr('mainStandup.otherWork')
 
 type Work = { key: string | null; repo: string; commits: string[]; sessions: { title: string; asks: string[]; outcome?: string }[] }
 
@@ -33,7 +34,7 @@ export function workingWindow(now = new Date()): { from: Date; to: Date; label: 
   const to = today
   const weekend = dow === 1 || dow === 0
   const day = from.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
-  return { from, to, label: weekend ? `Since ${day}` : `Yesterday, ${day}` }
+  return { from, to, label: weekend ? tr('mainStandup.since', { day }) : tr('mainStandup.yesterday', { day }) }
 }
 
 const keysIn = (s: string | undefined) => [...(s ?? '').matchAll(KEY)].map((m) => m[1].toUpperCase())
@@ -89,7 +90,7 @@ async function gather(from: Date, to: Date) {
     const root = cwd ? await git(cwd, ['rev-parse', '--show-toplevel']).catch(() => cwd) : ''
     if (root) repos.add(root)
     const key = keysIn(s.gitBranch)[0] ?? keysIn(asks.join(' '))[0] ?? null
-    bucket(key, root ? basename(root) : 'No project').sessions.push({ title: s.customTitle ?? s.summary, asks, outcome })
+    bucket(key, root ? basename(root) : tr('mainStandup.noProject')).sessions.push({ title: s.customTitle ?? s.summary, asks, outcome })
   }
 
   // Your commits in those repos, by the ticket in the branch they were made on or their message.
@@ -158,7 +159,7 @@ export async function getStandup(dir: string, force = false): Promise<Standup> {
       const id = byRepo ? `repo:${w.repo}` : epic?.key ?? OTHER
       let g = groups.get(id)
       if (!g) groups.set(id, (g = byRepo ? { epic: basename(w.repo) || OTHER, items: [] } : { epic: epic ? epic.summary : OTHER, epicKey: epic?.key, url: epic && w.issue?.url ? w.issue.url.replace(/[^/]+$/, epic.key) : undefined, items: [] }))
-      const fallback = w.commits[0] ?? w.sessions[0]?.title ?? w.issue?.summary ?? 'Worked on this'
+      const fallback = w.commits[0] ?? w.sessions[0]?.title ?? w.issue?.summary ?? tr('mainStandup.workedOnThis')
       g.items.push({ text: words[String(i)] ?? fallback, ticket: w.issue ? { key: w.issue.key, summary: w.issue.summary, status: w.issue.status, url: w.issue.url } : w.key ? { key: w.key } : undefined, repo: w.repo })
     })
     // Epics first (largest first), untracked work last.

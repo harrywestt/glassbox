@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { gitListFiles } from './git'
+import { tr } from '../shared/i18n'
 
 // Big enough for large generated files (20k+ lines); beyond this Monaco itself struggles.
 const MAX_FILE_BYTES = 25 * 1024 * 1024
@@ -29,6 +30,6 @@ export async function listProjectFiles(cwd: string): Promise<string[]> {
 export async function readProjectFile(cwd: string, path: string) {
   const full = isAbsolute(path) ? path : resolve(cwd, path)
   const info = await stat(full)
-  if (info.size > MAX_FILE_BYTES) return { path: full, error: `File is ${info.size.toLocaleString()} bytes; too large to preview.` }
+  if (info.size > MAX_FILE_BYTES) return { path: full, error: tr('mainFiles.tooLarge', { size: info.size.toLocaleString() }) }
   return { path: full, content: await readFile(full, 'utf8') }
 }

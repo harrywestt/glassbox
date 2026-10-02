@@ -11,6 +11,7 @@ import { money, useFx } from '../money'
 import { ticketKeyFromBranch } from '../../../shared/ticket'
 import { setPinned, usePinned } from '../pins'
 import { tabTitle } from '../tabs'
+import { tr } from '../../../shared/i18n'
 
 export function SessionHeader() {
   const { tab, s, actions, showPanel, everyday } = useSession()
@@ -31,12 +32,12 @@ export function SessionHeader() {
   return (
     <div className="session-header">
       <div className="sh-left">
-        <button className="sh-folder" title={`${tab.cwd}\nClick to change (only before the first message)`} onClick={changeFolder} disabled={s.timeline.length > 0}>
+        <button className="sh-folder" title={tr('sessionHeader.folderTitle', { path: tab.cwd })} onClick={changeFolder} disabled={s.timeline.length > 0}>
           {baseName(tab.cwd)}
         </button>
         {!everyday && <BranchMenu />}
         {ticket && !everyday && (
-          <button className="sh-ticket" title="Open the ticket" onClick={() => showPanel('ticket')}>
+          <button className="sh-ticket" title={tr('sessionHeader.openTicket')} onClick={() => showPanel('ticket')}>
             {ticket}
           </button>
         )}
@@ -72,7 +73,7 @@ function PinButton() {
     <button
       className={on ? 'icon-btn pin-btn on' : 'icon-btn pin-btn'}
       aria-pressed={on}
-      title={error ?? (on ? 'Pinned: kept for good. Click to unpin' : 'Pin this session to keep it for good (Claude Code clears old sessions after a while)')}
+      title={error ?? (on ? tr('sessionHeader.pinnedTitle') : tr('sessionHeader.pinTitle'))}
       onClick={() => void toggle()}
     >
       <Icon name={on ? 'pinned' : 'pin'} />
@@ -93,7 +94,7 @@ function Usage() {
   const tone = usedPct >= 90 ? 'err' : usedPct >= 70 ? 'warn' : 'ok'
   return (
     <div className="usage">
-      <button className={open ? 'usage-btn open' : 'usage-btn'} onClick={() => setOpen(!open)} aria-expanded={open} title={`${(100 - usedPct).toFixed(0)}% of the context window left, ${cost.text} so far`}>
+      <button className={open ? 'usage-btn open' : 'usage-btn'} onClick={() => setOpen(!open)} aria-expanded={open} title={tr('sessionHeader.usageTitle', { percent: (100 - usedPct).toFixed(0), cost: cost.text })}>
         <span className={`usage-ring ${tone}`} style={{ '--used': `${usedPct}%` } as React.CSSProperties} aria-hidden />
         <span className="num">{cost.text}</span>
       </button>
@@ -104,24 +105,24 @@ function Usage() {
             <dl className="usage-list">
               {s.model && (
                 <>
-                  <dt>Model</dt>
+                  <dt>{tr('sessionHeader.model')}</dt>
                   <dd>{s.model}</dd>
                 </>
               )}
-              <dt>Context left</dt>
+              <dt>{tr('sessionHeader.contextLeft')}</dt>
               <dd>
-                <span className="num">{(100 - usedPct).toFixed(0)}%</span>
+                <span className="num">{tr('sessionHeader.percent', { percent: (100 - usedPct).toFixed(0) })}</span>
                 <Meter value={usedPct} />
               </dd>
-              <dt>Tokens</dt>
+              <dt>{tr('sessionHeader.tokens')}</dt>
               <dd className="num">
-                {formatTokens(used)} in, {formatTokens(s.usage.outputTokens)} out
+                {tr('sessionHeader.tokensInOut', { input: formatTokens(used), output: formatTokens(s.usage.outputTokens) })}
               </dd>
-              <dt>Cost</dt>
+              <dt>{tr('sessionHeader.cost')}</dt>
               <dd className="num" title={cost.title}>{cost.text}</dd>
             </dl>
             <button className="btn quiet" onClick={() => void window.glassbox.session.refresh(tab.id)} disabled={s.status === 'new' || s.status === 'stopped'}>
-              <Icon name="refresh" /> Refresh context and connectors
+              <Icon name="refresh" /> {tr('sessionHeader.refresh')}
             </button>
           </div>
         </>
@@ -143,15 +144,15 @@ function StatusPill() {
   const busy = s.busySince ? Math.round((now - s.busySince) / 1000) : 0
   if (s.status === 'stopped')
     return (
-      <button className="status-btn" title="Restart this session" onClick={() => void window.glassbox.session.open(tab.id, tab.cwd, s.sessionId ?? tab.resumeId, loadAccess())}>
-        <span className="tally-lamp tally-err" aria-hidden /> Stopped. Restart
+      <button className="status-btn" title={tr('sessionHeader.restartTitle')} onClick={() => void window.glassbox.session.open(tab.id, tab.cwd, s.sessionId ?? tab.resumeId, loadAccess())}>
+        <span className="tally-lamp tally-err" aria-hidden /> {tr('sessionHeader.stoppedRestart')}
       </button>
     )
   return (
     <span className={`status tally-${tally}`}>
       <span className="tally-lamp" aria-hidden />
-      {s.status === 'new' || s.status === 'starting' ? 'Starting' : liveVerb(s)}
-      {tally === 'live' && s.busySince && <span className="muted num">{busy >= 60 ? `${Math.floor(busy / 60)}m ${busy % 60}s` : `${busy}s`}</span>}
+      {s.status === 'new' || s.status === 'starting' ? tr('sessionHeader.starting') : liveVerb(s)}
+      {tally === 'live' && s.busySince && <span className="muted num">{busy >= 60 ? tr('sessionHeader.minutesSeconds', { m: Math.floor(busy / 60), s: busy % 60 }) : tr('sessionHeader.seconds', { s: busy })}</span>}
     </span>
   )
 }
@@ -166,20 +167,20 @@ function ViewToggle() {
   const pick = (view: 'everyday' | 'engineering') => (actions.setView(tab.id, view), setOpen(false))
   return (
     <div className="view-toggle">
-      <button className={open ? 'btn quiet open' : 'btn quiet'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title="Choose how much of the engineering side this session shows">
-        <Icon name={everyday ? 'comment-discussion' : 'tools'} /> {everyday ? 'Everyday' : 'Engineering'} <Icon name="chevron-down" />
+      <button className={open ? 'btn quiet open' : 'btn quiet'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={tr('sessionHeader.viewTitle')}>
+        <Icon name={everyday ? 'comment-discussion' : 'tools'} /> {everyday ? tr('sessionHeader.everyday') : tr('sessionHeader.engineering')} <Icon name="chevron-down" />
       </button>
       {open && (
         <>
           <div className="menu-scrim" onMouseDown={() => setOpen(false)} />
           <div className="menu view-menu" role="menu">
             <button role="menuitemradio" aria-checked={everyday} className={everyday ? 'menu-item current' : 'menu-item'} onClick={() => pick('everyday')}>
-              <span className="view-menu-label">Everyday {everyday && <Icon name="check" />}</span>
-              <span className="view-menu-note">The conversation, with diagrams, decisions and files. For work that isn’t code.</span>
+              <span className="view-menu-label">{tr('sessionHeader.everyday')} {everyday && <Icon name="check" />}</span>
+              <span className="view-menu-note">{tr('sessionHeader.everydayNote')}</span>
             </button>
             <button role="menuitemradio" aria-checked={!everyday} className={!everyday ? 'menu-item current' : 'menu-item'} onClick={() => pick('engineering')}>
-              <span className="view-menu-label">Engineering {!everyday && <Icon name="check" />}</span>
-              <span className="view-menu-note">Adds the map, changes, git, services, tests and review.</span>
+              <span className="view-menu-label">{tr('sessionHeader.engineering')} {!everyday && <Icon name="check" />}</span>
+              <span className="view-menu-note">{tr('sessionHeader.engineeringNote')}</span>
             </button>
           </div>
         </>
@@ -193,8 +194,8 @@ function AdminBadge() {
   const admin = useAdmin()
   if (!admin?.elevated) return null
   return (
-    <button className="admin-badge" onClick={openAdminPrompt} title="Glassbox is running as administrator, so Claude’s shell commands run elevated. Click to change.">
-      <Icon name="shield" /> Admin
+    <button className="admin-badge" onClick={openAdminPrompt} title={tr('sessionHeader.adminTitle')}>
+      <Icon name="shield" /> {tr('sessionHeader.admin')}
     </button>
   )
 }

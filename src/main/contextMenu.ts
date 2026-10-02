@@ -1,4 +1,5 @@
 import { app, clipboard, Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron'
+import { tr } from '../shared/i18n'
 
 /**
  * The right-click menu (Windows) / Control-click or two-finger-click menu (macOS). Electron shows
@@ -12,14 +13,14 @@ export function attachContextMenu(win: BrowserWindow) {
 
     if (p.isEditable && p.misspelledWord) {
       for (const word of p.dictionarySuggestions.slice(0, 5)) items.push({ label: word, click: () => win.webContents.replaceMisspelling(word) })
-      if (!p.dictionarySuggestions.length) items.push({ label: 'No suggestions', enabled: false })
-      items.push({ label: 'Add to dictionary', click: () => win.webContents.session.addWordToSpellCheckerDictionary(p.misspelledWord) })
+      if (!p.dictionarySuggestions.length) items.push({ label: tr('mainContextMenu.noSuggestions'), enabled: false })
+      items.push({ label: tr('mainContextMenu.addToDictionary'), click: () => win.webContents.session.addWordToSpellCheckerDictionary(p.misspelledWord) })
       sep()
     }
 
     if (p.linkURL) {
-      items.push({ label: 'Open link', click: () => void shell.openExternal(p.linkURL) })
-      items.push({ label: 'Copy link', click: () => clipboard.writeText(p.linkURL) })
+      items.push({ label: tr('mainContextMenu.openLink'), click: () => void shell.openExternal(p.linkURL) })
+      items.push({ label: tr('mainContextMenu.copyLink'), click: () => clipboard.writeText(p.linkURL) })
       sep()
     }
 
