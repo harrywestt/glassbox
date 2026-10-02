@@ -31,6 +31,8 @@ export function toolLabel(name: string): string {
 const agentOf = (item: TimelineItem): string | null => ('agentId' in item ? item.agentId : null)
 
 function visible(item: TimelineItem, filter: AgentFilter): boolean {
+  // A service's errors are shown under Services, not in the conversation.
+  if (item.kind === 'service-error') return false
   if (filter === 'all' || item.kind === 'user' || item.kind === 'comment' || item.kind === 'result' || item.kind === 'note' || item.kind === 'guard' || item.kind === 'finding' || item.kind === 'checkin') return true
   const agentId = agentOf(item)
   if (filter === 'main') return agentId === null
@@ -328,7 +330,13 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
   const { tab } = useSession()
   switch (item.kind) {
     case 'user':
-      return <UserMessage text={item.text} uuid={item.uuid} turn={item.turn} />
+      return (
+        // Your message, then (when Claude was tied up) a line or quick answer underneath it, never beside it.
+        <div className="user-turn">
+          <UserMessage text={item.text} uuid={item.uuid} turn={item.turn} />
+          {item.uuid && s.quickAnswers?.[item.uuid] ? <QuickAnswer a={s.quickAnswers[item.uuid]} /> : <WaitingOnAgent at={item.at} s={s} />}
+        </div>
+      )
     case 'comment': {
       // Your message, as normal, with a quiet line above saying what it replies to.
       const target = item.target
@@ -455,6 +463,53 @@ function UserMessage({ text: sent, uuid, turn }: { text: string; uuid?: string; 
         )}
         {text && <div className="msg user" data-turn={turn}>{text}</div>}
       </div>
+    </div>
+  )
+}
+
+/**
+ * You wrote while an agent was working. Claude itself is waiting for that agent, so your message
+ * reaches it only when the agent finishes; Claude Code passes it to the running agent too. Say so,
+ * until Claude replies, with a way to follow the agent or stop it so Claude reads your message now.
+ */
+function WaitingOnAgent({ at, s }: { at: number; s: SessionState }) {
+  const { tab, setFilter } = useSession()
+  if (s.status !== 'running') return null
+  const answered = s.timeline.some((i) => i.at > at && (i.kind === 'text' || i.kind === 'tool') && i.agentId === null)
+  if (answered) return null
+  const busy = Object.values(s.agents).filter((a) => a.status === 'running' && a.at < at && !a.background)
+  if (!busy.length) return null
+  const a = busy[busy.length - 1]
+  const name = `${a.type ? a.type[0].toUpperCase() + a.type.slice(1) : 'An'} agent`
+  return (
+    <div className="waiting-on-agent small">
+      <Icon name="info" className="muted" />
+      <span className="grow">
+        Claude is waiting for the {name} ({a.description}), so it reads this when that agent finishes. The agent sees your message too.
+      </span>
+      <button className="link small" onClick={() => setFilter(a.id)}>
+        Follow the agent
+      </button>
+      {a.taskId && (
+        <button className="link small" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title="Stop the agent so Claude reads your message now">
+          Stop it
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** A reply from a copy of the conversation, because Claude itself was tied up when you wrote. */
+function QuickAnswer({ a }: { a: { status: 'running' | 'done' | 'failed'; text?: string } }) {
+  const { tab } = useSession()
+  if (a.status === 'failed') return null
+  return (
+    <div className="quick-answer">
+      <div className="quick-answer-head small muted">
+        {a.status === 'running' ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name="zap" className="accent" />}
+        {a.status === 'running' ? 'Claude is busy with a long step, so getting you a quick answer…' : 'Quick answer while Claude finishes its current step. It has your message and acts on it next.'}
+      </div>
+      {a.text && <div className="msg assistant markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(a.text, tab.cwd) }} />}
     </div>
   )
 }
@@ -698,9 +753,14 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
   if (!a) return null
   const running = a.status === 'running'
   // While it works, its latest few steps show right here, so you can see what it's doing without following it.
-  const recent = running
-    ? Object.values(s.toolCalls)
-        .filter((c) => c.agentId === a.id)
+  const recent: ({ kind: 'tool'; c: ToolCall; at: number } | { kind: 'said'; text: string; at: number })[] = running
+    ? [
+        ...Object.values(s.toolCalls)
+          .filter((c) => c.agentId === a.id)
+          .map((c) => ({ kind: 'tool' as const, c, at: c.at })),
+        // What the agent says as it goes, so you can see it react (to your messages, say).
+        ...s.timeline.flatMap((i) => (i.kind === 'text' && i.agentId === a.id ? [{ kind: 'said' as const, text: i.text, at: i.at }] : []))
+      ]
         .sort((x, y) => x.at - y.at)
         .slice(-3)
     : []
@@ -719,7 +779,6 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
         </span>
         {running && a.progress && <span className="agent-step-now">{a.progress}</span>}
       </span>
-      <StepTime at={a.at} endedAt={a.endedAt} running={running} />
       {running && a.taskId && (
         <button className="btn quiet" onClick={() => void window.glassbox.session.stopTask(tab.id, a.taskId!)} title="Stop just this agent. Claude and the other agents carry on">
           Stop
@@ -728,16 +787,25 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
       <button className="btn quiet" onClick={() => setFilter(a.id)} title="Show only this agent's work">
         {running ? 'Follow it' : 'See its work'}
       </button>
+      <StepTime at={a.at} endedAt={a.endedAt} running={running} />
     </div>
     {recent.length > 0 && (
       <div className="agent-feed" aria-label={`What ${a.type} is doing`}>
-        {recent.map((c) => (
-          <div key={c.id} className={`agent-feed-row tool-${c.status}`}>
-            {c.status === 'running' ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name={c.status === 'error' ? 'error' : toolIcon(c.name)} className={c.status === 'error' ? 'err' : 'muted'} />}
-            <span className="grow ellipsis">{describeTool(c)}</span>
-            <StepTime at={c.at} endedAt={c.endedAt} running={c.status === 'running'} />
-          </div>
-        ))}
+        {recent.map((r) =>
+          r.kind === 'said' ? (
+            <div key={`said:${r.at}`} className="agent-feed-row said" title={r.text}>
+              <Icon name="comment" className="muted" />
+              <span className="grow ellipsis">“{r.text.replace(/\s+/g, ' ').trim()}”</span>
+              <StepTime at={r.at} running={false} />
+            </div>
+          ) : (
+            <div key={r.c.id} className={`agent-feed-row tool-${r.c.status}`}>
+              {r.c.status === 'running' ? <Icon name="loading" className="codicon-modifier-spin accent" /> : <Icon name={r.c.status === 'error' ? 'error' : toolIcon(r.c.name)} className={r.c.status === 'error' ? 'err' : 'muted'} />}
+              <span className="grow ellipsis">{describeTool(r.c)}</span>
+              <StepTime at={r.c.at} endedAt={r.c.endedAt} running={r.c.status === 'running'} />
+            </div>
+          )
+        )}
       </div>
     )}
     </>
@@ -783,23 +851,37 @@ function Steps({ calls, s }: { calls: ToolCall[]; s: SessionState }) {
           {running ? <>{describeTool(running)}<span className="muted"> ({calls.length} steps so far)</span></> : summarizeTools(calls)}
           {failed > 0 && <span className="err"> {failed} failed</span>}
         </span>
-        <StepTime at={calls[0].at} endedAt={running ? undefined : Math.max(...calls.map((c) => c.endedAt ?? 0)) || undefined} running={!!running} />
         <span className="muted small">{calls.length} steps</span>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />
+        <StepTime at={calls[0].at} endedAt={running ? undefined : Math.max(...calls.map((c) => c.endedAt ?? 0)) || undefined} running={!!running} />
       </div>
       {open && rows}
     </div>
   )
 }
 
-/** When a step started, and how long it took (counting up while it runs). Hover for the full time. */
-function StepTime({ at, endedAt, running }: { at: number; endedAt?: number; running: boolean }) {
+/** One ticking clock for every running timer, so they all move together, once a second. */
+const clockListeners = new Set<() => void>()
+let clockTimer: ReturnType<typeof setInterval> | undefined
+function useClock(active: boolean): number {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
-    if (!running) return
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [running])
+    if (!active) return
+    const tick = () => setNow(Date.now())
+    tick()
+    clockListeners.add(tick)
+    clockTimer ??= setInterval(() => clockListeners.forEach((f) => f()), 1000)
+    return () => {
+      clockListeners.delete(tick)
+      if (!clockListeners.size && clockTimer) clearInterval(clockTimer), (clockTimer = undefined)
+    }
+  }, [active])
+  return active ? now : Date.now()
+}
+
+/** When a step started, and how long it took (counting up while it runs), always in the same column at the row's right. Hover for the full time. */
+function StepTime({ at, endedAt, running }: { at: number; endedAt?: number; running: boolean }) {
+  const now = useClock(running)
   if (!at) return null
   const took = running ? now - at : endedAt ? endedAt - at : undefined
   const start = new Date(at)
@@ -834,7 +916,6 @@ function ToolRow({ call, isAgent, guarded }: { call: ToolCall; isAgent: boolean;
           {describeTool(call)}
         </span>
         {guarded && <Icon name="shield" className={guarded === 'block' ? 'err' : 'warn'} title={guarded === 'block' ? 'Blocked by a guardrail' : 'Stopped for your approval by a guardrail'} />}
-        <StepTime at={call.at} endedAt={call.endedAt} running={call.status === 'running'} />
         <span className="tool-actions">
           <button className="icon-btn" title="Comment on this step" onClick={(e) => (e.stopPropagation(), setCommenting(true))}>
             <Icon name="comment" />
@@ -851,6 +932,7 @@ function ToolRow({ call, isAgent, guarded }: { call: ToolCall; isAgent: boolean;
           )}
         </span>
         <Icon name="chevron-down" className="tool-chevron" />
+        <StepTime at={call.at} endedAt={call.endedAt} running={call.status === 'running'} />
       </div>
       {commenting && <CommentBox target={toolTarget(call)} onDone={() => setCommenting(false)} />}
       {open && (
@@ -958,7 +1040,7 @@ function CommitsCard({ item }: { item: Extract<TimelineItem, { kind: 'commits' }
 }
 
 /** A running service logged an error, shown next to the edit that most likely caused it. */
-function ServiceErrorCard({ item }: { item: Extract<TimelineItem, { kind: 'service-error' }> }) {
+export function ServiceErrorCard({ item }: { item: Extract<TimelineItem, { kind: 'service-error' }> }) {
   const { send, showPanel, s } = useSession()
   const secs = item.after ? Math.max(1, Math.round((item.at - item.after.at) / 1000)) : 0
   const canSend = s.status === 'ready' || s.status === 'running'

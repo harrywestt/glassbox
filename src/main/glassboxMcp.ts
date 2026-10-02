@@ -56,6 +56,7 @@ Use the glassbox MCP tools to keep the user oriented:
 - Tools and skills that start their own local preview server (hyperframes preview, vite, storybook and the like) open a browser by default: always pass their no-open flag (e.g. --no-open), then call open_preview with the URL they print. When you produce a video, image or recording the user should see (a rendered brag.mp4, a screenshot, a chart), call open_file on it: it plays inline in the conversation. Never open these in an external player or browser.
 These tools only affect the Glassbox UI; they are cheap, so use them freely.
 - When a command genuinely needs administrator rights (installing system software, changing system settings, services or protected folders), run it with run_as_admin rather than your normal shell. The user approves each one in a Windows prompt, so batch related steps into one command and never use it for things that don't need elevation.
+- Stay answerable. When work will take more than a couple of minutes (several subagents, a long build or test run), start it in the background (run_in_background: true) so you remain free to reply. When the user writes while work is running, reply to them first, briefly, then carry on.
 The user may attach "Glassbox session requirements" to their messages: files they marked must-read, must-edit or don't-touch, and connectors or skills they require. Treat these as firm instructions.`
 
 // Kept in context instead of deferred behind tool search, and read-only so plan mode allows them

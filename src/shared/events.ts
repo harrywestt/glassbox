@@ -90,6 +90,8 @@ export type SessionEvent =
   /** Claude asked you questions (AskUserQuestion); answered from the box under the conversation. */
   | { kind: 'user-questions'; id: string; questions: UserQuestion[] }
   | { kind: 'user-questions-done'; id: string }
+  /** A quick reply to a message you sent while Claude was tied up (waiting on an agent or a long step), from a copy of the conversation. */
+  | { kind: 'quick-answer'; uuid: string; status: 'running' | 'done' | 'failed'; text?: string }
   | { kind: 'permission-cancelled'; id: string } // answered, aborted or session closed
   | { kind: 'glassbox'; signal: GlassboxSignal }
   | { kind: 'capabilities'; commands: SlashCommand[]; models: ModelInfo[]; account?: AccountInfo }

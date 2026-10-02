@@ -37,7 +37,10 @@ import type { BrowserBridge } from './browserTools'
 const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification']
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell'])
-const IDLE_ALERT_MS = 3 * 60_000
+/** Nothing at all from Claude (no words, no steps) for this long while it isn't running a tool. */
+const IDLE_ALERT_MS = 5 * 60_000
+/** A single tool (a build, a test run) running this long. */
+const TOOL_ALERT_MS = 15 * 60_000
 
 /** Push-based prompt stream so every message goes into the same live session. */
 class InputQueue implements AsyncIterable<SDKUserMessage> {
@@ -376,9 +379,68 @@ export class AgentHost {
     if (opts.plan && this.mode !== 'plan') await this.setMode('plan')
     const msg = { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, uuid: opts.uuid, priority: opts.priority } as SDKUserMessage
     this.input.push(msg)
+    const wasBusy = this.busy
     this.busy = true
+    this.idleAlerted = false
     this.touch()
     this.emit({ kind: 'status', status: 'running' })
+    if (wasBusy && opts.priority !== 'now') this.maybeQuickAnswer(text, opts.uuid)
+  }
+
+  /** When the main thread last said or did anything itself (not an agent's steps). */
+  private mainActivity = 0
+  /** Foreground agents the main thread is waiting on: it can't reply until they finish. */
+  private waitingOn = new Set<string>()
+
+  /**
+   * You wrote while Claude was tied up: waiting on a foreground agent, or on a step that's already
+   * run a while. Claude only reads your message when that finishes, which can be many minutes, so a
+   * copy of the conversation answers you now. Claude still gets the message and acts on it after.
+   */
+  private maybeQuickAnswer(text: string, uuid: string) {
+    if (!this.sid || text.trim().startsWith('/')) return
+    const sentAt = Date.now()
+    const tiedUp = () => this.waitingOn.size > 0 || [...this.openTools.values()].some((t) => Date.now() - t > 20_000)
+    // Give Claude a moment to pick it up itself (between steps it reads new messages straight away).
+    setTimeout(() => {
+      if (!this.busy || this.mainActivity > sentAt || !tiedUp()) return
+      void this.quickAnswer(text, uuid)
+    }, 6_000)
+  }
+
+  private async quickAnswer(text: string, uuid: string) {
+    const sid = this.sid
+    if (!sid) return
+    this.emit({ kind: 'quick-answer', uuid, status: 'running' })
+    const busyWith = this.waitingOn.size ? `${this.waitingOn.size === 1 ? 'an agent' : `${this.waitingOn.size} agents`} you started` : 'a long-running step'
+    const prompt = `[Glassbox: the user sent the message below while you were waiting on ${busyWith}. You are a quick side copy of the conversation, answering now so they aren't kept waiting; the main session also receives the message and will act on it when its current step finishes.]
+
+${text}
+
+Reply to the user now, briefly and directly, from what you know so far (glance at a file if you must). If it's a question, just answer it: don't mention the main session or this note. Only if it's an instruction or a change of plan for the ongoing work, add one sentence on what happens next: the main session and its running agents have the message and act on it after their current step, and the user can stop an agent from the Stop menu to have it acted on at once. Don't start the work yourself, don't edit files, and don't run commands.`
+    let reply = ''
+    try {
+      for await (const msg of query({
+        prompt,
+        options: {
+          cwd: this.cwd,
+          resume: sid,
+          forkSession: true,
+          persistSession: false,
+          model: 'sonnet',
+          tools: ['Read', 'Grep', 'Glob'],
+          allowedTools: ['Read', 'Grep', 'Glob'],
+          settingSources: [],
+          maxTurns: 6,
+          env: SESSION_ENV
+        }
+      })) {
+        if (msg.type === 'result') reply = msg.subtype === 'success' ? msg.result : ''
+      }
+      this.emit(reply.trim() ? { kind: 'quick-answer', uuid, status: 'done', text: reply.trim() } : { kind: 'quick-answer', uuid, status: 'failed' })
+    } catch {
+      this.emit({ kind: 'quick-answer', uuid, status: 'failed' })
+    }
   }
 
   async interrupt() {
@@ -656,21 +718,51 @@ export class AgentHost {
 
   private touch() {
     this.lastActivity = Date.now()
-    this.idleAlerted = false
   }
 
+  /** Tools Claude has started and not yet had a result for, with when each started. */
+  private openTools = new Map<string, number>()
+
+  /**
+   * Warn at most once per turn, and only when it looks stuck: a long build or test run is normal,
+   * so a running tool gets much longer than silence does, and subagents' progress counts as activity.
+   */
   private checkIdle() {
     if (!this.busy || this.pending.size || this.idleAlerted) return
-    if (Date.now() - this.lastActivity > IDLE_ALERT_MS) {
-      this.idleAlerted = true
-      this.emit({ kind: 'alert', level: 'warn', text: 'No activity for 3 minutes. Claude may be stuck on a long command.' })
+    const now = Date.now()
+    const oldestTool = Math.min(...this.openTools.values())
+    const stuck = this.openTools.size ? now - oldestTool > TOOL_ALERT_MS : now - this.lastActivity > IDLE_ALERT_MS
+    if (!stuck) return
+    this.idleAlerted = true
+    this.emit({
+      kind: 'alert',
+      level: 'warn',
+      text: this.openTools.size
+        ? `A step has been running for ${Math.round((now - oldestTool) / 60_000)} minutes. If it shouldn’t take this long, stop it.`
+        : `Nothing from Claude for ${Math.round((now - this.lastActivity) / 60_000)} minutes. It may be stuck; stop it and ask again if so.`
+    })
+  }
+
+  private trackTools(m: unknown) {
+    const msg = m as { type: string; message?: { content?: unknown } }
+    const content = (msg.type === 'assistant' || msg.type === 'user') && Array.isArray(msg.message?.content) ? (msg.message.content as { type: string; id?: string; name?: string; tool_use_id?: string }[]) : []
+    const main = (m as { parent_tool_use_id?: string | null }).parent_tool_use_id == null
+    if (main && msg.type === 'assistant') this.mainActivity = Date.now()
+    for (const b of content as { type: string; id?: string; name?: string; tool_use_id?: string; input?: { run_in_background?: boolean } }[]) {
+      // An agent's own steps are tracked one by one; the call that started it stays open throughout, so it isn't.
+      if (b.type === 'tool_use' && b.id && b.name !== 'Agent' && b.name !== 'Task') this.openTools.set(b.id, Date.now())
+      // A foreground agent started by Claude itself: the main thread waits for it.
+      if (b.type === 'tool_use' && b.id && main && (b.name === 'Agent' || b.name === 'Task') && !b.input?.run_in_background) this.waitingOn.add(b.id)
+      if (b.type === 'tool_result' && b.tool_use_id) this.openTools.delete(b.tool_use_id), this.waitingOn.delete(b.tool_use_id)
     }
+    if (msg.type === 'result') this.openTools.clear(), this.waitingOn.clear()
   }
 
   private async pump(q: Query) {
     try {
       for await (const msg of q) {
         this.touch()
+        this.trackTools(msg)
         this.emit({ kind: 'sdk', msg })
         if ('session_id' in msg && typeof msg.session_id === 'string') this.sid = msg.session_id
         if (msg.type === 'result') {

@@ -698,9 +698,9 @@ body.resizing, body.resizing * { user-select: none !important; cursor: col-resiz
 .composer-actions { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-1) var(--s-2) var(--s-2); }
 .composer-actions .hint { margin-right: var(--s-2); }
 .send { width: var(--h-lg); height: var(--h-lg); padding: 0; border-radius: var(--r-md); }
-.send.stop { background: var(--fg); border: none; }
-.send.stop:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 85%, var(--bg)); }
-.stop-square { width: 10px; height: 10px; border-radius: 2px; background: var(--bg); }
+.send.stop { background: var(--elevated); border: 1px solid var(--border); color: var(--fg); }
+.send.stop:hover:not(:disabled) { background: var(--surface); border-color: var(--muted); }
+.stop-square { width: 10px; height: 10px; border-radius: 2px; background: var(--fg); }
 .predicted-hint { position: absolute; top: var(--s-2); right: var(--s-3); z-index: 1; color: var(--muted); pointer-events: none; display: inline-flex; gap: var(--s-1); align-items: center; font-size: 12px; }
 .suggest { position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: var(--s-2); background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); overflow: hidden; z-index: 5; padding: var(--s-1); }
 .suggest-item { display: flex; gap: var(--s-2); align-items: baseline; padding: 0 var(--s-2); height: var(--h-lg); line-height: var(--h-lg); cursor: pointer; border-radius: var(--r-md); }
@@ -1665,9 +1665,9 @@ button.user-option.on { border-color: var(--accent); background: var(--accent-so
 .browser-start-form input { border: none; background: none; height: 100%; padding: 0; font-size: 14px; outline: none; }
 
 /* Stop, split: the square stops what you're looking at, the arrow lists the rest. */
-.stop-split { position: relative; display: inline-flex; gap: 1px; }
+.stop-split { position: relative; display: inline-flex; }
 .stop-split > .send.stop:first-child { border-radius: var(--r-md) 0 0 var(--r-md); }
-.send.stop.stop-more { width: 22px; border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--bg); }
+.send.stop.stop-more { width: 22px; border-radius: 0 var(--r-md) var(--r-md) 0; border-left: none; color: var(--muted); }
 .send.stop.stop-more .codicon { font-size: 12px; }
 .menu.stop-menu { top: auto; bottom: calc(100% + var(--s-1)); left: auto; right: 0; width: 300px; }
 .stop-menu .menu-item { flex-direction: column; align-items: flex-start; gap: 2px; height: auto; min-height: var(--h-ctl); padding: var(--s-2); white-space: normal; text-align: left; }
@@ -1683,7 +1683,7 @@ button.update-chip.ready .codicon { color: var(--ok, var(--accent)); }
 button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: var(--surface); }
 
 /* When a step started and how long it took, at the right of its row. */
-.step-time { display: inline-flex; align-items: baseline; gap: var(--s-2); flex-shrink: 0; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.step-time { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: var(--s-2); flex-shrink: 0; width: 120px; margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .step-time-took { min-width: 3.5em; text-align: right; color: color-mix(in srgb, var(--fg) 70%, var(--muted)); }
 .step-time-took.live { color: var(--accent); }
 
@@ -1697,3 +1697,27 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 
 /* Which Glassbox this is, at the foot of the dashboard. */
 .dash-version { display: flex; justify-content: center; align-items: center; gap: var(--s-2); padding: var(--s-6) 0 var(--s-2); }
+
+/* A message you sent while Claude waits on an agent: where it went. */
+.waiting-on-agent { display: flex; align-items: center; gap: var(--s-2); margin: calc(-1 * var(--s-1)) 0 var(--s-2) auto; max-width: min(640px, 85%); padding: var(--s-1) var(--s-3); border-radius: var(--r-md); background: var(--surface); color: var(--muted); line-height: 1.4; }
+.agent-feed-row.said { color: color-mix(in srgb, var(--fg) 75%, var(--muted)); font-style: italic; }
+
+/* Alerts at the top of a side panel sit inside its gutters, like the sections below them. */
+.panel-scroll > .callout { margin: var(--s-3) var(--s-4) var(--s-1); align-items: center; }
+
+/* A quick answer to a message sent while Claude was tied up. */
+.quick-answer { display: flex; flex-direction: column; gap: var(--s-1); margin: 0 0 var(--s-3); padding-left: var(--s-3); border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.quick-answer-head { display: flex; align-items: center; gap: var(--s-2); }
+
+/* A message you sent, with anything about it stacked underneath. */
+.user-turn { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: var(--s-2); }
+.user-turn > .quick-answer { margin-bottom: 0; }
+.row:has(.msg.user) > .user-turn { flex-direction: column; }
+
+/* Every row with a time ends at the same right edge, so the times line up in one column. */
+.agent-step { padding: 0 var(--s-2); }
+.agent-feed-row { padding-right: var(--s-2); }
+
+/* Service errors, under the services they came from. */
+.services-errors { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); }
+.services-errors .service-error { margin: 0; }

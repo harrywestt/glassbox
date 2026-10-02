@@ -10,6 +10,7 @@ const basename = (p: string) => p.split('/').filter(Boolean).pop() ?? p
 import type { SessionState } from '../session'
 import type { FileMark, PlanMap } from '../../../shared/events'
 import type { MapGroups } from '../../../main/mapGroups'
+import type { MapAnswer } from '../../../main/mapAsk'
 import { searchHits } from '../session'
 import { Icon, IconButton, Segmented } from '../components/ui'
 import './MapTab.css'
@@ -106,6 +107,24 @@ const groupedFor = new Map<string, { sig: string; groups: MapGroups }>()
 const AUTO_FOLD = 12
 /** The last show_on_map request each session's map has acted on. */
 const handledMapOpen = new Map<string, number>()
+/** Each session's last "show me a feature" answer, kept while the tab is open. */
+const askedFor = new Map<string, MapAnswer>()
+/** What you've asked the map before, per project, newest first (offered as suggestions). */
+const recentKey = (root: string) => `glassbox.mapAsks.${root.toLowerCase()}`
+const recentAsks = (root: string): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(recentKey(root)) ?? '[]') as string[]
+  } catch {
+    return []
+  }
+}
+const rememberAsk = (root: string, q: string) => {
+  try {
+    localStorage.setItem(recentKey(root), JSON.stringify([q, ...recentAsks(root).filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 8)))
+  } catch {
+    /* suggestions are a nicety */
+  }
+}
 
 /**
  * The part of the project a conversation is about: the modules Claude has read or changed, or that
@@ -259,7 +278,22 @@ export function MapTab() {
   const scroller = useRef<HTMLDivElement>(null)
   const [W, setW] = useState(0)
   // What the map shows: by default only the part of the project this conversation is working in.
-  const [whole, setWhole] = useState(false)
+  // Or a feature you asked to see ("ask"), drawn as the steps the work flows through.
+  const [mode, setMode] = useState<'conv' | 'whole' | 'ask'>(() => (askedFor.has(tab.id) ? 'ask' : 'conv'))
+  const whole = mode === 'whole'
+  const setWhole = (on: boolean) => setMode(on ? 'whole' : 'conv')
+  const [feature, setFeature] = useState<MapAnswer | null>(() => askedFor.get(tab.id) ?? null)
+  const [asking, setAsking] = useState<{ q: string; since: number } | null>(null)
+  const [askError, setAskError] = useState<string | null>(null)
+  const [askText, setAskText] = useState('')
+  // The feature's step list, folded by default: the map's numbered bands already show the steps.
+  const [stepsOpen, setStepsOpen] = useState(false)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (!asking) return
+    const t = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [asking])
   // Whole project: groups you folded or opened (null until you do: big groups start folded), and a search.
   const [folds, setFolds] = useState<Set<string> | null>(null)
   const [query, setQuery] = useState('')
@@ -318,7 +352,7 @@ export function MapTab() {
   const [regroupN, setRegroupN] = useState(0)
   const [busyGrouping, setBusyGrouping] = useState(false)
   useEffect(() => {
-    if (!arch || whole || heat.length < 2 || s.status === 'running') return
+    if (!arch || mode !== 'conv' || heat.length < 2 || s.status === 'running') return
     if (grouping?.sig === heatSig && !regroupN) return
     let live = true
     setBusyGrouping(true)
@@ -337,13 +371,28 @@ export function MapTab() {
       live = false
       clearTimeout(t)
     }
-  }, [arch, whole, heatSig, s.status, regroupN])
-  const groups = !whole && grouping && grouping.groups.groups.length ? grouping.groups : null
+  }, [arch, mode, heatSig, s.status, regroupN])
+  const groups = mode === 'conv' && grouping && grouping.groups.groups.length ? grouping.groups : null
 
   const shown = useMemo(() => {
     if (!arch || !scope) return null
     const modules = [...arch.modules, ...(plan?.ghosts ?? [])]
     if (whole) return { ...arch, modules }
+    // A feature you asked about: its steps become the bands, in the order the work flows.
+    if (mode === 'ask' && feature) {
+      const layerOf = new Map<string, string>()
+      feature.steps.forEach((st, i) => {
+        const name = `${i + 1}. ${st.name}`
+        for (const id of st.modules) if (!layerOf.has(id)) layerOf.set(id, name)
+        for (const f of st.files) {
+          const m = moduleOf(arch, `${arch.root}/${f.path}`)
+          if (m && !layerOf.has(m.id)) layerOf.set(m.id, name)
+        }
+      })
+      const mods = arch.modules.filter((m) => layerOf.has(m.id)).map((m) => ({ ...m, layer: layerOf.get(m.id)! }))
+      const ids = new Set(mods.map((m) => m.id))
+      return { ...arch, layers: feature.steps.map((st, i) => `${i + 1}. ${st.name}`), modules: mods, edges: arch.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) }
+    }
     // Claude's grouping: its groups become the bands, and what it left out stays off the map.
     if (groups) {
       const layerOf = new Map<string, string>()
@@ -356,7 +405,18 @@ export function MapTab() {
     }
     const ids = new Set([...scope.focus, ...scope.context])
     return { ...arch, modules: modules.filter((m) => ids.has(m.id)), edges: arch.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) }
-  }, [arch, scope, whole, plan, groups])
+  }, [arch, scope, whole, mode, feature, plan, groups])
+  // What each module does for the feature you asked about: its key files, and why they matter.
+  const notes = useMemo(() => {
+    if (mode !== 'ask' || !feature || !arch) return null
+    const out = new Map<string, string[]>()
+    for (const st of feature.steps)
+      for (const f of st.files) {
+        const m = moduleOf(arch, `${arch.root}/${f.path}`)
+        if (m) out.set(m.id, [...(out.get(m.id) ?? []), f.why ? `${basename(f.path)}: ${f.why}` : basename(f.path)])
+      }
+    return out
+  }, [mode, feature, arch])
   // Search (whole project): modules whose name or folder matches.
   const found = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -386,10 +446,11 @@ export function MapTab() {
   // Whole project: modules the conversation hasn't touched are compact (name, folder, size), so the
   // shape of the project fits on screen; the ones it works in keep room for their activity.
   const compact = useMemo(() => {
+    if (mode === 'ask') return null
     if (!whole) return scope?.context ?? null
     if (!shown || !scope) return null
     return new Set(shown.modules.filter((m) => !scope.focus.has(m.id) && !plan?.modules.has(m.id)).map((m) => m.id))
-  }, [whole, shown, scope, plan])
+  }, [whole, mode, shown, scope, plan])
   const lay = useMemo(() => (shown && shown.modules.length && W ? layout(shown, W, compact, folded) : null), [shown, W, compact, folded])
   // Searching: bring the first match into view (it may be far down a long project).
   useEffect(() => {
@@ -508,7 +569,8 @@ export function MapTab() {
     if (!arch) return <div className="map-empty">Mapping the project…</div>
     if (arch.error && !arch.modules.length) return <div className="map-empty">Couldn’t map this project: {arch.error}</div>
     if (!arch.modules.length) return <div className="map-empty">No source folders found to map.</div>
-    if (!whole && scope && !scope.focus.size)
+    if (mode === 'ask' && feature && !feature.steps.length) return null
+    if (mode === 'conv' && scope && !scope.focus.size)
       return (
         <div className="map-empty map-empty-scope">
           <strong>The map fills in as Claude works</strong>
@@ -528,7 +590,8 @@ export function MapTab() {
         setSel={setSel}
         W={W}
         hoverOther={hoverOther}
-        context={whole ? null : scope?.context ?? null}
+        context={mode === 'conv' ? scope?.context ?? null : null}
+        notes={notes}
         pointed={pointed}
         whole={whole}
         found={found}
@@ -537,14 +600,68 @@ export function MapTab() {
       />
     )
   })()
-  const scopeBar = arch && arch.modules.length > 0 && scope && (scope.focus.size > 0 || whole) && (
+  const ask = async (question: string, force = false) => {
+    const q = question.trim()
+    if (!arch || !q || asking) return
+    setAsking({ q, since: Date.now() })
+    setAskError(null)
+    const mods = arch.modules.filter((m) => !m.external).map((m) => ({ id: m.id, name: m.name, path: m.path }))
+    const a = await window.glassbox.architecture.ask(arch.root, q, mods, force).catch((e: unknown) => ({ error: String(e) }) as MapAnswer)
+    setAsking(null)
+    if (a.error) return setAskError(a.error)
+    askedFor.set(tab.id, a)
+    setFeature(a)
+    setMode('ask')
+    setSel(null)
+    setAskText('')
+    rememberAsk(arch.root, q)
+  }
+  const recent = arch ? recentAsks(arch.root) : []
+  const askBox = arch && arch.modules.length > 0 && (
+    <form
+      className={asking ? 'map-ask busy' : 'map-ask'}
+      onSubmit={(e) => {
+        e.preventDefault()
+        void ask(askText)
+      }}
+    >
+      <Icon name={asking ? 'loading' : 'sparkle'} className={asking ? 'codicon-modifier-spin accent' : 'accent'} />
+      {asking ? (
+        <span className="map-ask-busy">
+          Finding “{asking.q}” in the code… <span className="muted">{elapsed(Date.now() - asking.since)}</span>
+        </span>
+      ) : (
+        <input
+          className="grow"
+          list={`map-asks-${tab.id}`}
+          placeholder="Show me a feature, e.g. how discount codes are applied"
+          aria-label="Ask the map to show a feature"
+          value={askText}
+          onChange={(e) => setAskText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setAskText('')}
+        />
+      )}
+      <datalist id={`map-asks-${tab.id}`}>
+        {recent.map((q) => (
+          <option key={q} value={q} />
+        ))}
+      </datalist>
+      {!asking && (
+        <button className="btn" type="submit" disabled={!askText.trim()}>
+          Show me
+        </button>
+      )}
+    </form>
+  )
+  const scopeBar = arch && arch.modules.length > 0 && scope && (
     <div className="map-bar">
-      <Segmented<'conv' | 'whole'>
-        value={whole ? 'whole' : 'conv'}
-        onChange={(v) => (setWhole(v === 'whole'), setSel(null), setQuery(''))}
+      <Segmented<'conv' | 'whole' | 'ask'>
+        value={mode}
+        onChange={(v) => (setMode(v), setSel(null), setQuery(''))}
         options={[
           { value: 'conv', label: 'This conversation' },
-          { value: 'whole', label: 'Whole project' }
+          { value: 'whole', label: 'Whole project' },
+          ...(feature ? [{ value: 'ask' as const, label: feature.title }] : [])
         ]}
       />
       {whole && (
@@ -561,7 +678,7 @@ export function MapTab() {
           }}
         />
       )}
-      {!whole && (groups || busyGrouping) && (
+      {mode === 'conv' && (groups || busyGrouping) && (
         <span className="map-grouped" title={groups ? 'Claude grouped these from what this session read, edited and searched, and left out generated code and other noise' : undefined}>
           <Icon name={busyGrouping ? 'loading' : 'sparkle'} className={busyGrouping ? 'codicon-modifier-spin' : undefined} />
           {busyGrouping ? 'Grouping…' : 'Grouped by Claude'}
@@ -577,8 +694,56 @@ export function MapTab() {
           ? `${found.size} match${found.size === 1 ? '' : 'es'}${found.size ? '. Enter opens the first' : ''}`
           : whole
           ? `All ${arch.modules.length} modules`
-          : `${scope.focus.size} module${scope.focus.size === 1 ? '' : 's'} in this conversation, and ${scope.context.size} connected to ${scope.focus.size === 1 ? 'it' : 'them'}${scope.moreContext ? ` (${scope.moreContext} more connected, hidden)` : ''}`}
+          : mode === 'ask'
+          ? feature && shown && feature.steps.length
+            ? `${shown.modules.length} module${shown.modules.length === 1 ? '' : 's'} in ${feature.steps.length} step${feature.steps.length === 1 ? '' : 's'}`
+            : ''
+          : scope.focus.size
+          ? `${scope.focus.size} module${scope.focus.size === 1 ? '' : 's'} in this conversation, and ${scope.context.size} connected to ${scope.focus.size === 1 ? 'it' : 'them'}${scope.moreContext ? ` (${scope.moreContext} more connected, hidden)` : ''}`
+          : ''}
       </span>
+    </div>
+  )
+  // The feature you asked about, in words: what it is, and its steps with the files that matter.
+  const featureBar = arch && mode === 'ask' && feature && (
+    <div className="map-feature">
+      <div className="map-feature-head">
+        <strong>{feature.title}</strong>
+        <span className="spacer" />
+        <button className="btn quiet" onClick={() => void ask(feature.question, true)} disabled={!!asking} title={`Ask again: “${feature.question}”`}>
+          <Icon name="refresh" /> Ask again
+        </button>
+        <IconButton icon="close" title="Close this feature and go back to the conversation’s map" onClick={() => (askedFor.delete(tab.id), setFeature(null), setMode('conv'), setSel(null))} />
+      </div>
+      {feature.summary && <p className="map-feature-summary" title={feature.summary}>{feature.summary}</p>}
+      {feature.steps.length === 0 ? (
+        <p className="muted small">{feature.summary ? 'Try describing it another way, or name a screen, endpoint or file.' : 'Nothing in the code matched that. Try describing it another way, or name a screen, endpoint or file.'}</p>
+      ) : !stepsOpen ? (
+        <button className="link small map-feature-toggle" onClick={() => setStepsOpen(true)}>
+          Show the {feature.steps.length} steps and their files
+        </button>
+      ) : (
+        <ol className="map-feature-steps">
+          {feature.steps.map((st, i) => (
+            <li key={i}>
+              <span className="map-feature-n">{i + 1}</span>
+              <span className="map-feature-step">{st.name}</span>
+              <span className="map-feature-files">
+                {st.files.map((f) => (
+                  <button key={f.path} className="link small" title={`${f.path}${f.why ? `\n${f.why}` : ''}`} onClick={() => openFile(`${arch.root}/${f.path}`)}>
+                    {basename(f.path)}
+                  </button>
+                ))}
+              </span>
+            </li>
+          ))}
+          <li>
+            <button className="link small" onClick={() => setStepsOpen(false)}>
+              Hide the steps
+            </button>
+          </li>
+        </ol>
+      )}
     </div>
   )
   // The plan's shape in words, with the way back to approving it when it's waiting on you.
@@ -617,8 +782,15 @@ export function MapTab() {
 
   return (
     <div className={selBox ? 'map-tab inspecting' : 'map-tab'}>
+      {askBox}
+      {askError && (
+        <div className="note note-error map-ask-error">
+          Couldn’t find that: {askError} <button className="link" onClick={() => setAskError(null)}>Dismiss</button>
+        </div>
+      )}
       {scopeBar}
-      {planBar}
+      {featureBar}
+      {mode !== 'ask' && planBar}
       <div className="map-view" ref={scroller} onClick={(e) => e.target === e.currentTarget && setSel(null)}>
         {body}
       </div>
@@ -712,7 +884,8 @@ function MapSvg({
   onBoundsMenu,
   whole,
   found,
-  onToggleFold
+  onToggleFold,
+  notes
 }: {
   arch: Architecture
   lay: Layout
@@ -729,6 +902,8 @@ function MapSvg({
   /** Search matches (whole project), drawn outlined while the rest steps back. */
   found: Set<string> | null
   onToggleFold: (layer: string) => void
+  /** A feature you asked about: what each module's key files do for it, shown in the box. */
+  notes?: Map<string, string[]> | null
 }) {
   const box = (id: string) => lay.boxes[id]
   // Whole project: connections show for the module you point at or pick, not all at once (a big
@@ -867,7 +1042,12 @@ function MapSvg({
             {ghost && planned?.why && b.h > CONTEXT_H && (
               <text className="map-mod-file" x={b.x + 12} y={b.y + 58}>{clip(planned.why, b.w, 6.4)}</text>
             )}
-            {m.files.slice(-3).map((f, i) => (
+            {notes?.get(b.id)?.slice(0, 3).map((line, i) => (
+              <text key={i} className="map-mod-file note" x={b.x + 12} y={b.y + 58 + i * 14}>
+                {clip(line, b.w, 6.4)}
+              </text>
+            ))}
+            {!notes && m.files.slice(-3).map((f, i) => (
               <text key={f.path} className={f.isNew ? 'map-mod-file new' : 'map-mod-file'} x={b.x + 12} y={b.y + 58 + i * 14}>
                 {clip(`${f.isNew ? '+' : '~'} ${f.name}`, b.w, 6.4)}
               </text>
