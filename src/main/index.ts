@@ -641,10 +641,19 @@ app.on('certificate-error', (event, _contents, url, _error, _cert, callback) => 
 })
 
 // Runs for every quit path (including app.quit()), so sessions and services never outlive the app.
+// Each step is guarded: one that throws must not leave Glassbox running with no window (which also
+// holds up a pending update, since that installs once the app has gone).
 app.on('will-quit', () => {
-  for (const h of hosts.values()) h.close()
-  usage.dispose()
-  services.disposeAll()
-  tray?.dispose()
-  watch.dispose()
+  const safely = (f: () => unknown) => {
+    try {
+      void Promise.resolve(f()).catch(() => undefined)
+    } catch {
+      /* carry on closing */
+    }
+  }
+  for (const h of hosts.values()) safely(() => h.close())
+  safely(() => usage.dispose())
+  safely(() => services.disposeAll())
+  safely(() => tray?.dispose())
+  safely(() => watch.dispose())
 })

@@ -3,7 +3,8 @@ import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { query, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import { type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 import type { LocalUsageDay, RateLimitWindow, UsageSnapshot } from '../shared/events'
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects')

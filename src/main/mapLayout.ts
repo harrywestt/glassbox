@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 import type { Architecture } from '../shared/architecture'
 
 /**

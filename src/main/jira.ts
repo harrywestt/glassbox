@@ -1,4 +1,5 @@
-import { query, type McpServerConfig, type Query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { type McpServerConfig, type Query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { query } from './claude'
 import type { Ticket, TicketActionResult, TicketComment, TicketResult, TicketTransition, TicketTransitionsResult } from '../shared/events'
 
 export { ticketKeyFromBranch } from '../shared/ticket'
