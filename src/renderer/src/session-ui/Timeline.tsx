@@ -95,8 +95,12 @@ export function Timeline() {
   // A long conversation draws only its latest SHOWN groups; earlier ones load on request, 50 at a
   // time, keeping your place (drawing hundreds of steps at once made the chat lag).
   const [shown, setShown] = useState(SHOWN)
-  useEffect(() => setShown(SHOWN), [filter, tab.id])
+  useEffect(() => {
+    setShown(SHOWN)
+    windowStart.current = null
+  }, [filter, tab.id])
   const keepPlace = useRef<number | null>(null)
+  const windowStart = useRef<number | null>(null)
   useLayoutEffect(() => {
     const el = scroller.current
     if (el && keepPlace.current !== null) el.scrollTop += el.scrollHeight - keepPlace.current
@@ -210,7 +214,11 @@ export function Timeline() {
         ) : (
           (() => {
             const groups = groupTools(items)
-            const from = Math.max(0, groups.length - shown)
+            // Following the bottom: the latest `shown` groups. Scrolled up to read: the start stays
+            // where it was, so new items at the bottom don't pull what you're reading out from under you.
+            const latest = Math.max(0, groups.length - shown)
+            if (stick.current || windowStart.current === null || windowStart.current > latest) windowStart.current = latest
+            const from = windowStart.current
             return (
               <>
                 {from > 0 && (
@@ -219,6 +227,7 @@ export function Timeline() {
                     onClick={() => {
                       keepPlace.current = scroller.current?.scrollHeight ?? null
                       stick.current = false
+                      windowStart.current = Math.max(0, (windowStart.current ?? 0) - SHOWN)
                       setShown((n) => n + SHOWN)
                     }}
                   >
@@ -261,10 +270,10 @@ export function Timeline() {
             {d.kind === 'thinking' ? (
               <div className="thinking live">
                 <div className="live-label"><Icon name="lightbulb" /> {tr('timeline.thinking')}</div>
-                <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, tab.cwd) }} />
+                <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, tab.cwd, true) }} />
               </div>
             ) : (
-              <div className="msg assistant markdown live" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, tab.cwd) + '<span class="caret"></span>' }} />
+              <div className="msg assistant markdown live" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, tab.cwd, true) + '<span class="caret"></span>' }} />
             )}
           </div>
         ))}
@@ -414,7 +423,7 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
         // Your message, then (when Claude was tied up) a line or quick answer underneath it, never beside it.
         <div className="user-turn">
           <UserMessage text={item.text} uuid={item.uuid} turn={item.turn} />
-          {item.uuid && s.quickAnswers?.[item.uuid] ? <QuickAnswer a={s.quickAnswers[item.uuid]} /> : <WaitingOnAgent at={item.at} s={s} />}
+          {item.uuid && s.quickAnswers?.[item.uuid] && s.quickAnswers[item.uuid].status !== 'failed' ? <QuickAnswer a={s.quickAnswers[item.uuid]} /> : <WaitingOnAgent at={item.at} s={s} />}
         </div>
       )
     case 'comment': {
@@ -877,7 +886,7 @@ function AgentStep({ call, s }: { call: ToolCall; s: SessionState }) {
       <div className="agent-feed" aria-label={tr('timeline.agentFeed', { type: a.type })}>
         {recent.map((r) =>
           r.kind === 'said' ? (
-            <div key={`said:${r.at}`} className="agent-feed-row said" title={r.text}>
+            <div key={`said:${r.at}:${r.text.length}:${r.text.slice(0, 24)}`} className="agent-feed-row said" title={r.text}>
               <Icon name="comment" className="muted" />
               <span className="grow ellipsis">{tr('timeline.saidQuote', { text: r.text.replace(/\s+/g, ' ').trim() })}</span>
               <StepTime at={r.at} running={false} />

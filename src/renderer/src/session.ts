@@ -75,9 +75,11 @@ export type CommentTarget =
  * agent, with its steps and progress live in the conversation, instead of one silent line.
  */
 function asAgent(agents: Record<string, AgentNode>, toolCalls: Record<string, ToolCall>, id: string | null | undefined): Record<string, AgentNode> {
-  if (!id || agents[id]) return agents
+  // Always a copy: callers write into the result, and the previous state must stay as it was.
+  if (!id || agents[id]) return { ...agents }
   const call = toolCalls[id]
-  if (!call) return agents
+  // Only a skill runs like an agent; other tasks (a background shell command) stay steps.
+  if (!call || call.name !== 'Skill') return { ...agents }
   const skill = call.name === 'Skill' ? String(call.input.skill ?? call.input.command ?? '') : ''
   return {
     ...agents,
@@ -475,7 +477,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
         if (m.type === 'system') continue
         next = applySdk(next, { ...m, message: m.message } as SDKMessage, true, m.timestamp)
       }
-      const settle = <T extends { status: string }>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.status === 'running' ? { ...v, status: 'done' } : v]))
+      const settle = <T extends { status: string; at: number; endedAt?: number }>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.status === 'running' ? { ...v, status: 'done', endedAt: v.endedAt ?? v.at } : v]))
       next = { ...next, toolCalls: settle(next.toolCalls), agents: settle(next.agents) }
       return next.timeline.length ? note(next, tr('session.resumed'), 'info') : next
     }
@@ -484,7 +486,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       if (s.type === 'diagram') return { ...state, diagrams: { ...state.diagrams, [s.id]: { ...s, at } } }
       if (s.type === 'flow') return { ...state, flows: { ...state.flows, [s.id]: { ...s, at } } }
       if (s.type === 'task') return { ...state, task: { summary: s.summary, steps: s.steps } }
-      if (s.type === 'showcase') return { ...state, showcase: { ...s, at } }
+      if (s.type === 'showcase') return { ...state, showcase: { ...s, artifactUrl: s.artifactUrl ?? (state.showcase?.path === s.path ? state.showcase.artifactUrl : undefined), at } }
       if (s.type === 'open') return { ...state, open: { n: (state.open?.n ?? 0) + 1, target: s.target, why: s.why, at } }
       if (s.type === 'loader') return { ...state, loaders: { ...state.loaders, [s.loader.id]: s.loader } }
       return { ...state, pins: [...state.pins.filter((p) => p.path !== s.path), { path: s.path, reason: s.reason }] }
@@ -546,8 +548,8 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         // A background agent Claude no longer lists has ended, whether or not its own notice arrived.
         if (state.status !== 'running') state = settleRunning(state, at, (a) => !a.background || !a.taskId || listed.has(a.taskId), 'done')
         else {
-          const gone = Object.values(state.agents).filter((a) => a.status === 'running' && a.background && a.taskId && !listed.has(a.taskId)).map((a) => a.id)
-          if (gone.length) state = settleRunning(state, at, (a) => !gone.includes(a.id), 'done')
+          const gone = new Set(Object.values(state.agents).filter((a) => a.status === 'running' && a.background && a.taskId && !listed.has(a.taskId)).map((a) => a.id))
+          if (gone.size) state = settleAgents(state, at, gone)
         }
         return {
           ...state,
@@ -576,13 +578,13 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         if (m.subtype === 'task_updated') {
           if (m.patch?.is_backgrounded) next.background = true
           const st = m.patch?.status
-          if (st === 'completed') (next.status = 'done'), (next.endedAt = at)
+          if (st === 'completed') (next.status = 'done'), (next.endedAt = at), (next.stopped = false)
           else if (st === 'failed' || st === 'killed') (next.status = 'error'), (next.endedAt = at), (next.stopped = st === 'killed')
           else if (st === 'running' && !fromHistory) next.status = 'running'
         }
         if (m.subtype === 'task_notification') {
           next.status = m.status === 'completed' ? 'done' : 'error'
-          if (m.status === 'stopped') next.stopped = true
+          next.stopped = m.status === 'stopped'
           next.endedAt = at
           if (m.summary) next.result = m.summary
           next.progress = undefined
@@ -629,14 +631,22 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
             if (block.name === 'TodoWrite' && Array.isArray(input.todos))
               updated = (input.todos as { content?: string; status?: string; activeForm?: string }[]).map((t) => ({ label: String(t.content ?? ''), status: todoStatus(t.status), activeForm: t.activeForm }))
             if (block.name === 'TaskCreate') updated = [...list, { toolId: block.id, label: String(input.subject ?? ''), status: 'pending', activeForm: input.activeForm as string | undefined }]
-            if (block.name === 'TaskUpdate' && input.taskId != null) {
+            // Claude Code's task list is shared: an agent may update a task the main thread made.
+            if (block.name === 'TaskUpdate' && input.taskId != null && agentId && !list.some((t) => t.id === String(input.taskId)) && (next.todos ?? []).some((t) => t.id === String(input.taskId))) {
+              const id = String(input.taskId)
+              next.todos = (next.todos ?? []).flatMap((t) =>
+                t.id !== id ? [t] : input.status === 'deleted' ? [] : [{ ...t, ...(input.status ? { status: todoStatus(input.status) } : {}), ...(input.subject ? { label: String(input.subject) } : {}), ...(input.activeForm ? { activeForm: String(input.activeForm) } : {}) }]
+              )
+            } else if (block.name === 'TaskUpdate' && input.taskId != null) {
               const id = String(input.taskId)
               updated = list.flatMap((t) =>
                 t.id !== id ? [t] : input.status === 'deleted' ? [] : [{ ...t, ...(input.status ? { status: todoStatus(input.status) } : {}), ...(input.subject ? { label: String(input.subject) } : {}), ...(input.activeForm ? { activeForm: String(input.activeForm) } : {}) }]
               )
             }
-            if (agentId) next.agentTodos = { ...next.agentTodos, [agentId]: updated }
-            else next.todos = updated
+            if (updated !== list) {
+              if (agentId) next.agentTodos = { ...next.agentTodos, [agentId]: updated }
+              else next.todos = updated
+            }
           }
           if (block.name === 'mcp__glassbox__show_diagram' && typeof input.id === 'string') {
             next.diagrams = { ...next.diagrams, [input.id]: { id: input.id, title: String(input.title ?? input.id), mermaid: String(input.mermaid ?? ''), at } }
@@ -768,7 +778,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
     case 'result': {
       // The turn is over: only background agents Claude still lists as running carry on.
       const still = new Set((state.backgroundTasks ?? []).map((t) => t.id))
-      state = fromHistory ? state : settleRunning(state, at, (a) => !!a.background && (!a.taskId || still.has(a.taskId)))
+      state = fromHistory ? state : settleRunning(state, at, (a) => inBackground(state, a) && (!a.taskId || still.has(a.taskId) || !a.background))
       return {
         ...state,
         status: 'ready',
@@ -809,6 +819,21 @@ function settleRunning(state: SessionState, at: number, keep: (a: AgentNode) => 
       changed = true
     }
   return changed ? { ...state, agents, toolCalls } : state
+}
+
+/** Whether an agent runs in the background: itself, or because it was started by one that does. */
+function inBackground(state: SessionState, a: AgentNode): boolean {
+  for (let n: AgentNode | undefined = a, depth = 0; n && depth < 20; n = n.parentId ? state.agents[n.parentId] : undefined, depth++) if (n.background) return true
+  return false
+}
+
+/** Close just these agents (and the steps they took), leaving everything else as it is. */
+function settleAgents(state: SessionState, at: number, ids: Set<string>): SessionState {
+  const agents = { ...state.agents }
+  for (const id of ids) if (agents[id]) agents[id] = { ...agents[id], status: 'done', endedAt: at, progress: undefined }
+  const toolCalls = { ...state.toolCalls }
+  for (const c of Object.values(toolCalls)) if (c.status === 'running' && c.agentId && ids.has(c.agentId)) toolCalls[c.id] = { ...c, status: 'done', endedAt: at }
+  return { ...state, agents, toolCalls }
 }
 
 /** Transcript user text: show real prompts and slash commands, skip harness-injected wrappers. */

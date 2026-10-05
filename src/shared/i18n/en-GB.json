@@ -1020,6 +1020,18 @@
     "changedByOtherSession_other": "{count} files changed during that command by another session working in this same folder{alsoRunning}, so they aren’t counted or committed as this session’s: {files}. Give each session its own copy of the repo to keep their work apart.",
     "alsoRunningCommand": " (or while it was running a command too)"
   },
+  "mainArchDiff": {
+    "notRepo": "Not a git repository"
+  },
+  "mainAutocommit": {
+    "detached": "Not committing: HEAD is detached.",
+    "onDefault": "Not committing on {branch}. Switch to a feature branch and Glassbox will commit Claude’s changes there.",
+    "midMerge": "Not committing while a merge or rebase is in progress.",
+    "failed": "Commit failed",
+    "failedWith": "Commit failed: {error}",
+    "notLatest": "Only the latest commit can be undone, and newer commits have been made since.",
+    "pushed": "That commit has been pushed, so it isn’t undone here. Revert it instead."
+  },
   "mainContextMenu": {
     "noSuggestions": "No suggestions",
     "addToDictionary": "Add to dictionary",
@@ -1030,6 +1042,11 @@
     "folderNotFound": "Project folder not found: {cwd}",
     "onlyFirstFiles": "Only the first {max} of {total} files were checked.",
     "notGitPartial": "Not a git repository, so only part of the folder was scanned."
+  },
+  "mainErd": {
+    "noSchema": "No database schema found in this project.",
+    "noMatch": "Claude couldn’t match that to any tables. Try naming a feature or table.",
+    "unreadable": "Claude’s answer couldn’t be read. Try again."
   },
   "mainFiles": {
     "tooLarge": "File is {size} bytes; too large to preview."
@@ -1088,6 +1105,9 @@
   "mainLoaders": {
     "gaveUp": "Stopped watching after an hour",
     "answering": "{url} is answering"
+  },
+  "mainMapAsk": {
+    "noAnswer": "Claude didn’t return an answer. Try asking a different way."
   },
   "mainPinned": {
     "noHistory": "Claude Code no longer has this session’s history"

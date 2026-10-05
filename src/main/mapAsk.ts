@@ -1,4 +1,5 @@
 import { query } from './claude'
+import { tr } from '../shared/i18n'
 
 /**
  * "Show me a feature" on the map. You ask in plain words ("how discount codes are applied"); a
@@ -22,7 +23,8 @@ const running = new Map<string, Promise<MapAnswer>>()
 
 export async function askMap(root: string, question: string, modules: MapAskModule[], force = false): Promise<MapAnswer> {
   const q = question.trim()
-  const key = `${root.toLowerCase()}|${q.toLowerCase()}`
+  // Tied to the map's modules: after a rescan, an old answer could name modules that are gone.
+  const key = `${root.toLowerCase()}|${q.toLowerCase()}|${modules.map((m) => m.id).sort().join(',')}`
   if (!force && cache.has(key)) return cache.get(key)!
   const inflight = running.get(key)
   if (inflight) return inflight
@@ -63,7 +65,7 @@ Reply with only JSON: {"title":"...","summary":"...","steps":[{"name":"...","mod
         summary?: string
         steps?: { name?: string; modules?: string[]; files?: { path?: string; why?: string }[] }[]
       } | null
-      if (!raw) throw new Error('Claude didn’t return an answer. Try asking a different way.')
+      if (!raw) throw new Error(tr('mainMapAsk.noAnswer'))
       const used = new Set<string>()
       const steps = (raw.steps ?? [])
         .slice(0, 6)

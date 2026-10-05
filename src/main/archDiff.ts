@@ -4,6 +4,7 @@ import { fileConnections, type FileConnection } from './architecture'
 import { gitDiff } from './git'
 import { isPublicEntry, moduleOf } from '../shared/architecture'
 import type { ArchBreach, ArchDiff, ArchDiffEdge, DiffMode } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 /**
  * What a branch does to the architecture: the connections between modules it adds and removes.
@@ -25,7 +26,7 @@ const topLevel = (cwd: string) =>
 export async function architectureDiff(cwd: string, ref: string, mode: DiffMode, apiOnly: string[] = []): Promise<ArchDiff> {
   try {
     const root = await topLevel(cwd)
-    if (!root) return { added: [], removed: [], breaches: [], error: 'Not a git repository' }
+    if (!root) return { added: [], removed: [], breaches: [], error: tr('mainArchDiff.notRepo') }
     const diff = await gitDiff(cwd, ref, mode)
     const changed = diff.files.slice(0, MAX_FILES)
     const [before, after] = await Promise.all([

@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { app } from 'electron'
 import { query } from './claude'
 import type { GlassboxCommit } from '../shared/events'
+import { tr } from '../shared/i18n'
 
 const exec = promisify(execFile)
 const MAX_DIFF = 40_000
@@ -55,12 +56,12 @@ export async function autoCommit(cwd: string, files: string[], task?: string): P
   const root = await tryGit(cwd, ['rev-parse', '--show-toplevel'])
   if (!root) return { commits: [] }
   const branch = await tryGit(root, ['branch', '--show-current'])
-  if (!branch) return { commits: [], skipped: 'Not committing: HEAD is detached.' }
-  if ((await defaultBranch(root)).includes(branch)) return { commits: [], skipped: `Not committing on ${branch}. Switch to a feature branch and Glassbox will commit Claude’s changes there.` }
+  if (!branch) return { commits: [], skipped: tr('mainAutocommit.detached') }
+  if ((await defaultBranch(root)).includes(branch)) return { commits: [], skipped: tr('mainAutocommit.onDefault', { branch }) }
   const gitDir = (await tryGit(root, ['rev-parse', '--git-dir'])) ?? '.git'
   const g = isAbsolute(gitDir) ? gitDir : join(root, gitDir)
   if (['MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD'].some((f) => existsSync(join(g, f)))) {
-    return { commits: [], skipped: 'Not committing while a merge or rebase is in progress.' }
+    return { commits: [], skipped: tr('mainAutocommit.midMerge') }
   }
 
   // Only files that still have changes.
@@ -87,7 +88,7 @@ export async function autoCommit(cwd: string, files: string[], task?: string): P
       await tryGit(root, ['reset', '-q', '--', ...group.files])
       const stderr = (err as { stderr?: string }).stderr?.trim()
       remember(made)
-      return { commits: made, error: `Commit failed${stderr ? `: ${stderr.slice(0, 600)}` : ''}` }
+      return { commits: made, error: stderr ? tr('mainAutocommit.failedWith', { error: stderr.slice(0, 600) }) : tr('mainAutocommit.failed') }
     }
   }
   remember(made)
@@ -147,8 +148,8 @@ ${diff.slice(0, MAX_DIFF)}`
 /** Undoes a Glassbox commit (keeping its changes, uncommitted) if it's still the latest and not pushed. */
 export async function undoGlassboxCommit(cwd: string, sha: string): Promise<void> {
   const head = await tryGit(cwd, ['rev-parse', 'HEAD'])
-  if (head !== sha) throw new Error('Only the latest commit can be undone, and newer commits have been made since.')
+  if (head !== sha) throw new Error(tr('mainAutocommit.notLatest'))
   const pushed = await tryGit(cwd, ['branch', '-r', '--contains', sha])
-  if (pushed) throw new Error('That commit has been pushed, so it isn’t undone here. Revert it instead.')
+  if (pushed) throw new Error(tr('mainAutocommit.pushed'))
   await git(cwd, ['reset', '--soft', 'HEAD~1'])
 }

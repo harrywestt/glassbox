@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, protocol, shell } from 'electron'
 import { Updater } from './updater'
+import { abortAllQueries } from './claude'
 import { askMap, type MapAskModule } from './mapAsk'
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -665,6 +666,7 @@ app.on('will-quit', () => {
     }
   }
   for (const h of hosts.values()) safely(() => h.close())
+  safely(() => abortAllQueries())
   safely(() => usage.dispose())
   safely(() => services.disposeAll())
   safely(() => tray?.dispose())

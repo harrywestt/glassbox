@@ -12,8 +12,22 @@ export function claudeExecutable(): string | undefined {
   return existsSync(file) ? file : undefined
 }
 
+/** Every Claude run's abort switch, so quitting stops them all (a leftover claude.exe would block an update). */
+const runs = new Set<AbortController>()
+
 /** The SDK's query, pointed at the bundled program when the app is installed. Use this instead of the SDK's own. */
 export const query: typeof sdkQuery = (params) => {
   const exe = app.isPackaged ? claudeExecutable() : undefined
-  return sdkQuery(exe ? { ...params, options: { pathToClaudeCodeExecutable: exe, ...params.options } } : params)
+  const abortController = params.options?.abortController ?? new AbortController()
+  runs.add(abortController)
+  abortController.signal.addEventListener('abort', () => runs.delete(abortController), { once: true })
+  return sdkQuery({ ...params, options: { ...(exe ? { pathToClaudeCodeExecutable: exe } : {}), ...params.options, abortController } })
 }
+
+/** Stop every Claude run still going: the sessions' side runs, quick answers, map questions… */
+export function abortAllQueries() {
+  for (const c of [...runs]) c.abort()
+}
+
+/** A file shipped with the app, as a path other programs (Claude Code) can read: outside the app.asar archive. */
+export const unpackedPath = (p: string) => p.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')

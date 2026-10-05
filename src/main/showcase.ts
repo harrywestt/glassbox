@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
+import { unpackedPath } from './claude'
 
 export const showcaseDir = () => {
   const dir = join(app.getPath('userData'), 'showcases')
@@ -14,7 +15,8 @@ export const skillDeckDir = () => join(homedir(), '.claude', 'pr-showcase')
 
 /** The house deck template (the one /pr-showcase uses), bundled with the app. */
 export function showcaseTemplate(): string | null {
-  const path = join(app.getAppPath(), 'resources', 'showcase-template.html')
+  // Claude Code reads it, and it can't look inside app.asar: use the copy unpacked beside it.
+  const path = unpackedPath(join(app.getAppPath(), 'resources', 'showcase-template.html'))
   return existsSync(path) ? path : null
 }
 

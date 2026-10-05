@@ -40,7 +40,9 @@ const URI_OK = /^(?:(?:https?|mailto|tel|media|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.
 const formatted = new Map<string, string>()
 const FORMATTED_MAX = 600
 
-export function renderMarkdown(text: string, base?: string): string {
+export function renderMarkdown(text: string, base?: string, live = false): string {
+  // A draft still streaming in changes every frame: caching its snapshots would only push out finished messages.
+  if (live) return formatMarkdown(text, base)
   const key = `${base ?? ''}\u0000${text}`
   const hit = formatted.get(key)
   if (hit !== undefined) {
