@@ -267,16 +267,20 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
                     <span key={i} style={{ transform: `scaleY(${0.15 + voice.level * w})` }} />
                   ))}
                 </span>
-                <span>{tr('composer.voiceListening')}</span>
+                {voice.partial ? <span className="voice-partial">{voice.partial}</span> : <span>{tr('composer.voiceListening')}</span>}
               </>
             ) : (
               <>
                 <Icon name="loading" className="codicon-modifier-spin" />
-                <span>
-                  {voice.model?.status === 'downloading'
-                    ? tr('composer.voiceDownloading', { percent: voice.model.progress ?? 0 })
-                    : tr('composer.voiceTranscribing')}
-                </span>
+                {voice.partial && voice.model?.status !== 'downloading' ? (
+                  <span className="voice-partial">{voice.partial}</span>
+                ) : (
+                  <span>
+                    {voice.model?.status === 'downloading'
+                      ? tr('composer.voiceDownloading', { percent: voice.model.progress ?? 0 })
+                      : tr('composer.voiceTranscribing')}
+                  </span>
+                )}
               </>
             )}
           </div>
