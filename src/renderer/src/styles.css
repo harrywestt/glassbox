@@ -1749,3 +1749,8 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 @keyframes claude-browsing { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
 .work-tab:has(.claude-browsing) > .codicon:first-child, .browser-tab:has(.claude-browsing) > .codicon:first-child { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .claude-browsing { animation: none; } }
+
+/* Tab strips that run past their edges fade on the side with more tabs (the wheel scrolls them). */
+.tabstrip[data-more~="right"], .work-tab-list[data-more~="right"], .browser-tabs[data-more~="right"] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.tabstrip[data-more~="left"], .work-tab-list[data-more~="left"], .browser-tabs[data-more~="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+.tabstrip[data-more="left right"], .work-tab-list[data-more="left right"], .browser-tabs[data-more="left right"] { mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
