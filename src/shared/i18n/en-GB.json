@@ -1021,7 +1021,8 @@
     "alsoRunningCommand": " (or while it was running a command too)",
     "watchdogNudged_one": "Glassbox asked Claude to check on “{what}”: it has shown no progress for a while.",
     "watchdogNudged_other": "Glassbox asked Claude to check on {count} background tasks that have shown no progress for a while.",
-    "watchdogStoppedAgent": "Glassbox stopped “{what}”: it made no progress for {minutes} minutes. Claude has been told."
+    "watchdogStoppedAgent_one": "Glassbox stopped “{what}”: it made no progress for a minute. Claude has been told.",
+    "watchdogStoppedAgent_other": "Glassbox stopped “{what}”: it made no progress for {count} minutes. Claude has been told."
   },
   "mainArchDiff": {
     "notRepo": "Not a git repository"
