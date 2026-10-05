@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { THEMES, useTheme, type ThemeTokens } from './theme'
-import { appReducer, DASHBOARD, loadTabs, rememberView, saveTabs, type SessionViewMode } from './tabs'
+import { appReducer, DASHBOARD, loadTabs, rememberView, saveTabs, type AppAction, type SessionViewMode } from './tabs'
 import { disposeTerminal } from './work/TerminalTab'
 import { TitleBar } from './components/TitleBar'
 import { Dashboard } from './views/Dashboard'
@@ -56,11 +56,31 @@ export function App() {
   const stateRef = useRef(state)
   stateRef.current = state
 
-  useEffect(
-    () =>
-      window.glassbox.onEvent(({ tabId, event }) => dispatch({ type: 'session', tabId, action: { type: 'event', event } })),
-    []
-  )
+  // Claude's reply streams in many small events a second; applying each one redrew the whole app.
+  // They're queued and applied together once a frame instead.
+  useEffect(() => {
+    let queue: AppAction[] = []
+    let pending = false
+    const flush = () => {
+      if (!pending) return
+      pending = false
+      const actions = queue
+      queue = []
+      dispatch(actions.length === 1 ? actions[0] : { type: 'batch', actions })
+    }
+    const off = window.glassbox.onEvent(({ tabId, event }) => {
+      queue.push({ type: 'session', tabId, action: { type: 'event', event } })
+      if (pending) return
+      pending = true
+      requestAnimationFrame(flush)
+      // A hidden or minimised window gets no animation frames; the timer keeps it up to date there.
+      setTimeout(flush, 120)
+    })
+    return () => {
+      off()
+      flush()
+    }
+  }, [])
 
   // A desktop notification click brings its session to the front.
   useEffect(() => window.glassbox.onFocusTab((id) => dispatch({ type: 'activate', id })), [])

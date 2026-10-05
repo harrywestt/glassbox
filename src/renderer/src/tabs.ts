@@ -21,6 +21,8 @@ export type AppAction =
   | { type: 'started'; id: string }
   | { type: 'view'; id: string; view: SessionViewMode }
   | { type: 'session'; tabId: string; action: SessionAction }
+  /** Several session updates applied in one go (events that arrived within one frame). */
+  | { type: 'batch'; actions: AppAction[] }
 
 const KEY = 'glassbox.tabs'
 
@@ -82,6 +84,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       tabs.splice(action.to, 0, tab)
       return { ...state, tabs }
     }
+    case 'batch':
+      return action.actions.reduce(appReducer, state)
     case 'session': {
       const current = state.sessions[action.tabId]
       if (!current) return state

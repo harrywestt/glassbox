@@ -1738,3 +1738,5 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 
 /* A long conversation: the start loads on request. */
 .timeline-earlier { align-self: center; display: flex; margin: 0 auto var(--s-4); }
+
+.raw-more { display: block; margin: var(--s-2) var(--s-3); }
