@@ -891,7 +891,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       if (!e || e.stopped || !e.taskId || now - e.at < AGENT_STALL_MS) continue
       e.stopped = true
       const minutes = Math.round((now - e.at) / 60_000)
-      this.emit({ kind: 'alert', level: 'warn', text: tr('mainAgentHost.watchdogStoppedAgent', { what: e.label, minutes }) })
+      this.emit({ kind: 'alert', level: 'warn', text: tr('mainAgentHost.watchdogStoppedAgent', { what: e.label, count: minutes }) })
       void this.stopTask(e.taskId).catch(() => undefined)
       // Claude reads this once the stopped agent hands back.
       void this.send(
