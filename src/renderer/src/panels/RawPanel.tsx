@@ -10,10 +10,14 @@ import type { SessionEvent } from '../../../shared/events'
 import { PanelHeader, Segmented } from '../components/ui'
 import { tr } from '../../../shared/i18n'
 
+const RAW_SHOWN = 200
+
 export function RawPanel() {
   const { s } = useSession()
   const [view, setView] = useState<'events' | 'stderr'>('events')
   const [filter, setFilter] = useState('')
+  // The latest RAW_SHOWN events are drawn; a long session holds far more, and drawing them all was slow.
+  const [rawShown, setRawShown] = useState(RAW_SHOWN)
   // Events you've opened. While any is open the list holds still: new events wait behind a button.
   const [open, setOpen] = useState<Set<number>>(new Set())
   const [heldAt, setHeldAt] = useState<number | null>(null)
@@ -56,7 +60,7 @@ export function RawPanel() {
               </button>
             </div>
           )}
-          {[...rows].reverse().map((r) => (
+          {[...rows].reverse().slice(0, rawShown).map((r) => (
             <details key={idOf(r)} open={open.has(idOf(r))} onToggle={(e) => (e.currentTarget.open !== open.has(idOf(r))) && toggle(idOf(r), e.currentTarget.open)}>
               <summary className="mono small">
                 <span className="muted">{new Date(r.at).toLocaleTimeString()}</span> {label(r.event)}
@@ -64,6 +68,11 @@ export function RawPanel() {
               {open.has(idOf(r)) && <pre>{JSON.stringify(r.event, null, 2)}</pre>}
             </details>
           ))}
+          {rows.length > rawShown && (
+            <button className="link small raw-more" onClick={() => setRawShown((n) => n + RAW_SHOWN)}>
+              {tr('rawPanel.showOlder', { count: Math.min(RAW_SHOWN, rows.length - rawShown) })}
+            </button>
+          )}
           </>
         )}
       </div>

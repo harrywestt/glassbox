@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
 import type { SessionState } from '../session'
 import { defaultView, tabTitle, type Tab } from '../tabs'
@@ -244,7 +244,21 @@ function setKept(cwd: string, kind: ViewKind, on: boolean) {
   }
 }
 
-export function SessionView({ tab, session, active, peers = [] }: { tab: Tab; session: SessionState; active: boolean; peers?: { tab: Tab; s: SessionState }[] }) {
+type SessionViewProps = { tab: Tab; session: SessionState; active: boolean; peers?: { tab: Tab; s: SessionState }[] }
+
+/**
+ * Each open tab keeps its view, but only redraws for its own session. The other sessions (peers,
+ * for overlap warnings and the map) matter only to the tab you're looking at; a fresh list of them
+ * on every update used to redraw every tab whenever any session streamed a word.
+ */
+export const SessionView = memo(SessionViewInner, (a: SessionViewProps, b: SessionViewProps) => {
+  if (a.tab !== b.tab || a.session !== b.session || a.active !== b.active) return false
+  if (!b.active) return true
+  const pa = a.peers ?? [], pb = b.peers ?? []
+  return pa.length === pb.length && pa.every((p, i) => p.tab === pb[i].tab && p.s === pb[i].s)
+})
+
+function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps) {
   const appearance = useAppearance()
   const actions = useActions()
   const [side, setSideState] = useState<SideTab>(() => savedSide(tab.cwd))

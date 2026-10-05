@@ -36,7 +36,26 @@ const URI_OK = /^(?:(?:https?|mailto|tel|media|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.
  * Markdown to safe HTML. With `base` (the session's folder), images that point at local files
  * (![](screenshot.png), ![](C:/…/shot.png)) are shown from disk.
  */
+/** Formatted messages, by their text: a conversation redraws often, and its messages rarely change. */
+const formatted = new Map<string, string>()
+const FORMATTED_MAX = 600
+
 export function renderMarkdown(text: string, base?: string): string {
+  const key = `${base ?? ''}\u0000${text}`
+  const hit = formatted.get(key)
+  if (hit !== undefined) {
+    // Most recently used goes to the back, so the oldest are dropped first.
+    formatted.delete(key)
+    formatted.set(key, hit)
+    return hit
+  }
+  const html = formatMarkdown(text, base)
+  formatted.set(key, html)
+  if (formatted.size > FORMATTED_MAX) formatted.delete(formatted.keys().next().value!)
+  return html
+}
+
+function formatMarkdown(text: string, base?: string): string {
   const html = marked.parse(text, {
     async: false,
     walkTokens: (t) => {

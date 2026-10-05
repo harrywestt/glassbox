@@ -1573,7 +1573,9 @@
     "pausedNew_one": "Paused while you read: {count} new event",
     "pausedNew_other": "Paused while you read: {count} new events",
     "paused": "Paused while you read",
-    "closeAllResume": "Close all and resume"
+    "closeAllResume": "Close all and resume",
+    "showOlder_one": "Show 1 older event",
+    "showOlder_other": "Show {count} older events"
   },
   "replayPanel": {
     "title": "Replay",
