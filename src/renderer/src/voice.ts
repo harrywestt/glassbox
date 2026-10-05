@@ -28,28 +28,36 @@ let closeTimer: ReturnType<typeof setTimeout> | undefined
 let sink: ((chunk: Float32Array) => void) | null = null
 let level = 0
 
+/** Let go of the mic at once (its device went away, or it's no longer needed). */
+function dropMic() {
+  const m = mic
+  mic = null
+  if (!m) return
+  try {
+    m.node.disconnect()
+  } catch {
+    /* already disconnected */
+  }
+  m.stream.getTracks().forEach((t) => t.stop())
+  void m.ctx.close().catch(() => undefined)
+}
+
+const alive = (m: Mic) => m.ctx.state !== 'closed' && m.stream.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted)
+
 async function openMic(): Promise<Mic> {
-  if (mic) return mic
+  if (mic && !alive(mic)) dropMic()
+  if (mic) {
+    if (mic.ctx.state === 'suspended') await mic.ctx.resume().catch(() => undefined)
+    return mic
+  }
   opening ??= (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
-    const ctx = new AudioContext({ sampleRate: SAMPLE_RATE })
-    const source = ctx.createMediaStreamSource(stream)
-    const node = ctx.createScriptProcessor(1024, 1, 1)
-    const m: Mic = { stream, ctx, node, ring: new Float32Array(Math.round(SAMPLE_RATE * PRE_ROLL_S)), ringAt: 0 }
-    node.onaudioprocess = (e) => {
-      const chunk = new Float32Array(e.inputBuffer.getChannelData(0))
-      let peak = 0
-      for (const v of chunk) peak = Math.max(peak, Math.abs(v))
-      level = Math.min(1, peak * 2.5)
-      if (sink) sink(chunk)
-      // The pre-roll ring: the last half-second, always.
-      for (const v of chunk) (m.ring[m.ringAt] = v), (m.ringAt = (m.ringAt + 1) % m.ring.length)
+    try {
+      return wire(stream)
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop())
+      throw e
     }
-    source.connect(node)
-    // A ScriptProcessor only runs while connected to the output; it writes silence there.
-    node.connect(ctx.destination)
-    mic = m
-    return m
   })()
   try {
     return await opening
@@ -58,14 +66,33 @@ async function openMic(): Promise<Mic> {
   }
 }
 
+function wire(stream: MediaStream): Mic {
+  const ctx = new AudioContext({ sampleRate: SAMPLE_RATE })
+  const source = ctx.createMediaStreamSource(stream)
+  const node = ctx.createScriptProcessor(1024, 1, 1)
+  const m: Mic = { stream, ctx, node, ring: new Float32Array(Math.round(SAMPLE_RATE * PRE_ROLL_S)), ringAt: 0 }
+  node.onaudioprocess = (e) => {
+    const chunk = new Float32Array(e.inputBuffer.getChannelData(0))
+    let peak = 0
+    for (const v of chunk) peak = Math.max(peak, Math.abs(v))
+    level = Math.min(1, peak * 2.5)
+    if (sink) sink(chunk)
+    // The pre-roll ring: the last half-second, always.
+    for (const v of chunk) (m.ring[m.ringAt] = v), (m.ringAt = (m.ringAt + 1) % m.ring.length)
+  }
+  source.connect(node)
+  // A ScriptProcessor only runs while connected to the output; it writes silence there.
+  node.connect(ctx.destination)
+  // The device went away (unplugged, the PC slept): drop the mic so the next hold opens a fresh one.
+  for (const t of stream.getAudioTracks()) t.addEventListener('ended', () => mic === m && !sink && dropMic())
+  mic = m
+  return m
+}
+
 function closeMicSoon() {
   clearTimeout(closeTimer)
   closeTimer = setTimeout(() => {
-    if (sink || !mic) return
-    mic.node.disconnect()
-    mic.stream.getTracks().forEach((t) => t.stop())
-    void mic.ctx.close()
-    mic = null
+    if (!sink) dropMic()
   }, WARM_MS)
 }
 
@@ -118,9 +145,10 @@ export function useVoice() {
       if (!mic) setState('starting')
       const m = await openMic()
       if (cancelled.current) return closeMicSoon(), setState('idle')
-      const t = { parts: [preRoll(m)] as Float32Array[], raf: 0, live: 0 as unknown as ReturnType<typeof setInterval>, busy: false, heard: 0 }
+      const first = preRoll(m)
+      const t = { parts: [first] as Float32Array[], length: first.length, raf: 0, live: 0 as unknown as ReturnType<typeof setInterval>, busy: false, heard: 0 }
       take.current = t
-      sink = (chunk) => t.parts.push(chunk)
+      sink = (chunk) => (t.parts.push(chunk), (t.length += chunk.length))
       const tick = () => {
         setMeter(level)
         if (take.current === t) t.raf = requestAnimationFrame(tick)
@@ -129,14 +157,19 @@ export function useVoice() {
       // Live transcription: the words so far, every LIVE_EVERY_MS, one request at a time.
       t.live = setInterval(() => {
         if (t.busy || take.current !== t) return
-        const audio = join(t.parts)
-        if (audio.length - t.heard < SAMPLE_RATE * 0.4) return
+        if (t.length - t.heard < SAMPLE_RATE * 0.4) return
         t.busy = true
-        t.heard = audio.length
-        const recent = audio.length > SAMPLE_RATE * LIVE_WINDOW_S ? audio.slice(audio.length - SAMPLE_RATE * LIVE_WINDOW_S) : audio
+        t.heard = t.length
+        // Only the recent stretch is joined and sent, however long the take has run.
+        const want = SAMPLE_RATE * LIVE_WINDOW_S
+        const tail: Float32Array[] = []
+        let got = 0
+        for (let i = t.parts.length - 1; i >= 0 && got < want; i--) tail.unshift(t.parts[i]), (got += t.parts[i].length)
+        const recent = join(tail)
+        const trimmed = got < t.length
         void window.glassbox.voice
           .transcribe(recent)
-          .then((text) => take.current === t && text && setPartial(audio.length > recent.length ? `…${text}` : text))
+          .then((text) => take.current === t && text && setPartial(trimmed ? `…${text}` : text))
           .catch(() => undefined)
           .finally(() => (t.busy = false))
       }, LIVE_EVERY_MS)

@@ -264,7 +264,7 @@ export class ProjectServices {
       // Exiting before it was ready means it failed to start; a clean exit after that is fine.
       markReady(run.state.status === 'running' || code === 0)
       const crashed = run.state.status !== 'stopping' && code !== 0
-      this.appendLog(name, run.logs, `\x1b[90m${signal ? tr('mainServices.exitedSignal', { signal }) : tr('mainServices.exitedCode', { code })}\x1b[0m`)
+      this.appendLog(name, run.logs, `\x1b[90m${signal ? tr('mainServices.exitedSignal', { signal }) : tr('mainServices.exitedCode', { code: code ?? '?' })}\x1b[0m`)
       this.stopped.set(name, { ...run.state, status: crashed ? 'crashed' : 'stopped', exitCode: code ?? undefined, logs: run.logs })
       this.emitState()
     })

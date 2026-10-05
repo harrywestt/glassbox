@@ -25,7 +25,7 @@ function listen() {
       if (data) sh.term.write(data)
       if (exit !== undefined) {
         sh.exited = exit
-        sh.term.write(`\r\n\x1b[2m${tr('terminalTab.exited', { code: exit })}\x1b[0m\r\n`)
+        sh.term.write(`\r\n\x1b[2m${tr('terminalTab.exited', { code: exit ?? '?' })}\x1b[0m\r\n`)
       }
     }
   })

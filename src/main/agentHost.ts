@@ -356,6 +356,9 @@ export class AgentHost {
       }
     })
     this.q = q
+    // A fresh run: nothing from the last one is still open.
+    this.openTools.clear()
+    this.waitingOn.clear()
     this.emit({ kind: 'status', status: 'starting' })
     void this.pump(q)
     void this.refreshGit()
@@ -400,20 +403,36 @@ export class AgentHost {
    * run a while. Claude only reads your message when that finishes, which can be many minutes, so a
    * copy of the conversation answers you now. Claude still gets the message and acts on it after.
    */
+  /** Messages waiting for a quick answer (sent while Claude is tied up), answered together. */
+  private quickQueue: { text: string; uuid: string; at: number }[] = []
+  private quickTimer?: ReturnType<typeof setTimeout>
+  private quickBusy = false
+
   private maybeQuickAnswer(text: string, uuid: string) {
     if (!this.sid || text.trim().startsWith('/')) return
-    const sentAt = Date.now()
-    const tiedUp = () => this.waitingOn.size > 0 || [...this.openTools.values()].some((t) => Date.now() - t > 20_000)
-    // Give Claude a moment to pick it up itself (between steps it reads new messages straight away).
-    setTimeout(() => {
-      if (!this.busy || this.mainActivity > sentAt || !tiedUp()) return
-      void this.quickAnswer(text, uuid)
-    }, 6_000)
+    this.quickQueue.push({ text, uuid, at: Date.now() })
+    // Give Claude a moment to pick it up itself (between steps it reads new messages straight away);
+    // a burst of messages waits for the last one, then gets one answer.
+    clearTimeout(this.quickTimer)
+    this.quickTimer = setTimeout(() => this.flushQuick(), 6_000)
   }
 
-  private async quickAnswer(text: string, uuid: string) {
+  private flushQuick() {
+    if (this.quickBusy) return void (this.quickTimer = setTimeout(() => this.flushQuick(), 2_000))
+    const tiedUp = this.waitingOn.size > 0 || [...this.openTools.values()].some((t) => Date.now() - t > 20_000)
+    // Only what Claude hasn't already replied to itself.
+    const waiting = this.quickQueue.filter((m) => m.at > this.mainActivity)
+    this.quickQueue = []
+    if (!this.busy || !tiedUp || !waiting.length) return
+    void this.quickAnswer(waiting.map((m) => m.text).join('\n\n'), waiting.map((m) => m.uuid))
+  }
+
+  private async quickAnswer(text: string, uuids: string[]) {
     const sid = this.sid
     if (!sid) return
+    this.quickBusy = true
+    // The answer shows under the last of the messages it answers.
+    const uuid = uuids[uuids.length - 1]
     this.emit({ kind: 'quick-answer', uuid, status: 'running' })
     const busyWith = this.waitingOn.size ? `${this.waitingOn.size === 1 ? 'an agent' : `${this.waitingOn.size} agents`} you started` : 'a long-running step'
     const prompt = `[Glassbox: the user sent the message below while you were waiting on ${busyWith}. You are a quick side copy of the conversation, answering now so they aren't kept waiting; the main session also receives the message and will act on it when its current step finishes.]
@@ -430,7 +449,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
           resume: sid,
           forkSession: true,
           persistSession: false,
-          model: 'sonnet',
+          // The session's own model: a long conversation may only fit its (larger) context window.
+          ...(this.sessionModel ? { model: this.sessionModel } : {}),
           tools: ['Read', 'Grep', 'Glob'],
           allowedTools: ['Read', 'Grep', 'Glob'],
           settingSources: [],
@@ -443,6 +463,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       this.emit(reply.trim() ? { kind: 'quick-answer', uuid, status: 'done', text: reply.trim() } : { kind: 'quick-answer', uuid, status: 'failed' })
     } catch {
       this.emit({ kind: 'quick-answer', uuid, status: 'failed' })
+    } finally {
+      this.quickBusy = false
     }
   }
 
@@ -725,6 +747,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   /** Tools Claude has started and not yet had a result for, with when each started. */
   private openTools = new Map<string, number>()
+  /** The model the session runs on (from its init message). */
+  private sessionModel?: string
 
   /**
    * Warn at most once per turn, and only when it looks stuck: a long build or test run is normal,
@@ -747,7 +771,13 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
   }
 
   private trackTools(m: unknown) {
-    const msg = m as { type: string; message?: { content?: unknown } }
+    const msg = m as { type: string; subtype?: string; model?: string; tool_use_id?: string; message?: { content?: unknown } }
+    if (msg.type === 'system' && msg.subtype === 'init' && msg.model) this.sessionModel = msg.model
+    // A task that ended (an agent finished or was stopped) may leave its call without a result.
+    if (msg.type === 'system' && msg.subtype === 'task_notification' && msg.tool_use_id) {
+      this.openTools.delete(msg.tool_use_id)
+      this.waitingOn.delete(msg.tool_use_id)
+    }
     const content = (msg.type === 'assistant' || msg.type === 'user') && Array.isArray(msg.message?.content) ? (msg.message.content as { type: string; id?: string; name?: string; tool_use_id?: string }[]) : []
     const main = (m as { parent_tool_use_id?: string | null }).parent_tool_use_id == null
     if (main && msg.type === 'assistant') this.mainActivity = Date.now()

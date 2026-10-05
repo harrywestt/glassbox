@@ -5,6 +5,7 @@ import { type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { query } from './claude'
 import { gitListFiles } from './git'
 import type { Erd, ErdColumn, ErdEntity, ErdFocus, ErdRelation } from '../shared/erd'
+import { tr } from '../shared/i18n'
 
 /**
  * Reads a project's database schema from its code, no database connection needed:
@@ -190,7 +191,7 @@ export async function getErd(cwd: string): Promise<Erd> {
  */
 export async function focusErd(cwd: string, question: string): Promise<ErdFocus> {
   const erd = await getErd(cwd)
-  if (!erd.entities.length) return { entities: [], error: 'No database schema found in this project.' }
+  if (!erd.entities.length) return { entities: [], error: tr('mainErd.noSchema') }
   const list = erd.entities.map((e) => `${e.id}${e.table ? ` (table ${e.schema ? `${e.schema}.` : ''}${e.table})` : ''} [${e.group}]`).join('\n')
   const prompt = `The user is looking at the database of the project in ${erd.root} and wants to see: "${question}".
 
@@ -216,8 +217,8 @@ Reply with JSON only: {"entities": ["<entity id exactly as listed>", ...], "why"
     const parsed = JSON.parse(body) as { entities?: unknown; why?: unknown }
     const ids = new Set(erd.entities.map((e) => e.id))
     const picked = (Array.isArray(parsed.entities) ? parsed.entities : []).filter((x): x is string => typeof x === 'string' && ids.has(x))
-    return { entities: picked, why: typeof parsed.why === 'string' ? parsed.why : undefined, ...(picked.length ? {} : { error: 'Claude couldn’t match that to any tables. Try naming a feature or table.' }) }
+    return { entities: picked, why: typeof parsed.why === 'string' ? parsed.why : undefined, ...(picked.length ? {} : { error: tr('mainErd.noMatch') }) }
   } catch {
-    return { entities: [], error: 'Claude’s answer couldn’t be read. Try again.' }
+    return { entities: [], error: tr('mainErd.unreadable') }
   }
 }
