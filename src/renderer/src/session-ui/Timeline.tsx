@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useRef, useState } from 'react'
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useActions } from '../App'
 import { useSession, type AgentFilter } from '../views/SessionView'
 import { withoutBangs, CHANGE_TOOLS, toolSummary, type DecisionEntry, type SessionState, type TimelineItem, type ToolCall } from '../session'
@@ -77,6 +77,9 @@ function AgentBrief({ agentId, s }: { agentId: string; s: SessionState }) {
   )
 }
 
+/** How many groups (a message, or a run of steps) a conversation draws at first, and how many more each "Show earlier" adds. */
+const SHOWN = 50
+
 export function Timeline() {
   const { s, tab, filter, setFilter } = useSession()
   const scroller = useRef<HTMLDivElement>(null)
@@ -89,6 +92,16 @@ export function Timeline() {
   const draftLength = drafts.reduce((n, [, d]) => n + d.text.length, 0)
 
   const content = useRef<HTMLDivElement>(null)
+  // A long conversation draws only its latest SHOWN groups; earlier ones load on request, 50 at a
+  // time, keeping your place (drawing hundreds of steps at once made the chat lag).
+  const [shown, setShown] = useState(SHOWN)
+  useEffect(() => setShown(SHOWN), [filter, tab.id])
+  const keepPlace = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (el && keepPlace.current !== null) el.scrollTop += el.scrollHeight - keepPlace.current
+    keepPlace.current = null
+  }, [shown])
   const userScroll = useRef(0)
   const lastItem = items.at(-1)
 
@@ -195,7 +208,26 @@ export function Timeline() {
         {items.length === 0 && !drafts.length && !viewingAgent ? (
           <Welcome />
         ) : (
-          groupTools(items).map((g, i, all) => {
+          (() => {
+            const groups = groupTools(items)
+            const from = Math.max(0, groups.length - shown)
+            return (
+              <>
+                {from > 0 && (
+                  <button
+                    className="btn quiet timeline-earlier"
+                    onClick={() => {
+                      keepPlace.current = scroller.current?.scrollHeight ?? null
+                      stick.current = false
+                      setShown((n) => n + SHOWN)
+                    }}
+                  >
+                    {tr('timeline.showEarlier', { count: Math.min(SHOWN, from) })}
+                  </button>
+                )}
+                {groups.slice(from).map((g, j) => {
+            const i = from + j
+            const all = groups
             // In the everything view, one quiet line says where an agent's run starts (no indents).
             const agentId = Array.isArray(g) ? g[0].agentId : agentOf(g)
             const before = i > 0 ? (Array.isArray(all[i - 1]) ? (all[i - 1] as ToolItem[])[0].agentId : agentOf(all[i - 1] as TimelineItem)) : null
@@ -218,7 +250,10 @@ export function Timeline() {
                 )}
               </Fragment>
             )
-          })
+          })}
+              </>
+            )
+          })()
         )}
         {/* An empty draft (thinking or reply) says nothing the working line doesn't, and would only add a gap. */}
         {drafts.filter(([, d]) => d.text.trim()).map(([key, d]) => (

@@ -2324,7 +2324,9 @@
     "agentBriefTitle": "{name} agent’s brief",
     "agentBriefNote": "What Claude asked this agent to do. It starts with only this, not your conversation; below is what it did, and any message you sent while it ran.",
     "agentBriefMore": "Show the whole brief",
-    "agentBriefLess": "Show less"
+    "agentBriefLess": "Show less",
+    "showEarlier_one": "Show the earlier message",
+    "showEarlier_other": "Show {count} earlier messages"
   },
   "titleBar": {
     "dashboardTip": "Dashboard (Ctrl+T)",

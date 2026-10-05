@@ -1732,3 +1732,9 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .agent-brief-text { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .agent-brief-text.clamped { max-height: 9.5em; overflow: hidden; mask-image: linear-gradient(to bottom, #000 70%, transparent); }
 .agent-brief > .link { align-self: flex-start; }
+
+/* The words so far while you talk. */
+.voice-partial { flex: 1; min-width: 0; color: var(--fg); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+
+/* A long conversation: the start loads on request. */
+.timeline-earlier { align-self: center; display: flex; margin: 0 auto var(--s-4); }
