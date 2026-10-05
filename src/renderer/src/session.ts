@@ -494,7 +494,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       // is noted in the conversation only the first time.
       const again = !!event.id && state.alerts.some((x) => x.id === event.id)
       const alerts = [...state.alerts.filter((x) => !event.id || x.id !== event.id).slice(-4), { level: event.level, text: event.text, at, id: event.id }]
-      return again ? { ...state, alerts } : { ...state, alerts, timeline: [...state.timeline, { kind: 'note', text: event.text, tone: event.level === 'error' ? 'error' : 'warn', at }] }
+      return again ? { ...state, alerts } : { ...state, alerts, timeline: [...state.timeline, { kind: 'note', text: event.text, tone: event.level === 'error' ? 'error' : event.level === 'info' ? 'info' : 'warn', at }] }
     }
     case 'alert-clear':
       return { ...state, alerts: state.alerts.filter((x) => x.id !== event.id) }
@@ -869,7 +869,7 @@ function historyPrompt(state: SessionState, text: string, uuid: string | undefin
   const command = text.match(/<command-name>([^<]+)<\/command-name>/)
   let shown: string | undefined
   if (command) shown = `${command[1]} ${text.match(/<command-args>([^<]*)<\/command-args>/)?.[1] ?? ''}`.trim()
-  else if (text.trim() && !text.startsWith('<') && !text.startsWith('Caveat:') && !text.startsWith('[Request interrupted')) shown = text
+  else if (text.trim() && !text.startsWith('<') && !text.startsWith('Caveat:') && !text.startsWith('[Request interrupted') && !text.startsWith('[Glassbox watchdog')) shown = text
   if (!shown) return state
   // An answer or comment sent from Glassbox: tie it back to what it was about, so a question you
   // answered stays answered when the session is reopened.

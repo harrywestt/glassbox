@@ -43,6 +43,13 @@ const IDLE_ALERT_MS = 5 * 60_000
 /** Calls that wait by design (an agent, a monitor, a wait for output): never "stuck". */
 const WAITS_ON_PURPOSE = new Set(['Agent', 'Task', 'Monitor', 'TaskOutput', 'BashOutput', 'TaskStop', 'ScheduleWakeup', 'mcp__glassbox__browser_wait', 'mcp__glassbox__check_in', 'AskUserQuestion', 'ExitPlanMode'])
 
+/** The watchdog: background work that's shown no progress this long, while Claude is idle, gets Claude to check on it. */
+const QUIET_NUDGE_MS = 10 * 60_000
+/** …and at most this often per task. */
+const NUDGE_EVERY_MS = 20 * 60_000
+/** An agent Claude is waiting on that's made no progress this long is stopped, so Claude can carry on. */
+const AGENT_STALL_MS = 15 * 60_000
+
 /** A single tool (a build, a test run) running this long. */
 const TOOL_ALERT_MS = 15 * 60_000
 
@@ -207,7 +214,8 @@ function transcriptTimes(sessionId: string): Map<string, number> {
 // Glassbox shows those pages in its own preview instead.
 // CLAUDE_CODE_ENABLE_TODO_TOOLS: Claude keeps a to-do list (TaskCreate/TaskUpdate) that Glassbox shows
 // as Tasks; without it, SDK sessions on newer models have no list tools at all.
-const SESSION_ENV = { ...process.env, CLAUDE_CODE_ARTIFACT: '1', BROWSER: 'none', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' }
+// MCP_TOOL_TIMEOUT: a connector call (Jira, a browser tool…) that hangs gives up after 15 minutes rather than holding the session for ever.
+const SESSION_ENV = { ...process.env, CLAUDE_CODE_ARTIFACT: '1', BROWSER: 'none', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1', MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT ?? String(15 * 60_000) }
 
 const isClaudeOwnFile = (full: string) => CLAUDE_OWN_DIRS.some((d) => norm(full).startsWith(d + '/'))
 
@@ -362,10 +370,11 @@ export class AgentHost {
     // A fresh run: nothing from the last one is still open.
     this.openTools.clear()
     this.waitingOn.clear()
+    this.live.clear()
     this.emit({ kind: 'status', status: 'starting' })
     void this.pump(q)
     void this.refreshGit()
-    this.idleTimer = setInterval(() => this.checkIdle(), 15_000)
+    this.idleTimer = setInterval(() => (this.checkIdle(), this.watchdog()), 15_000)
 
     try {
       const init = await q.initializationResult()
@@ -411,7 +420,8 @@ export class AgentHost {
   private quickBusy = false
 
   private maybeQuickAnswer(text: string, uuid: string) {
-    if (!this.sid || text.trim().startsWith('/')) return
+    // Slash commands, and Glassbox's own notes to Claude (the watchdog), aren't yours to answer.
+    if (!this.sid || text.trim().startsWith('/') || text.startsWith('[Glassbox')) return
     this.quickQueue.push({ text, uuid, at: Date.now() })
     // Give Claude a moment to pick it up itself (between steps it reads new messages straight away);
     // a burst of messages waits for the last one, then gets one answer.
@@ -781,8 +791,21 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     })
   }
 
+  /**
+   * The watchdog's view of everything running: each step, agent and background task, with when it
+   * started and when it last showed real progress (output, its own steps, a progress report; not
+   * heartbeats). Keyed by tool call id, or task id for background tasks.
+   */
+  private live = new Map<string, { label: string; started: number; at: number; taskId?: string; agent?: boolean; background?: boolean; nudged?: number; stopped?: boolean; uses?: number }>()
+
+  private progressed(id: string | null | undefined) {
+    const e = id ? this.live.get(id) : undefined
+    if (e) e.at = Date.now()
+  }
+
   private trackTools(m: unknown) {
-    const msg = m as { type: string; subtype?: string; model?: string; tool_use_id?: string; message?: { content?: unknown } }
+    const msg = m as { type: string; subtype?: string; model?: string; tool_use_id?: string; task_id?: string; heartbeat?: boolean; parent_tool_use_id?: string | null; description?: string; tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[]; message?: { content?: unknown } }
+    this.watchProgress(msg)
     if (msg.type === 'system' && msg.subtype === 'init' && msg.model) this.sessionModel = msg.model
     // A task that ended (an agent finished or was stopped) may leave its call without a result.
     if (msg.type === 'system' && msg.subtype === 'task_notification' && msg.tool_use_id) {
@@ -800,6 +823,82 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       if (b.type === 'tool_result' && b.tool_use_id) this.openTools.delete(b.tool_use_id), this.waitingOn.delete(b.tool_use_id)
     }
     if (msg.type === 'result') this.openTools.clear(), this.waitingOn.clear()
+  }
+
+  /** Keeps the watchdog's map in step with what's running. */
+  private watchProgress(msg: { type: string; subtype?: string; tool_use_id?: string; task_id?: string; heartbeat?: boolean; parent_tool_use_id?: string | null; description?: string; tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[]; message?: { content?: unknown } }) {
+    const now = Date.now()
+    // What an agent says or does is progress for it. A running step's "still going" pings are not:
+    // a hung command sends them too.
+    if (msg.type === 'assistant' || msg.type === 'user') this.progressed(msg.parent_tool_use_id)
+    const blocks = (msg.type === 'assistant' || msg.type === 'user') && Array.isArray(msg.message?.content) ? (msg.message.content as { type: string; id?: string; name?: string; tool_use_id?: string; input?: Record<string, unknown> }[]) : []
+    for (const b of blocks) {
+      if (b.type === 'tool_use' && b.id && b.name && !(b.name.startsWith('mcp__glassbox__') && !b.name.startsWith('mcp__glassbox__browser_'))) {
+        const i = b.input ?? {}
+        const what = String(i.description ?? i.command ?? i.subagent_type ?? i.file_path ?? i.pattern ?? '').split('\n')[0].slice(0, 80)
+        this.live.set(b.id, { label: what ? `${b.name}: ${what}` : b.name, started: now, at: now, agent: b.name === 'Agent' || b.name === 'Task', background: i.run_in_background === true })
+      }
+      // A background call returns at once; its task carries on and is watched by task id instead.
+      if (b.type === 'tool_result' && b.tool_use_id) this.live.delete(b.tool_use_id)
+    }
+    if (msg.type === 'system' && (msg.subtype === 'task_started' || msg.subtype === 'task_progress' || msg.subtype === 'task_updated') && msg.task_id) {
+      // A task's report counts as progress only when it has done something new (another step).
+      const uses = (msg as { usage?: { tool_uses?: number } }).usage?.tool_uses
+      const byCall = msg.tool_use_id ? this.live.get(msg.tool_use_id) : undefined
+      const moved = (e: { uses?: number }) => msg.subtype !== 'task_progress' || uses === undefined || uses !== e.uses
+      if (byCall) {
+        byCall.taskId = msg.task_id
+        if (moved(byCall)) (byCall.at = now), (byCall.uses = uses)
+      }
+      const t = this.live.get(msg.task_id)
+      if (t && moved(t)) (t.at = now), (t.uses = uses)
+      else if (msg.subtype === 'task_started' && !byCall) this.live.set(msg.task_id, { label: msg.description ?? 'A background task', started: now, at: now, taskId: msg.task_id, background: true })
+    }
+    if (msg.type === 'system' && msg.subtype === 'task_notification') {
+      if (msg.task_id) this.live.delete(msg.task_id)
+      if (msg.tool_use_id) this.live.delete(msg.tool_use_id)
+    }
+    // The background list says what's still going; anything it no longer lists is over.
+    if (msg.type === 'system' && msg.subtype === 'background_tasks_changed' && msg.tasks) {
+      const listed = new Set(msg.tasks.filter((t) => !t.ambient).map((t) => t.task_id))
+      for (const t of msg.tasks) if (!t.ambient && ![...this.live.values()].some((e) => e.taskId === t.task_id)) this.live.set(t.task_id, { label: t.description ?? 'A background task', started: now, at: now, taskId: t.task_id, background: true })
+      for (const [k, e] of this.live) if (e.background && e.taskId && !listed.has(e.taskId)) this.live.delete(k)
+    }
+  }
+
+  /**
+   * The watchdog, every check: background work gone quiet while Claude is idle gets Claude to look
+   * at it; an agent Claude is stuck waiting on, with no progress for a long time, is stopped so Claude
+   * can carry on. Each is said in the conversation.
+   */
+  private watchdog() {
+    const now = Date.now()
+    if (!this.busy) {
+      const quiet = [...this.live.values()].filter((e) => e.background && now - e.at > QUIET_NUDGE_MS && (!e.nudged || now - e.nudged > NUDGE_EVERY_MS))
+      if (quiet.length && this.input && this.q) {
+        for (const e of quiet) e.nudged = now
+        const list = quiet.map((e) => `- ${e.label} (running ${Math.round((now - e.started) / 60_000)} min, no progress for ${Math.round((now - e.at) / 60_000)} min)`).join('\n')
+        this.emit({ kind: 'alert', level: 'info', text: tr('mainAgentHost.watchdogNudged', { count: quiet.length, what: quiet[0].label }) })
+        void this.send(
+          `[Glassbox watchdog, not from the user] This background work has shown no progress for a while:\n${list}\nCheck its output (TaskOutput). If it's stuck, hung, or waiting for input it will never get, stop it (TaskStop) and work around it, then tell the user in a sentence. If it's simply slow but fine, leave it and say nothing.`,
+          { uuid: randomUUID() }
+        ).catch(() => undefined)
+      }
+      return
+    }
+    for (const id of this.waitingOn) {
+      const e = this.live.get(id)
+      if (!e || e.stopped || !e.taskId || now - e.at < AGENT_STALL_MS) continue
+      e.stopped = true
+      const minutes = Math.round((now - e.at) / 60_000)
+      this.emit({ kind: 'alert', level: 'warn', text: tr('mainAgentHost.watchdogStoppedAgent', { what: e.label, minutes }) })
+      void this.stopTask(e.taskId).catch(() => undefined)
+      // Claude reads this once the stopped agent hands back.
+      void this.send(
+        `[Glassbox watchdog, not from the user] The agent "${e.label}" made no progress for ${minutes} minutes, so Glassbox stopped it. Decide whether to retry it with a narrower brief, do that part yourself, or carry on without it, and tell the user in a sentence.`,
+        { uuid: randomUUID() }
+      ).catch(() => undefined)
+    }
   }
 
   private async pump(q: Query) {
