@@ -1924,7 +1924,8 @@
     "branchForCopy": "Branch for its own copy",
     "makingCopy": "Making a copy…",
     "giveOwnCopy": "Give this session its own copy",
-    "hide": "Hide"
+    "hide": "Hide",
+    "claudeBrowsing": "Claude is using the Browser"
   },
   "sessionsOverview": {
     "columnPlan": "Plan",

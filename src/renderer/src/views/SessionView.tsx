@@ -1,6 +1,6 @@
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
-import type { SessionState } from '../session'
+import { claudeInBrowser, type SessionState } from '../session'
 import { defaultView, tabTitle, type Tab } from '../tabs'
 import type { DiffMode, FileMark, Requirements, SideTaskSpec } from '../../../shared/events'
 import { sessionBrief } from '../side'
@@ -654,6 +654,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               onActivate={(id) => openWork(work.find((w) => w.id === id)!)}
               onClose={closeWork}
               diagramCount={diagramCount}
+              claudeBrowsing={claudeInBrowser(session).active}
               kept={kept}
               onKeep={(kind, on) => {
                 setKept(tab.cwd, kind, on)
@@ -867,6 +868,7 @@ function WorkTabs({
   onActivate,
   onClose,
   diagramCount,
+  claudeBrowsing,
   kept,
   onKeep,
   views,
@@ -879,6 +881,8 @@ function WorkTabs({
   onActivate: (id: string) => void
   onClose: (id: string) => void
   diagramCount: number
+  /** Claude is using the Browser right now: its tab says so. */
+  claudeBrowsing: boolean
   kept: ViewKind[]
   onKeep: (kind: ViewKind, on: boolean) => void
   views: { kind: ViewKind; label: string; note: string; has: boolean }[]
@@ -904,6 +908,11 @@ function WorkTabs({
             <Icon name={WORK_ICON[t.kind]} />
             <span className="ellipsis">{workTitle(t)}</span>
             {t.kind === 'diagrams' && diagramCount > 0 && <span className="count">{diagramCount}</span>}
+            {t.kind === 'preview' && claudeBrowsing && (
+              <span className="claude-browsing" title={tr('sessionView.claudeBrowsing')} aria-label={tr('sessionView.claudeBrowsing')}>
+                <Icon name="sparkle" />
+              </span>
+            )}
             {unseen.has(t.id) && t.id !== active && <span className="unseen-dot" title={tr('sessionView.unseen')} />}
             {isView(t) && (
               <button
