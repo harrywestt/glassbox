@@ -112,7 +112,9 @@ export type SessionEvent =
   | { kind: 'restore'; costUsd: number; shellEdits: { toolId: string; files: string[]; agentId: string | null; at: number }[] }
   | { kind: 'autocommit'; enabled: boolean }
   | { kind: 'reviewer-state'; busy: boolean; pending: number; error?: string }
-  | { kind: 'alert'; level: 'info' | 'warn' | 'error'; text: string }
+  /** `id`: an alert about one ongoing thing ("stuck"): a newer one replaces it, and alert-clear takes it away. */
+  | { kind: 'alert'; level: 'info' | 'warn' | 'error'; text: string; id?: string }
+  | { kind: 'alert-clear'; id: string }
   | { kind: 'mode'; mode: string; base: string }
   | { kind: 'error'; message: string }
   | { kind: 'stderr'; text: string }

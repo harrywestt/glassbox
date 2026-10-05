@@ -312,14 +312,17 @@ function Working() {
   const [now, setNow] = useState(Date.now())
   // Agents still working in the background keep the line going after Claude's own turn ends.
   const background = Object.values(s.agents).filter((a) => a.status === 'running')
-  const on = (s.status === 'running' || (s.status === 'ready' && background.length > 0)) && !s.permissions.length && !s.checkins.some((c) => c.answer === undefined)
+  // Other background work Claude is waiting on (a long command it started in the background, say).
+  const tasks = (s.backgroundTasks ?? []).filter((t) => !background.some((a) => a.taskId === t.id))
+  const waiting = background.length > 0 || tasks.length > 0
+  const on = (s.status === 'running' || (s.status === 'ready' && waiting)) && !s.permissions.length && !s.checkins.some((c) => c.answer === undefined)
   useEffect(() => {
     if (!on) return
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [on])
   if (!on) return null
-  const since = s.busySince ?? Math.min(...background.map((a) => a.at), now)
+  const since = s.busySince ?? Math.min(...background.map((a) => a.at), ...tasks.map((t) => t.since), now)
   const took = Math.max(0, Math.floor((now - since) / 1000))
   const last = Math.max(since, s.timeline.at(-1)?.at ?? 0, ...Object.values(s.toolCalls).map((c) => c.endedAt ?? c.at))
   const quiet = Math.floor((now - last) / 1000)
@@ -338,7 +341,11 @@ function Working() {
         <span className="working-word">{tr('timeline.workingWord', { word })}</span>
         <span className="working-meta">
           {clock(took)}
-          {s.status !== 'running'
+          {s.status !== 'running' && !background.length
+            ? tasks.length === 1
+              ? tr('timeline.backgroundTaskOne', { what: tasks[0].description || tr('timeline.backgroundTaskUnnamed') })
+              : tr('timeline.backgroundTasks', { n: tasks.length })
+            : s.status !== 'running'
             ? background.length === 1
               ? background[0].progress
                 ? tr('timeline.backgroundOneProgress', { type: background[0].type, progress: background[0].progress })

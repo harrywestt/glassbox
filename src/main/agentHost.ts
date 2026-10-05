@@ -40,6 +40,9 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell'])
 /** Nothing at all from Claude (no words, no steps) for this long while it isn't running a tool. */
 const IDLE_ALERT_MS = 5 * 60_000
+/** Calls that wait by design (an agent, a monitor, a wait for output): never "stuck". */
+const WAITS_ON_PURPOSE = new Set(['Agent', 'Task', 'Monitor', 'TaskOutput', 'BashOutput', 'TaskStop', 'ScheduleWakeup', 'mcp__glassbox__browser_wait', 'mcp__glassbox__check_in', 'AskUserQuestion', 'ExitPlanMode'])
+
 /** A single tool (a build, a test run) running this long. */
 const TOOL_ALERT_MS = 15 * 60_000
 
@@ -387,7 +390,6 @@ export class AgentHost {
     this.input.push(msg)
     const wasBusy = this.busy
     this.busy = true
-    this.idleAlerted = false
     this.touch()
     this.emit({ kind: 'status', status: 'running' })
     if (wasBusy && opts.priority !== 'now') this.maybeQuickAnswer(text, opts.uuid)
@@ -754,19 +756,28 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
    * Warn at most once per turn, and only when it looks stuck: a long build or test run is normal,
    * so a running tool gets much longer than silence does, and subagents' progress counts as activity.
    */
+  /**
+   * One "may be stuck" alert at a time: it appears when a step runs very long (or Claude goes quiet),
+   * updates in place as the minutes go by, and clears itself once things move again.
+   */
   private checkIdle() {
-    if (!this.busy || this.pending.size || this.idleAlerted) return
     const now = Date.now()
     const oldestTool = Math.min(...this.openTools.values())
-    const stuck = this.openTools.size ? now - oldestTool > TOOL_ALERT_MS : now - this.lastActivity > IDLE_ALERT_MS
-    if (!stuck) return
+    const stuck = this.busy && !this.pending.size && (this.openTools.size ? now - oldestTool > TOOL_ALERT_MS : now - this.lastActivity > IDLE_ALERT_MS)
+    if (!stuck) {
+      if (this.idleAlerted) this.emit({ kind: 'alert-clear', id: 'stuck' })
+      this.idleAlerted = false
+      return
+    }
+    const minutes = Math.round((now - (this.openTools.size ? oldestTool : this.lastActivity)) / 60_000)
+    // Updated every five minutes, not on every check.
+    if (this.idleAlerted && minutes % 5 !== 0) return
     this.idleAlerted = true
     this.emit({
       kind: 'alert',
+      id: 'stuck',
       level: 'warn',
-      text: this.openTools.size
-        ? tr('mainAgentHost.stepRunningLong', { minutes: Math.round((now - oldestTool) / 60_000) })
-        : tr('mainAgentHost.nothingFromClaude', { minutes: Math.round((now - this.lastActivity) / 60_000) })
+      text: this.openTools.size ? tr('mainAgentHost.stepRunningLong', { minutes }) : tr('mainAgentHost.nothingFromClaude', { minutes })
     })
   }
 
@@ -783,7 +794,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     if (main && msg.type === 'assistant') this.mainActivity = Date.now()
     for (const b of content as { type: string; id?: string; name?: string; tool_use_id?: string; input?: { run_in_background?: boolean } }[]) {
       // An agent's own steps are tracked one by one; the call that started it stays open throughout, so it isn't.
-      if (b.type === 'tool_use' && b.id && b.name !== 'Agent' && b.name !== 'Task') this.openTools.set(b.id, Date.now())
+      if (b.type === 'tool_use' && b.id && b.name && !WAITS_ON_PURPOSE.has(b.name)) this.openTools.set(b.id, Date.now())
       // A foreground agent started by Claude itself: the main thread waits for it.
       if (b.type === 'tool_use' && b.id && main && (b.name === 'Agent' || b.name === 'Task') && !b.input?.run_in_background) this.waitingOn.add(b.id)
       if (b.type === 'tool_result' && b.tool_use_id) this.openTools.delete(b.tool_use_id), this.waitingOn.delete(b.tool_use_id)
