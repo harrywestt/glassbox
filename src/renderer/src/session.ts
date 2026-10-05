@@ -99,6 +99,20 @@ function asAgent(agents: Record<string, AgentNode>, toolCalls: Record<string, To
 /** Claude Code wraps an agent's report in a note for Claude ("[Subagent hand-back] … The report follows:"); keep just the report. */
 export const withoutHandback = (text: string) => text.replace(/^\s*\[Subagent hand-back\][\s\S]*?The report follows:\s*/i, '')
 
+/**
+ * Claude driving the Glassbox Browser: a browser tool running now, or one that finished in the last
+ * few seconds while Claude is still at work (so the marker holds steady between its clicks and reads).
+ * `tab` is the Browser page it's working in, when the tool named one.
+ */
+export function claudeInBrowser(s: SessionState): { active: boolean; tab?: string } {
+  const BROWSING = /^mcp__glassbox__(browser_|open_preview$|start_app$)/
+  let latest: ToolCall | undefined
+  for (const c of Object.values(s.toolCalls)) if (BROWSING.test(c.name) && (!latest || c.at > latest.at)) latest = c
+  if (!latest) return { active: false }
+  const recent = latest.status === 'running' || (s.status === 'running' && Date.now() - (latest.endedAt ?? latest.at) < 8000)
+  return recent ? { active: true, tab: typeof latest.input.tab === 'string' ? latest.input.tab : undefined } : { active: false }
+}
+
 /** One item on Claude's own to-do list. `toolId` ties a TaskCreate to its result, which carries the task's id. */
 export type Todo = { id?: string; toolId?: string; label: string; status: 'pending' | 'active' | 'done'; activeForm?: string }
 
@@ -120,6 +134,9 @@ export function taskOf(s: SessionState, agentId?: string): { summary: string; st
   }
   const todos = s.todos ?? []
   if (!todos.length) return s.task
+  // Claude keeps two lists: its own to-do list and the steps it gives set_current_task. Show the one
+  // it updated last (it often updates one and lets the other go stale), with the files from either.
+  if (s.task?.steps?.length && (s.task.at ?? 0) > (s.todosAt ?? 0)) return s.task
   const active = todos.find((t) => t.status === 'active')
   const done = todos.filter((t) => t.status === 'done').length
   return {
@@ -226,7 +243,10 @@ export interface SessionState {
   commits: GlassboxCommit[]
   autoCommit: boolean
   alerts: Alert[]
-  task?: { summary: string; steps?: TaskStep[] }
+  /** `at`: when set_current_task last said this, to weigh it against Claude's to-do list. */
+  task?: { summary: string; steps?: TaskStep[]; at?: number }
+  /** When Claude's own to-do list last changed. */
+  todosAt?: number
   plan?: { text: string; status: 'proposed' | 'approved' | 'changes-requested'; at: number }
   /** The plan's shape on the map (show_plan_on_map): modules it changes or adds, connections it adds or removes. */
   planMap?: PlanMap
@@ -485,7 +505,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       const s = event.signal
       if (s.type === 'diagram') return { ...state, diagrams: { ...state.diagrams, [s.id]: { ...s, at } } }
       if (s.type === 'flow') return { ...state, flows: { ...state.flows, [s.id]: { ...s, at } } }
-      if (s.type === 'task') return { ...state, task: { summary: s.summary, steps: s.steps } }
+      if (s.type === 'task') return { ...state, task: { summary: s.summary, steps: s.steps, at } }
       if (s.type === 'showcase') return { ...state, showcase: { ...s, artifactUrl: s.artifactUrl ?? (state.showcase?.path === s.path ? state.showcase.artifactUrl : undefined), at } }
       if (s.type === 'open') return { ...state, open: { n: (state.open?.n ?? 0) + 1, target: s.target, why: s.why, at } }
       if (s.type === 'loader') return { ...state, loaders: { ...state.loaders, [s.loader.id]: s.loader } }
@@ -622,7 +642,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
           const input = (block.input ?? {}) as Record<string, unknown>
           next.toolCalls[block.id] = { id: block.id, name: block.name, input, agentId, status: 'running', at, turn: state.turn }
           if (block.name === 'mcp__glassbox__set_current_task') {
-            next.task = { summary: String(input.summary ?? ''), steps: input.steps as TaskStep[] | undefined }
+            next.task = { summary: String(input.summary ?? ''), steps: input.steps as TaskStep[] | undefined, at }
           }
           // To-do lists: Claude's own, and each agent's, kept apart.
           if (block.name === 'TodoWrite' || block.name === 'TaskCreate' || block.name === 'TaskUpdate') {
@@ -634,6 +654,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
             // Claude Code's task list is shared: an agent may update a task the main thread made.
             if (block.name === 'TaskUpdate' && input.taskId != null && agentId && !list.some((t) => t.id === String(input.taskId)) && (next.todos ?? []).some((t) => t.id === String(input.taskId))) {
               const id = String(input.taskId)
+              next.todosAt = at
               next.todos = (next.todos ?? []).flatMap((t) =>
                 t.id !== id ? [t] : input.status === 'deleted' ? [] : [{ ...t, ...(input.status ? { status: todoStatus(input.status) } : {}), ...(input.subject ? { label: String(input.subject) } : {}), ...(input.activeForm ? { activeForm: String(input.activeForm) } : {}) }]
               )
@@ -645,7 +666,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
             }
             if (updated !== list) {
               if (agentId) next.agentTodos = { ...next.agentTodos, [agentId]: updated }
-              else next.todos = updated
+              else (next.todos = updated), (next.todosAt = at)
             }
           }
           if (block.name === 'mcp__glassbox__show_diagram' && typeof input.id === 'string') {

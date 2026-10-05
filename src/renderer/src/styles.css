@@ -1742,3 +1742,10 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .timeline-earlier { align-self: center; display: flex; margin: 0 auto var(--s-4); }
 
 .raw-more { display: block; margin: var(--s-2) var(--s-3); }
+
+/* Claude is driving the Browser: a small pulsing mark on its tab (and on the page it's in). */
+.claude-browsing { display: inline-flex; align-items: center; color: var(--accent); animation: claude-browsing 1.6s ease-in-out infinite; }
+.claude-browsing .codicon { font-size: 13px; }
+@keyframes claude-browsing { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
+.work-tab:has(.claude-browsing) > .codicon:first-child, .browser-tab:has(.claude-browsing) > .codicon:first-child { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .claude-browsing { animation: none; } }
