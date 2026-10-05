@@ -261,6 +261,11 @@ button.section-toggle:focus-visible { outline: 2px solid var(--accent); outline-
 :root[data-theme='light'] { --strong: #05070a; }
 .markdown table { font-size: .93em; border-collapse: separate; border-spacing: 0; margin: var(--s-1) 0 var(--s-3); width: max-content; max-width: 100%; display: block; overflow-x: auto; }
 .markdown th, .markdown td { padding: 6px var(--s-3); text-align: left; vertical-align: top; border: none; }
+/* No column squeezed to a sliver, and no one column taking all the room: wide tables scroll sideways instead. */
+.markdown td { min-width: 10ch; max-width: 56ch; overflow-wrap: break-word; }
+.markdown td:first-child { min-width: 8ch; }
+.markdown td ul, .markdown td ol { margin: 2px 0 0; padding-left: 1.2em; }
+.markdown td li { margin: 1px 0; }
 .markdown th { font-weight: 600; color: var(--strong); white-space: nowrap; }
 .markdown td code, .markdown th code { white-space: nowrap; }
 :root[data-tables='striped'] .markdown table { border: 1px solid var(--border); border-radius: var(--r-md); }

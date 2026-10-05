@@ -67,7 +67,25 @@ function formatMarkdown(text: string, base?: string): string {
       ;(t as { href: string }).href = mediaUrl(absPath(base, decodeURI(href.replace(/^file:\/\/\/?/i, ''))))
     }
   })
-  return DOMPurify.sanitize(html, { ALLOWED_URI_REGEXP: URI_OK })
+  return DOMPurify.sanitize(cellLists(html), { ALLOWED_URI_REGEXP: URI_OK })
+}
+
+/**
+ * A table row is one line of markdown, so a list inside a cell comes as "- one<br>- two". Turned
+ * into a real bulleted list here (any text before the first bullet stays above it).
+ */
+function cellLists(html: string): string {
+  if (!html.includes('<td')) return html
+  return html.replace(/<td([^>]*)>([\s\S]*?)<\/td>/g, (whole, attrs: string, body: string) => {
+    const lines = body.split(/<br\s*\/?>/i)
+    const bullet = /^\s*(?:[-*•‣▪]|\d+[.)])\s+/
+    const first = lines.findIndex((l) => bullet.test(l))
+    if (first < 0 || lines.slice(first).filter((l) => bullet.test(l)).length < 2) return whole
+    const numbered = /^\s*\d+[.)]\s/.test(lines[first])
+    const items = lines.slice(first).map((l) => `<li>${l.replace(bullet, '').trim()}</li>`).join('')
+    const lead = lines.slice(0, first).join('<br>').trim()
+    return `<td${attrs}>${lead ? `${lead}` : ''}${numbered ? `<ol>${items}</ol>` : `<ul>${items}</ul>`}</td>`
+  })
 }
 
 export function formatTokens(n: number): string {
