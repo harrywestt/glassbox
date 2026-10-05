@@ -1,6 +1,7 @@
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
 import { claudeInBrowser, type SessionState } from '../session'
+import { useScrollStrip } from '../components/useScrollStrip'
 import { defaultView, tabTitle, type Tab } from '../tabs'
 import type { DiffMode, FileMark, Requirements, SideTaskSpec } from '../../../shared/events'
 import { sessionBrief } from '../side'
@@ -890,10 +891,11 @@ function WorkTabs({
   onFullScreen: () => void
 }) {
   const [picking, setPicking] = useState(false)
+  const strip = useScrollStrip<HTMLDivElement>(active)
   const isView = (t: WorkTab): t is WorkTab & { kind: ViewKind } => VIEWS.some((v) => v.kind === t.kind)
   return (
     <div className="work-tabs" role="tablist">
-      <div className="work-tab-list">
+      <div className="work-tab-list" ref={strip}>
         {tabs.map((t, i) => (
           <div
             key={t.id}

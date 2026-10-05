@@ -4,6 +4,7 @@ import { useActions } from '../App'
 import { DASHBOARD, tabTitle, type AppAction, type AppState } from '../tabs'
 import type { ThemePreference } from '../theme'
 import { Icon } from './ui'
+import { useScrollStrip } from './useScrollStrip'
 import { liveVerb, tallyOf } from '../tally'
 import { Logo } from './Logo'
 import { tr } from '../../../shared/i18n'
@@ -12,6 +13,7 @@ type Props = { state: AppState; dispatch: Dispatch<AppAction>; themePref: ThemeP
 
 export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme }: Props) {
   const actions = useActions()
+  const strip = useScrollStrip<HTMLDivElement>(state.active)
   const [dragId, setDragId] = useState<string | null>(null)
 
   // The mark's lamp is the whole gallery's tally: anyone waiting on you first, then anyone working.
@@ -32,7 +34,7 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
         <Logo size={20} state={overall} />
         <span>{tr('titleBar.dashboard')}</span>
       </button>
-      <div className="tabstrip" role="tablist">
+      <div className="tabstrip" role="tablist" ref={strip}>
         {state.tabs.map((tab, index) => {
           const s = state.sessions[tab.id]
           const tally = tallyOf(s)
@@ -70,10 +72,11 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
             </div>
           )
         })}
-        <button className="tab-new" title={tr('titleBar.newSessionTip')} onClick={newTab}>
-          <Icon name="add" />
-        </button>
       </div>
+      {/* Outside the strip, so it stays in reach however many tabs are open. */}
+      <button className="tab-new" title={tr('titleBar.newSessionTip')} onClick={newTab}>
+        <Icon name="add" />
+      </button>
       <div className="titlebar-drag" />
       <UpdateButton />
       <button className="icon-btn titlebar-btn" title={themeBase === 'dark' ? (themePref === 'system' ? tr('titleBar.switchToLightSystem') : tr('titleBar.switchToLight')) : themePref === 'system' ? tr('titleBar.switchToDarkSystem') : tr('titleBar.switchToDark')} onClick={onToggleTheme}>

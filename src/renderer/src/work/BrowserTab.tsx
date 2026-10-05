@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
 import { useSession } from '../views/SessionView'
 import { claudeInBrowser } from '../session'
+import { useScrollStrip } from '../components/useScrollStrip'
 import { useServices } from '../services'
 import { CHANGE_TOOLS } from '../session'
 import { Icon, IconButton, Toggle } from '../components/ui'
@@ -36,13 +37,14 @@ export function BrowserTab() {
   }, [appUrl, b.tabs.length, tab.id])
 
   const active = b.tabs.find((t) => t.id === b.active) ?? b.tabs[0]
+  const strip = useScrollStrip<HTMLDivElement>(active?.id)
   // The page Claude is working in, marked like the Browser's own tab (the one it named, or the one showing).
   const browsing = claudeInBrowser(s)
   const claudeTab = browsing.active ? (browsing.tab && b.tabs.some((t) => t.id === browsing.tab) ? browsing.tab : active?.id) : undefined
 
   return (
     <div className="work-page browser">
-      <div className="browser-tabs" role="tablist" aria-label={tr('browserTab.tabs')}>
+      <div className="browser-tabs" role="tablist" aria-label={tr('browserTab.tabs')} ref={strip}>
         {b.tabs.map((t) => (
           <div key={t.id} role="tab" aria-selected={t.id === active?.id} className={t.id === active?.id ? 'browser-tab active' : 'browser-tab'} onClick={() => activateBrowserTab(tab.id, t.id)} onAuxClick={(e) => e.button === 1 && closeBrowserTab(tab.id, t.id)} title={t.url}>
             {t.loading ? <Icon name="loading" className="codicon-modifier-spin" /> : t.icon ? <img src={t.icon} alt="" className="browser-favicon" /> : <Icon name="globe" />}
