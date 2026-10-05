@@ -137,13 +137,18 @@ ipcMain.handle('settings:notifications', (_e, on: boolean) => {
 })
 
 /** Desktop notifications for things that need you, shown only while Glassbox isn't focused. */
+/** Ongoing alerts already notified, by tab and alert id, until they clear. */
+const alerted = new Set<string>()
+
 function notifyFor(tabId: string, cwd: string, event: SessionEvent) {
+  if (event.kind === 'alert-clear') return void alerted.delete(`${tabId}:${event.id}`)
   if (!notificationsOn || !win || win.isDestroyed() || win.isFocused()) return
   let body: string | undefined
   if (event.kind === 'user-questions') body = event.questions.length > 1 ? tr('mainIndex.notify.questions', { count: event.questions.length }) : tr('mainIndex.notify.asks', { question: event.questions[0]?.question ?? tr('mainIndex.notify.aQuestion') })
   else if (event.kind === 'permission') body = event.toolName === 'ExitPlanMode' ? tr('mainIndex.notify.planReady') : tr('mainIndex.notify.wantsTool', { tool: event.toolName })
   else if (event.kind === 'checkin') body = tr('mainIndex.notify.checkingIn', { about: event.checkin.about })
-  else if (event.kind === 'alert') body = event.text
+  // An ongoing alert ("stuck") notifies once, not each time it updates.
+  else if (event.kind === 'alert') body = event.id && alerted.has(`${tabId}:${event.id}`) ? undefined : (event.id && alerted.add(`${tabId}:${event.id}`), event.text)
   else if (event.kind === 'guard' && event.hit.action === 'block') body = tr('mainIndex.notify.blocked', { label: event.hit.label })
   else if (event.kind === 'sdk' && event.msg.type === 'result') body = event.msg.is_error ? tr('mainIndex.notify.stoppedWithError') : (backgroundAgents.get(tabId) ?? 0) > 0 ? undefined : tr('mainIndex.notify.finished')
   // Runs before trackTray, so the map still holds the count from before this change.

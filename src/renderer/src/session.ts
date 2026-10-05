@@ -209,7 +209,7 @@ export type Flow = { id: string; title: string; lanes: string[]; before?: FlowHo
 export type PermissionRequest = Extract<SessionEvent, { kind: 'permission' }>
 /** Text or thinking currently streaming in, keyed by thread (main or a subagent's tool_use id). */
 export type Draft = { kind: 'text' | 'thinking'; text: string; agentId: string | null }
-export type Alert = { level: 'info' | 'warn' | 'error'; text: string; at: number }
+export type Alert = { level: 'info' | 'warn' | 'error'; text: string; at: number; id?: string }
 
 export interface SessionState {
   status: SessionStatus
@@ -489,8 +489,15 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       return { ...state, autoCommit: event.enabled }
     case 'reviewer-state':
       return { ...state, reviewer: { ...state.reviewer, busy: event.busy, pending: event.pending, error: event.error } }
-    case 'alert':
-      return { ...state, alerts: [...state.alerts.slice(-4), { level: event.level, text: event.text, at }], timeline: [...state.timeline, { kind: 'note', text: event.text, tone: event.level === 'error' ? 'error' : 'warn', at }] }
+    case 'alert': {
+      // An alert about one ongoing thing replaces the last one about it, rather than piling up, and
+      // is noted in the conversation only the first time.
+      const again = !!event.id && state.alerts.some((x) => x.id === event.id)
+      const alerts = [...state.alerts.filter((x) => !event.id || x.id !== event.id).slice(-4), { level: event.level, text: event.text, at, id: event.id }]
+      return again ? { ...state, alerts } : { ...state, alerts, timeline: [...state.timeline, { kind: 'note', text: event.text, tone: event.level === 'error' ? 'error' : 'warn', at }] }
+    }
+    case 'alert-clear':
+      return { ...state, alerts: state.alerts.filter((x) => x.id !== event.id) }
     case 'history': {
       let next = state
       for (const m of event.messages) {

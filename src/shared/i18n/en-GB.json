@@ -2349,7 +2349,10 @@
     "agentBriefMore": "Show the whole brief",
     "agentBriefLess": "Show less",
     "showEarlier_one": "Show the earlier message",
-    "showEarlier_other": "Show {count} earlier messages"
+    "showEarlier_other": "Show {count} earlier messages",
+    "backgroundTaskOne": ", waiting on {what}",
+    "backgroundTaskUnnamed": "a background task",
+    "backgroundTasks": ", waiting on {n} background tasks"
   },
   "titleBar": {
     "dashboardTip": "Dashboard (Ctrl+T)",
