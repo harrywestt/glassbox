@@ -94,6 +94,9 @@ function asAgent(agents: Record<string, AgentNode>, toolCalls: Record<string, To
   }
 }
 
+/** Claude Code wraps an agent's report in a note for Claude ("[Subagent hand-back] … The report follows:"); keep just the report. */
+export const withoutHandback = (text: string) => text.replace(/^\s*\[Subagent hand-back\][\s\S]*?The report follows:\s*/i, '')
+
 /** One item on Claude's own to-do list. `toolId` ties a TaskCreate to its result, which carries the task's id. */
 export type Todo = { id?: string; toolId?: string; label: string; status: 'pending' | 'active' | 'done'; activeForm?: string }
 
@@ -755,7 +758,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         }
         // A background agent's tool result only says it has started; it ends with its own notification.
         const bg = agents[call.id]?.background || /running in the background|launched (successfully )?in the background|async agent/i.test(result.slice(0, 300))
-        if (agents[call.id]) agents[call.id] = bg && status === 'done' ? { ...agents[call.id], background: true } : { ...agents[call.id], status, result, endedAt: at }
+        if (agents[call.id]) agents[call.id] = bg && status === 'done' ? { ...agents[call.id], background: true } : { ...agents[call.id], status, result: withoutHandback(result), endedAt: at }
       }
       return { ...next, toolCalls, agents }
     }

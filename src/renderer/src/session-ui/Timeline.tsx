@@ -31,20 +31,58 @@ export function toolLabel(name: string): string {
 
 const agentOf = (item: TimelineItem): string | null => ('agentId' in item ? item.agentId : null)
 
-function visible(item: TimelineItem, filter: AgentFilter): boolean {
+function visible(item: TimelineItem, filter: AgentFilter, s: SessionState): boolean {
   // A service's errors are shown under Services, not in the conversation.
   if (item.kind === 'service-error') return false
-  if (filter === 'all' || item.kind === 'user' || item.kind === 'comment' || item.kind === 'result' || item.kind === 'note' || item.kind === 'guard' || item.kind === 'finding' || item.kind === 'checkin') return true
-  const agentId = agentOf(item)
-  if (filter === 'main') return agentId === null
-  return agentId === filter || (item.kind === 'tool' && item.toolId === filter)
+  if (filter === 'all') return true
+  const conversation = item.kind === 'user' || item.kind === 'comment' || item.kind === 'result' || item.kind === 'note' || item.kind === 'guard' || item.kind === 'finding' || item.kind === 'checkin'
+  if (filter === 'main') return conversation || agentOf(item) === null
+  // One agent: only what it did. It started from Claude's brief (shown above), not from your
+  // conversation; of your messages, only the ones you sent while it ran reach it (Claude Code passes
+  // them on), so only those show.
+  const a = s.agents[filter]
+  if (item.kind === 'user' || item.kind === 'comment') return !!a && item.at > a.at && item.at < (a.endedAt ?? Infinity)
+  if (item.kind === 'guard') return !!item.hit.toolUseId && s.toolCalls[item.hit.toolUseId]?.agentId === filter
+  if (conversation) return false
+  return agentOf(item) === filter
+}
+
+/** The top of one agent's view: the brief Claude gave it, which is all it started with. */
+function AgentBrief({ agentId, s }: { agentId: string; s: SessionState }) {
+  const a = s.agents[agentId]
+  const [open, setOpen] = useState(false)
+  if (!a) return null
+  const long = a.prompt.length > 600
+  const name = a.type ? a.type[0].toUpperCase() + a.type.slice(1) : ''
+  return (
+    <div className="agent-brief">
+      <div className="agent-brief-head small">
+        <Icon name="organization" className="muted" />
+        <span className="grow">
+          <strong>{tr('timeline.agentBriefTitle', { name })}</strong>
+          {a.description && <span className="muted"> {a.description}</span>}
+        </span>
+      </div>
+      <div className="muted small">{tr('timeline.agentBriefNote')}</div>
+      {a.prompt && (
+        // Plain text: briefs often hold <placeholders> that markdown would swallow as HTML.
+        <div className={open || !long ? 'agent-brief-text' : 'agent-brief-text clamped'}>{a.prompt}</div>
+      )}
+      {long && (
+        <button className="link small" onClick={() => setOpen(!open)}>
+          {open ? tr('timeline.agentBriefLess') : tr('timeline.agentBriefMore')}
+        </button>
+      )}
+    </div>
+  )
 }
 
 export function Timeline() {
   const { s, tab, filter, setFilter } = useSession()
   const scroller = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
-  const items = s.timeline.filter((i) => visible(i, filter))
+  const items = s.timeline.filter((i) => visible(i, filter, s))
+  const viewingAgent = filter !== 'all' && filter !== 'main' && s.agents[filter] ? filter : null
   // Each image shows once, where it first comes up (again only if it has changed since).
   const seenMedia = new Set<string>()
   const drafts = Object.entries(s.drafts).filter(([key]) => filter === 'all' || (filter === 'main' ? key === 'main' : key === filter))
@@ -153,7 +191,8 @@ export function Timeline() {
         }}
       >
         <div className="timeline-content" ref={content}>
-        {items.length === 0 && !drafts.length ? (
+        {viewingAgent && <AgentBrief agentId={viewingAgent} s={s} />}
+        {items.length === 0 && !drafts.length && !viewingAgent ? (
           <Welcome />
         ) : (
           groupTools(items).map((g, i, all) => {

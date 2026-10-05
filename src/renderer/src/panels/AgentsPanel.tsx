@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSession } from '../views/SessionView'
-import type { AgentNode } from '../session'
+import { withoutHandback, type AgentNode } from '../session'
 import { renderMarkdown } from '../lib'
 import { Empty, Icon, PanelHeader } from '../components/ui'
 import { tr } from '../../../shared/i18n'
@@ -47,11 +47,11 @@ export function AgentsPanel() {
       {filter === node.id && (
         <div className="agent-detail">
           <div className="label">{tr('agentsPanel.brief')}</div>
-          <div className="markdown small" dangerouslySetInnerHTML={{ __html: renderMarkdown(node.prompt) }} />
+          <div className="small agent-brief-text">{node.prompt}</div>
           {node.result && (
             <>
               <div className="label">{tr('agentsPanel.report')}</div>
-              <div className="markdown small" dangerouslySetInnerHTML={{ __html: renderMarkdown(node.result) }} />
+              <div className="markdown small" dangerouslySetInnerHTML={{ __html: renderMarkdown(withoutHandback(node.result)) }} />
             </>
           )}
         </div>

@@ -2320,7 +2320,11 @@
     "times": "{n} times",
     "afterClaudeEdited": "{time} after Claude edited",
     "logs": "Logs",
-    "askClaude": "Ask Claude"
+    "askClaude": "Ask Claude",
+    "agentBriefTitle": "{name} agent’s brief",
+    "agentBriefNote": "What Claude asked this agent to do. It starts with only this, not your conversation; below is what it did, and any message you sent while it ran.",
+    "agentBriefMore": "Show the whole brief",
+    "agentBriefLess": "Show less"
   },
   "titleBar": {
     "dashboardTip": "Dashboard (Ctrl+T)",
