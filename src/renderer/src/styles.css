@@ -1535,7 +1535,9 @@ button.agent-run:hover:not(:disabled) { background: none; text-decoration: under
 
 /* The Browser: its own tabs, pages kept alive while hidden. */
 .browser-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.browser-host.inactive { position: absolute; inset: 0; visibility: hidden; pointer-events: none; z-index: -1; }
+/* Out of sight but still drawn: moved off-screen rather than hidden. Chromium pauses a page that's hidden,
+   transparent or covered (no animation frames, so web apps Claude is testing never start); off-screen it keeps running. */
+.browser-host.inactive { position: absolute; inset: 0; transform: translateX(-30000px); pointer-events: none; }
 .work-content { position: relative; }
 .browser { flex: 1; }
 .browser-tabs { flex: none; display: flex; align-items: center; gap: 2px; height: 34px; padding: 0 var(--s-2); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
@@ -1547,7 +1549,7 @@ button.agent-run:hover:not(:disabled) { background: none; text-decoration: under
 .browser-tab-close { width: 18px; height: 18px; padding: 0; border: none; background: none; color: var(--muted); border-radius: var(--r-sm); opacity: 0; }
 .browser-tab:hover .browser-tab-close, .browser-tab.active .browser-tab-close { opacity: 1; }
 .browser-page { position: absolute; inset: 0; display: flex; }
-.browser-page.hidden { visibility: hidden; pointer-events: none; }
+.browser-page.hidden { transform: translateX(-30000px); pointer-events: none; }
 .browser .preview-stage { position: relative; flex: 1; min-height: 0; }
 /* Buttons sitting straight in the tab strip (full screen) centre like the + beside them. */
 .work-tabs > .icon-btn { align-self: center; }

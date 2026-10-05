@@ -201,6 +201,9 @@ function createWindow() {
     prefs.nodeIntegration = false
     prefs.contextIsolation = true
     prefs.sandbox = true
+    // Pages keep running (timers, animation frames, so apps like React start) while the Browser
+    // isn't the tab you're on, or Glassbox is minimised: Claude tests them in the background.
+    prefs.backgroundThrottling = false
     params.partition = 'persist:preview'
   })
   // The taskbar button's icon, set explicitly (from the versioned copy) rather than left to
@@ -633,6 +636,7 @@ app.on('window-all-closed', () => (closeTerminals(), stopAllBangs(), app.quit())
 // preview rather than spawning Electron windows.
 app.on('web-contents-created', (_e, contents) => {
   if (contents.getType() !== 'webview') return
+  contents.setBackgroundThrottling(false)
   contents.setWindowOpenHandler(({ url }) => {
     void contents.loadURL(url)
     return { action: 'deny' }
