@@ -162,7 +162,7 @@ function Page({ t, visible, follow, edits }: { t: BrowserTabState; visible: bool
   }, [edits, follow])
 
   return (
-    <div className={visible ? 'browser-page' : 'browser-page hidden'}>
+    <div className={visible ? 'browser-page' : 'browser-page hidden'} inert={!visible}>
       <webview ref={ref} data-browser-tab={`${tab.id}:${t.id}`} className="preview-frame" src={src} partition="persist:preview" allowpopups={true} />
       {failed && visible && (
         <div className="preview-failed">

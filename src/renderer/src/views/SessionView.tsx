@@ -693,7 +693,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               {current.kind === 'file' && <FileTab key={`${current.id}:${current.line ?? ''}:${current.endLine ?? ''}`} path={current.path} line={current.line} endLine={current.endLine} />}
               {/* The Browser stays loaded while hidden, so its pages (and Claude's use of them) carry on. */}
               {work.some((w) => w.kind === 'preview') && (
-                <div className={current.kind === 'preview' ? 'browser-host' : 'browser-host inactive'}>
+                <div className={current.kind === 'preview' ? 'browser-host' : 'browser-host inactive'} inert={current.kind !== 'preview'}>
                   <BrowserTab />
                 </div>
               )}
