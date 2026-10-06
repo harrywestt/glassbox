@@ -3,6 +3,7 @@ import { blockedOnYou, type SessionState } from '../session'
 import type { Tab } from '../tabs'
 import { baseName, relPath } from '../lib'
 import { setAppearance, useAppearance } from '../appearance'
+import { Select } from '../components/Select'
 import type { HoldPolicy } from '../../../shared/events'
 import { tr } from '../../../shared/i18n'
 import {
@@ -33,6 +34,8 @@ export type LiveNav = {
   show: (target: { view: 'diff' | 'file' | 'ripple'; path: string }) => void
   /** Put text in the message box for you to edit and send. */
   tell: (text: string) => void
+  /** Send Claude a message now. */
+  send: (text: string) => void
 }
 
 type Props = { tab: Tab; s: SessionState; nav: LiveNav; active: boolean }
@@ -48,7 +51,10 @@ export function LiveScreen({ tab, s, nav, active }: Props) {
   const looked = useLookedAt(tab.cwd, s)
   const flags = useFlags(s, looked, rel, now)
   const [dismissed, dismiss] = useDismissed(s.sessionId ?? tab.id)
-  const open = flags.filter((f) => !dismissed.has(f.id))
+  const [asked, ask] = useAsked(s.sessionId ?? tab.id)
+  // A check you asked Claude for clears once Claude's turn after it has finished.
+  const lastResult = s.timeline.findLast((i) => i.kind === 'result')?.at ?? 0
+  const open = flags.filter((f) => !dismissed.has(f.id) && !(asked[f.id] && lastResult > asked[f.id]))
   const rows = useMemo(() => ledger(s, now), [s.files, s.toolCalls, now])
   const failing = rows.filter((r) => r.state === 'failing').length
   // Mid width: the three lists share one column; this picks which shows.
@@ -70,7 +76,7 @@ export function LiveScreen({ tab, s, nav, active }: Props) {
           <div className="live-scroll">
             {open.length === 0 && <p className="live-empty">{tr('live.needs.none')}</p>}
             {open.map((f) => (
-              <FlagRow key={f.id} f={f} now={now} nav={nav} onDismiss={() => dismiss(f.id)} />
+              <FlagRow key={f.id} f={f} now={now} nav={nav} asked={asked[f.id]} onAsk={() => ask(f.id)} onDismiss={() => dismiss(f.id)} />
             ))}
           </div>
         </section>
@@ -115,6 +121,7 @@ function NowStrip({ s }: { s: SessionState }) {
   const steps = s.task?.steps ?? []
   const current = steps.findIndex((x) => x.status === 'active')
   const doneCount = steps.filter((x) => x.status === 'done').length
+  const thought = useMemo(() => currentThought(s), [s.drafts, s.timeline, s.status])
   const headline = s.task?.summary || (s.status === 'running' ? tr('live.now.working') : s.status === 'ready' && s.timeline.some((i) => i.kind === 'result') ? tr('live.now.finished') : s.status === 'ready' ? tr('live.now.ready') : tr('live.now.idle'))
   const used = (s.context?.categories ?? []).filter((c) => c.kind === 'used' && c.tokens > 0).sort((a, b) => b.tokens - a.tokens)
   const total = s.context?.maxTokens ?? 0
@@ -134,6 +141,12 @@ function NowStrip({ s }: { s: SessionState }) {
           </div>
         )}
         <p className="live-headline">{headline}</p>
+        {thought && (
+          <p className="live-thinking" title={thought.full}>
+            <span className="live-thinking-label">{thought.live ? tr('live.now.thinkingNow') : tr('live.now.thoughtLast')}</span>
+            <span className="live-thinking-text">{thought.text}</span>
+          </p>
+        )}
       </div>
       {s.context && total > 0 && (
         <div className="live-context" title={used.map((c) => `${c.name}: ${k(c.tokens)}`).join('\n')}>
@@ -151,6 +164,25 @@ function NowStrip({ s }: { s: SessionState }) {
       )}
     </section>
   )
+}
+
+/**
+ * What Claude is thinking about: its summarised thinking as it streams, or its last thought this
+ * turn. The newest heading if the summary has them, otherwise its last sentence.
+ */
+function currentThought(s: SessionState): { text: string; full: string; live: boolean } | null {
+  if (s.status !== 'running') return null
+  const draft = s.drafts.main
+  const live = draft?.kind === 'thinking'
+  const lastUser = s.timeline.findLastIndex((i) => i.kind === 'user')
+  const last = s.timeline.findLast((i, n) => n > lastUser && i.kind === 'thinking' && i.agentId === null) as { text: string } | undefined
+  const full = (live ? draft.text : last?.text ?? '').trim()
+  if (!full) return null
+  const headings = [...full.matchAll(/\*\*([^*\n]{3,120})\*\*/g)].map((m) => m[1].trim())
+  const plain = full.replace(/\*\*/g, '').replace(/\s+/g, ' ')
+  const sentences = plain.split(/(?<=[.!?])\s+/).filter((x) => x.trim().length > 3)
+  const text = headings.at(-1) ?? sentences.at(-1) ?? plain
+  return { text: text.length > 220 ? `…${text.slice(-220)}` : text, full: plain.slice(-1200), live }
 }
 
 function WaitBanner({ s, now }: { s: SessionState; now: number }) {
@@ -189,7 +221,7 @@ function useFlags(s: SessionState, looked: LookedAtData, rel: (p: string) => str
         kind: 'blind',
         at: b.at,
         title: tr('live.flags.blindTitle', { file: baseName(b.path), count: b.callers.length }),
-        detail: b.callers.slice(0, 3).map((c) => baseName(c)).join(', ') + (b.callers.length > 3 ? tr('live.flags.andMore', { n: b.callers.length - 3 }) : ''),
+        detail: tr('live.flags.blindDetail', { callers: b.callers.slice(0, 3).map((c) => baseName(c)).join(', ') + (b.callers.length > 3 ? tr('live.flags.andMore', { n: b.callers.length - 3 }) : '') }),
         show: { label: tr('live.flags.showCallers'), target: { view: 'ripple', path: b.path } },
         tell: tr('live.flags.blindTell', { file: rel(b.path), callers: b.callers.map(rel).join(', ') })
       })
@@ -198,8 +230,8 @@ function useFlags(s: SessionState, looked: LookedAtData, rel: (p: string) => str
         id: `unread:${u.path}`,
         kind: 'unread',
         at: u.at,
-        title: tr('live.flags.unreadTitle', { file: baseName(u.path), count: u.unread }),
-        detail: tr('live.flags.unreadDetail'),
+        title: tr('live.flags.unreadTitle', { file: baseName(u.path) }),
+        detail: tr('live.flags.unreadDetail', { count: u.unread }),
         show: { label: tr('live.flags.viewChange'), target: { view: 'diff', path: u.path } },
         tell: tr('live.flags.unreadTell', { file: rel(u.path) })
       })
@@ -223,28 +255,42 @@ function useFlags(s: SessionState, looked: LookedAtData, rel: (p: string) => str
   }, [s.toolCalls, s.files, s.decisions, s.task, s.agents, looked, Math.floor(now / 60_000)])
 }
 
-function FlagRow({ f, now, nav, onDismiss }: { f: Flag; now: number; nav: LiveNav; onDismiss: () => void }) {
+/** Risks in the code are Claude's to check; scope and assumptions are yours to answer. */
+const CLAUDE_CHECKS: Flag['kind'][] = ['blind', 'unread', 'clash', 'circles']
+
+function FlagRow({ f, now, nav, asked, onAsk, onDismiss }: { f: Flag; now: number; nav: LiveNav; asked?: number; onAsk: () => void; onDismiss: () => void }) {
+  const forClaude = CLAUDE_CHECKS.includes(f.kind)
   return (
-    <article className="live-flag">
+    <article className={asked ? 'live-flag asked' : 'live-flag'}>
       <div className="live-flag-head">
         <span className={`live-badge ${f.kind}`}>{tr(`live.flags.kind.${f.kind}`)}</span>
         <span className="live-note">{ago(now - f.at)}</span>
       </div>
       <div className="live-flag-title">{f.title}</div>
       <div className="live-flag-detail">{f.detail}</div>
-      <div className="live-flag-actions">
-        {f.show && (
-          <button className="quiet live-flag-show" onClick={() => nav.show(f.show!.target)}>
-            {f.show.label}
+      {asked ? (
+        <div className="live-flag-asked">{tr('live.flags.asked', { ago: ago(now - asked) })}</div>
+      ) : (
+        <div className="live-flag-actions">
+          {forClaude ? (
+            <button className="primary" onClick={() => (nav.send(f.tell), onAsk())} title={tr('live.flags.askTitle')}>
+              {tr('live.flags.ask')}
+            </button>
+          ) : (
+            <button className="primary" onClick={() => nav.tell(f.tell)} title={tr('live.flags.answerTitle')}>
+              {tr('live.flags.answer')}
+            </button>
+          )}
+          {f.show && (
+            <button className="quiet" onClick={() => nav.show(f.show!.target)}>
+              {tr('live.flags.showMe')}
+            </button>
+          )}
+          <button className="quiet" onClick={onDismiss} title={tr('live.flags.fineTitle')}>
+            {tr('live.flags.fine')}
           </button>
-        )}
-        <button className="quiet" onClick={() => nav.tell(f.tell)} title={tr('live.flags.tellTitle')}>
-          {tr('live.flags.tell')}
-        </button>
-        <button className="quiet" onClick={onDismiss} title={tr('live.flags.fineTitle')}>
-          {tr('live.flags.fine')}
-        </button>
-      </div>
+        </div>
+      )}
     </article>
   )
 }
@@ -435,12 +481,17 @@ function HoldPolicyPicker() {
   const value = a.automation.holdEdits ?? 'ask'
   return (
     <footer className="live-hold-policy">
-      <label htmlFor="live-hold-policy">{tr('live.edit.policyLabel')}</label>
-      <select id="live-hold-policy" value={value} onChange={(e) => setAppearance({ automation: { ...a.automation, holdEdits: e.target.value as HoldPolicy } })}>
-        <option value="ask">{tr('live.edit.policy.ask')}</option>
-        <option value="offplan">{tr('live.edit.policy.offplan')}</option>
-        <option value="all">{tr('live.edit.policy.all')}</option>
-      </select>
+      <span>{tr('live.edit.policyLabel')}</span>
+      <Select<HoldPolicy>
+        value={value}
+        aria-label={tr('live.edit.policyLabel')}
+        onChange={(holdEdits) => setAppearance({ automation: { ...a.automation, holdEdits } })}
+        options={[
+          { value: 'ask', label: tr('live.edit.policy.ask') },
+          { value: 'offplan', label: tr('live.edit.policy.offplan') },
+          { value: 'all', label: tr('live.edit.policy.all') }
+        ]}
+      />
     </footer>
   )
 }
@@ -756,6 +807,29 @@ function useFileText(cwd: string, path: string, version: number): string | null 
     return () => void (live = false)
   }, [key])
   return text
+}
+
+/** Checks you asked Claude for, by flag, with when (kept across restarts). */
+function useAsked(id: string): [Record<string, number>, (flag: string) => void] {
+  const storeKey = `glassbox.live.asked.${id}`
+  const [map, setMap] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storeKey) ?? '{}') as Record<string, number>
+    } catch {
+      return {}
+    }
+  })
+  const add = (flag: string) =>
+    setMap((prev) => {
+      const next = { ...prev, [flag]: Date.now() }
+      try {
+        localStorage.setItem(storeKey, JSON.stringify(next))
+      } catch {
+        /* storage full or blocked: it's only a convenience */
+      }
+      return next
+    })
+  return [map, add]
 }
 
 /** Flags you said are fine, per session (kept across restarts). */
