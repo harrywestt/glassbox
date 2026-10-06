@@ -523,9 +523,10 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
         else if (t.view === 'ripple') openWork({ id: 'ripple', kind: 'ripple', path })
         else openWork({ id: `file:${path}`, kind: 'file', path })
       },
-      tell: (text) => composerRef.current?.insert(text)
+      tell: (text) => composerRef.current?.insert(text),
+      send: (text) => void actions.send(tab.id, text)
     }
-  }, [tab.cwd, openWork])
+  }, [tab.cwd, openWork, actions, tab.id])
   const workPath = current.kind === 'file' || current.kind === 'diff' ? current.path : null
 
   const ui = useMemo<SessionUi>(

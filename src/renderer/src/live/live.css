@@ -18,7 +18,7 @@
 .live h2 { margin: 0; font-size: 13px; font-weight: 600; }
 .live-note { font-size: 12px; color: var(--muted); }
 .live .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.live-empty { margin: 0; padding: var(--s-3) 0; color: var(--muted); }
+.live-empty { margin: 0; padding: var(--s-3) var(--s-4); color: var(--muted); }
 
 /* Now: one line you can read from across the desk. */
 .live-now { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-6); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
@@ -53,8 +53,9 @@
 .live-stage, .live-trust { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-2); min-height: 0; min-width: 0; }
 .live-trust { grid-template-rows: minmax(0, auto) minmax(0, 1fr); }
 .live-pane { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-lg); min-height: 0; min-width: 0; display: flex; flex-direction: column; }
-.live-pane-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s-1) var(--s-3); padding: var(--s-3) var(--s-4) var(--s-2); }
-.live-scroll { overflow: auto; min-height: 0; padding: 0 var(--s-4) var(--s-2); }
+/* Each pane opens with a label strip; its rows run edge to edge beneath it. */
+.live-pane-h { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-3); min-height: 36px; box-sizing: border-box; padding: var(--s-1) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-scroll { overflow: auto; min-height: 0; padding: 0 0 var(--s-2); }
 .live-count { font-size: 12px; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
 
 /* The switcher only shows at mid width. */
@@ -89,12 +90,13 @@
 }
 
 /* Needs you */
-.live-flag { padding: var(--s-3) 0; border-top: 1px solid var(--border); }
+.live-flag { padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-flag.asked .live-flag-title { color: var(--muted); }
+.live-flag-asked { margin-top: var(--s-2); font-size: 12px; color: var(--muted); }
 .live-flag-head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: 3px; }
 .live-flag-title { font-weight: 600; line-height: 1.35; }
 .live-flag-detail { margin-top: 2px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .live-flag-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); margin-top: var(--s-2); }
-.live-flag-actions .link { margin-right: var(--s-2); }
 .live-badge { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 /* Severity words: an error loop reads in red; risks to look at in amber; the rest stay plain. */
 .live-badge.circles { color: var(--err); }
@@ -103,8 +105,8 @@
 /* Who's doing what */
 .live-legend { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); font-size: 12px; color: var(--muted); }
 .live-legend i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
-.live-lane-list { padding: 0 var(--s-4); }
-.live-lane { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: var(--s-3); align-items: center; padding: var(--s-2) 0; border-top: 1px solid var(--border); }
+.live-lane-list { padding: 0; }
+.live-lane { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: var(--s-3); align-items: center; padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--border); }
 .live-lane.ended { opacity: .62; }
 .live-lane-who { display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: var(--s-2); align-items: center; min-width: 0; }
 .live-lane-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tally-live); animation: on-air 2.4s ease-in-out infinite; }
@@ -171,7 +173,7 @@
 .live-ask-row input { min-width: 220px; }
 
 /* Checked since the last edit? */
-.live-check { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s-3); align-items: center; padding: var(--s-2) 0; border-top: 1px solid var(--border); }
+.live-check { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s-3); align-items: center; padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--border); }
 .live-check-detail { grid-column: 1 / -1; font-size: 12px; color: var(--subtle); }
 .live-file { height: auto; padding: 0; border: 0; background: none; font: 12px var(--mono); color: var(--fg); text-align: left; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-state { font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--muted); }
@@ -181,16 +183,16 @@
 .live-state.passed { color: var(--ok); }
 
 /* What Claude has looked at */
-.live-looked-sum { margin: 0; padding: 0 var(--s-4) var(--s-2); }
-.live-looked-row { padding: 7px 0; border-top: 1px solid var(--border); }
-.live-looked-row.quiet { padding: 4px 0; }
+.live-looked-sum { margin: 0; padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-looked-row { padding: 7px var(--s-4); border-bottom: 1px solid var(--border); }
+.live-looked-row.quiet { padding: 4px var(--s-4); }
 .live-looked-name { display: flex; align-items: baseline; gap: var(--s-3); }
 .live-looked-name .live-file { flex: 1; }
 .live-tag { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .live-tag.warn { color: var(--warn); }
 .live-cover { position: relative; height: 6px; margin-top: 5px; border-radius: 2px; overflow: hidden; background: var(--elevated); }
 .live-cover > span { position: absolute; top: 0; bottom: 0; }
-.live-instructions { padding: var(--s-3) 0 var(--s-1); border-top: 1px solid var(--border); }
+.live-instructions { padding: var(--s-3) var(--s-4) var(--s-1); }
 .live-instructions h3 { margin: 0 0 var(--s-2); font-size: 13px; font-weight: 600; }
 .live-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .live-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px var(--s-2); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font: 12px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -209,4 +211,8 @@
 .live-flag-show { color: var(--fg); padding-left: 0; }
 .live-flag-actions .quiet:first-child { padding-left: 0; }
 .live-hold-policy { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-.live-hold-policy select { height: 26px; font-size: 12px; background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0 var(--s-2); }
+
+/* What Claude is thinking about, under the headline. */
+.live-thinking { display: flex; align-items: baseline; gap: var(--s-2); margin: 4px 0 0; min-width: 0; font-size: 13px; }
+.live-thinking-label { flex: none; font-size: 12px; font-weight: 600; color: var(--muted); }
+.live-thinking-text { min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
