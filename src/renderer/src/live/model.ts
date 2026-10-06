@@ -136,12 +136,20 @@ export function readRanges(s: SessionState): Map<string, [number, number][]> {
   for (const c of Object.values(s.toolCalls)) {
     if (c.name !== 'Read' || c.status !== 'done') continue
     const path = String(c.input.file_path ?? '')
-    if (!path) continue
-    const nums = [...String(c.result ?? '').matchAll(/^\s*(\d+)[→\t]/gm)].map((m) => Number(m[1]))
-    const range: [number, number] | null = nums.length ? [nums[0], nums.at(-1)!] : null
-    if (range) out.set(path, [...(out.get(path) ?? []), range])
+    const range = rangeOf(c)
+    if (path && range) out.set(path, [...(out.get(path) ?? []), range])
   }
   return out
+}
+
+/** The lines a Read call showed, from its own line numbers (worked out once per call). */
+const rangeCache = new WeakMap<ToolCall, [number, number] | null>()
+function rangeOf(c: ToolCall): [number, number] | null {
+  if (rangeCache.has(c)) return rangeCache.get(c)!
+  const nums = [...String(c.result ?? '').matchAll(/^\s*(\d+)[→\t]/gm)].map((m) => Number(m[1]))
+  const range: [number, number] | null = nums.length ? [nums[0], nums.at(-1)!] : null
+  rangeCache.set(c, range)
+  return range
 }
 
 /** Where each change landed in the file now: line ranges, found by looking for the new text. */

@@ -13,15 +13,17 @@ import { setPinned, usePinned } from '../pins'
 import { tabTitle } from '../tabs'
 import { tr } from '../../../shared/i18n'
 
-export function SessionHeader() {
+export function SessionHeader({ active }: { active: boolean }) {
   const { tab, s, actions, showPanel, everyday } = useSession()
 
   // Keep the git branch fresh while the tab is open; the host also refreshes after edits.
+  // Only for the session on screen, and only git: context and connectors refresh after each turn.
+  const live = s.status !== 'new' && s.status !== 'stopped'
   useEffect(() => {
-    if (s.status === 'new' || s.status === 'stopped') return
-    const t = setInterval(() => void window.glassbox.session.refresh(tab.id).catch(() => {}), 20000)
+    if (!live || !active) return
+    const t = setInterval(() => document.visibilityState === 'visible' && void window.glassbox.session.refresh(tab.id, true).catch(() => {}), 20000)
     return () => clearInterval(t)
-  }, [tab.id, s.status])
+  }, [tab.id, live, active])
 
   const changeFolder = async () => {
     const folder = await window.glassbox.pickFolder()

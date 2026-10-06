@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { SDKMessage, SDKRateLimitInfo } from '@anthropic-ai/claude-agent-sdk'
 import { type UserQuestion,
   emptyRequirements,
@@ -374,6 +375,15 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
   if (waiting && next.waitSince === undefined) return { ...next, waitSince: Date.now() }
   if (!waiting && next.waitSince !== undefined) return { ...next, waitSince: undefined }
   return next
+}
+
+/**
+ * The session as views that draw its work (the map, Ripple) see it: the same object until a part
+ * they use changes, so text streaming in doesn't make them redraw.
+ */
+export function useSettledSession(s: SessionState): SessionState {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => s, [s.files, s.toolCalls, s.agents, s.status, s.permissions, s.userQuestions, s.checkins, s.decisions, s.requirements, s.task, s.todos, s.agentTodos, s.todosAt, s.backgroundTasks, s.planMap, s.plan, s.held, s.git, s.open])
 }
 
 /** Claude can't carry on until you answer: a question, a permission, a check-in or an edit you held. */
@@ -1035,6 +1045,16 @@ function pathFromLine(line: string): string | null {
  * These are files Claude saw in results, even if it never opened them.
  */
 export function searchHits(call: ToolCall): string[] {
+  // A call is replaced (never changed in place) when it updates, so its hits are worked out once.
+  const cached = hitsCache.get(call)
+  if (cached) return cached
+  const hits = findHits(call)
+  hitsCache.set(call, hits)
+  return hits
+}
+const hitsCache = new WeakMap<ToolCall, string[]>()
+
+function findHits(call: ToolCall): string[] {
   if (call.status !== 'done' || !call.result) return []
   const shell = call.name === 'Bash' || call.name === 'PowerShell'
   if (!(call.name === 'Grep' || call.name === 'Glob' || (shell && SHELL_SEARCH.test(String(call.input.command ?? ''))))) return []

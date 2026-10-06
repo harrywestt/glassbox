@@ -67,7 +67,7 @@ const api = {
     close: (tabId: string): Promise<void> => invoke('session:close', tabId),
     respondPermission: (tabId: string, id: string, decision: PermissionDecision, message?: string): Promise<void> =>
       invoke('session:permission', tabId, id, decision, message),
-    refresh: (tabId: string): Promise<void> => invoke('session:refresh', tabId),
+    refresh: (tabId: string, gitOnly?: boolean): Promise<void> => invoke('session:refresh', tabId, gitOnly),
     /** Answers to Claude's questions (keyed by question text), or null to close them unanswered. */
     answerQuestions: (tabId: string, id: string, answers: Record<string, string> | null): Promise<void> => invoke('session:answerQuestions', tabId, id, answers),
     toggleMcp: (tabId: string, name: string, enabled: boolean): Promise<void> => invoke('session:toggleMcp', tabId, name, enabled),

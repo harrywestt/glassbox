@@ -1,4 +1,4 @@
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Activity, createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
 import { blockedOnYou, claudeInBrowser, type SessionState } from '../session'
 import { useScrollStrip } from '../components/useScrollStrip'
@@ -659,7 +659,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
             </div>
           </div>
         )}
-        <SessionHeader />
+        <SessionHeader active={active} />
         <SharedFolderBanner />
         <div className="session-body">
           <section className="work">
@@ -700,7 +700,10 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               {current.kind === 'flows' && <FlowTab />}
               <div className="chat" hidden={current.kind !== 'conversation'}>
                 {appearance.awayDigest && <AwayDigest active={active && current.kind === 'conversation'} />}
-                <Timeline />
+                {/* Off screen (another tab, or a session in the background) it keeps its place but stops redrawing as Claude streams. */}
+                <Activity mode={active && current.kind === 'conversation' ? 'visible' : 'hidden'}>
+                  <Timeline />
+                </Activity>
               </div>
               {current.kind === 'live' && <LiveScreen tab={tab} s={session} nav={liveNav} active={active} />}
               {current.kind === 'diagrams' && <DiagramsPanel />}
@@ -711,14 +714,17 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               {current.kind === 'terminal' && <TerminalTab />}
               {current.kind === 'erd' && <ErdTab key={`${current.query ?? ''}|${(current.entities ?? []).join(',')}`} entities={current.entities} query={current.query} />}
               {current.kind === 'file' && <FileTab key={`${current.id}:${current.line ?? ''}:${current.endLine ?? ''}`} path={current.path} line={current.line} endLine={current.endLine} />}
-              {/* The Browser stays loaded while hidden, so its pages (and Claude's use of them) carry on. */}
-              {work.some((w) => w.kind === 'preview') && (
-                <div className={current.kind === 'preview' ? 'browser-host' : 'browser-host inactive'} inert={current.kind !== 'preview'}>
-                  <BrowserTab />
-                </div>
-              )}
               {current.kind === 'commit' && <CommitTab key={current.id} sha={current.sha} />}
               </ErrorBoundary>
+              {/* The Browser stays loaded while hidden, so its pages (and Claude's use of them) carry on. It sits
+                  outside the boundary above, which starts afresh for each view: inside it, every tab switch reloaded the pages. */}
+              {work.some((w) => w.kind === 'preview') && (
+                <ErrorBoundary where="view:preview">
+                  <div className={current.kind === 'preview' ? 'browser-host' : 'browser-host inactive'} inert={current.kind !== 'preview'}>
+                    <BrowserTab />
+                  </div>
+                </ErrorBoundary>
+              )}
               {current.kind === 'diff' && <DiffTab key={current.id} path={current.path} base={current.base} diffMode={current.diffMode} source={current.source} />}
             </div>
             <Composer compact={current.kind !== 'conversation'} liveOwnsAsks={current.kind === 'live'} />

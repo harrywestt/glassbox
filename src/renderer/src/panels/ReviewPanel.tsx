@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useRef, useEffect, useMemo, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { checkOf, checkpoints, sideEffectOf, type Check, type CheckKind } from '../review'
 import { baseName, relPath, timeAgo } from '../lib'
@@ -32,9 +32,17 @@ export function ReviewPanel({ compact }: { compact?: boolean } = {}) {
     window.glassbox.git.branches(tab.cwd).then(({ defaultBase }) => setBase(defaultBase))
   }, [tab.cwd, s.git?.isRepo])
 
+  // Waits for Claude's edits to settle, so a burst of them runs one diff rather than one each.
+  const diffLoaded = useRef(false)
+  diffLoaded.current = diff !== null
   useEffect(() => {
     if (!base) return
-    window.glassbox.git.diff(tab.cwd, base, 'merge-base').then(setDiff, () => setDiff(null))
+    let live = true
+    const t = setTimeout(() => window.glassbox.git.diff(tab.cwd, base, 'merge-base').then((d) => live && setDiff(d), () => live && setDiff(null)), diffLoaded.current ? 700 : 0)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
   }, [tab.cwd, base, s.git?.dirty, s.git?.head])
 
   const checks = useMemo(() => Object.values(s.toolCalls).map(checkOf).filter((c): c is Check => !!c), [s.toolCalls])

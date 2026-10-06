@@ -83,6 +83,9 @@ const usage = new UsageService()
 // crashes Chromium gives up on the graphics card and draws everything on the CPU for the rest of the
 // session, which is why Glassbox turned laggy after an accidental lock. Keep restarting it instead.
 app.commandLine.appendSwitch('disable-gpu-process-crash-limit')
+// Glassbox is often covered by the editor while Claude works in its Browser. A covered window
+// otherwise counts as hidden, and pages that pause when hidden (streaming chat UIs) stall until you look.
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 
 // Dev aid: snapshot runs keep painting while other windows cover this one (Windows otherwise pauses
 // a covered window, and capturePage hands back an old frame).
@@ -471,9 +474,10 @@ ipcMain.handle('session:permission', (_e, tabId: string, id: string, decision: P
   host(tabId).respondPermission(id, decision, message)
 )
 ipcMain.handle('session:answerQuestions', (_e, tabId: string, id: string, answers: Record<string, string> | null) => host(tabId).answerQuestions(id, answers))
-ipcMain.handle('session:refresh', async (_e, tabId: string) => {
+// `gitOnly`: the periodic check while a session is on screen (context and connectors refresh when something happens).
+ipcMain.handle('session:refresh', async (_e, tabId: string, gitOnly?: boolean) => {
   const h = host(tabId)
-  await Promise.all([h.refreshContext(), h.refreshMcp(), h.refreshGit()])
+  await (gitOnly ? h.refreshGit() : Promise.all([h.refreshContext(), h.refreshMcp(), h.refreshGit()]))
 })
 ipcMain.handle('session:toggleMcp', (_e, tabId: string, name: string, enabled: boolean) => host(tabId).toggleMcp(name, enabled))
 ipcMain.handle('session:requirements', (_e, tabId: string, req: Requirements) => host(tabId).setRequirements(req))
