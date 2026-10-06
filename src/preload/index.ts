@@ -52,6 +52,10 @@ const api = {
     setModel: (tabId: string, model: string): Promise<void> => invoke('session:setModel', tabId, model),
     /** Take back a message Claude hasn't read yet (false if it already has). */
     withdraw: (tabId: string, uuid: string): Promise<boolean> => invoke('session:withdraw', tabId, uuid),
+    /** Hold an edit Claude is still writing (false if it has already landed). */
+    hold: (tabId: string, toolUseId: string): Promise<boolean> => invoke('session:hold', tabId, toolUseId),
+    /** Let a held edit land, or turn it down with a note Claude reads. */
+    releaseHold: (tabId: string, toolUseId: string, allow: boolean, reason?: string): Promise<void> => invoke('session:releaseHold', tabId, toolUseId, allow, reason),
     /** Carry on by itself once the usage limit resets (or stop waiting). */
     continueAfterReset: (tabId: string, on: boolean): Promise<void> => invoke('session:continueAfterReset', tabId, on),
     stopTask: (tabId: string, taskId: string): Promise<void> => invoke('session:stopTask', tabId, taskId),
@@ -248,6 +252,25 @@ const api = {
   setAutomation: (next: Partial<Automation>): Promise<void> => invoke('settings:automation', next),
   platform: process.platform,
   defaultCwd: process.cwd(),
+  /** Live in its own window, for a second screen. */
+  live: {
+    popout: (tabId: string, title: string): Promise<void> => invoke('live:popout', tabId, title),
+    snapshot: (tabId: string): Promise<unknown> => invoke('live:snapshot', tabId),
+    show: (tabId: string, target: unknown): Promise<void> => invoke('live:show', tabId, target),
+    /** Main window: a Live window wants this session's state. */
+    onSnapshotRequest(callback: (req: { reqId: string; tabId: string }) => void) {
+      const listener = (_e: IpcRendererEvent, req: { reqId: string; tabId: string }) => callback(req)
+      ipcRenderer.on('glassbox:liveSnapshotRequest', listener)
+      return () => void ipcRenderer.off('glassbox:liveSnapshotRequest', listener)
+    },
+    replySnapshot: (reqId: string, state: unknown): Promise<void> => invoke('live:snapshotReply', reqId, state),
+    /** Main window: Live asked to show something on a session. */
+    onShow(callback: (req: { tabId: string; target: unknown }) => void) {
+      const listener = (_e: IpcRendererEvent, req: { tabId: string; target: unknown }) => callback(req)
+      ipcRenderer.on('glassbox:liveShow', listener)
+      return () => void ipcRenderer.off('glassbox:liveShow', listener)
+    }
+  },
   onFocusTab(callback: (tabId: string) => void) {
     const listener = (_e: IpcRendererEvent, tabId: string) => callback(tabId)
     ipcRenderer.on('glassbox:focusTab', listener)

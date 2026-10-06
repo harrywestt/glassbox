@@ -1,0 +1,227 @@
+/* Live: what Claude is doing now, what needs you, and whether to trust it. */
+.live {
+  /* Chart colours, from the categorical set in its fixed order. */
+  --seg-read: var(--cat-1);
+  --seg-edit: var(--cat-2);
+  --seg-run: var(--cat-3);
+  --seg-think: var(--cat-4);
+  container-type: inline-size;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface2);
+  color: var(--fg);
+  font-size: 13px;
+}
+.live-popout { height: 100vh; }
+.live .grow { flex: 1; min-width: 0; }
+.live h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.live-note { font-size: 12px; color: var(--muted); }
+.live .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.live-empty { margin: 0; padding: var(--s-3) 0; color: var(--muted); }
+
+/* Popped out: the session's name, spend and Stop. */
+.live-top { display: flex; align-items: center; gap: var(--s-2) var(--s-4); flex-wrap: wrap; padding: var(--s-2) var(--s-4); background: var(--surface); border-bottom: 1px solid var(--border); }
+.live-top-title { font-weight: 600; }
+.live-top-name { font-weight: 600; font-stretch: var(--label); }
+.live-top-path { font: 12px var(--mono); color: var(--muted); }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tally-ok); }
+.live-dot.on { background: var(--tally-live); animation: on-air 2.4s ease-in-out infinite; }
+.live-dot.wait { background: var(--warn); }
+
+/* Now: one line you can read from across the desk. */
+.live-now { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-6); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-now-main { flex: 999 1 420px; min-width: 0; }
+.live-steps { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.live-step-bars { display: flex; gap: 3px; flex: none; }
+.live-step { width: 16px; height: 4px; border-radius: 2px; background: var(--border); }
+.live-step.done { background: var(--ok); }
+.live-step.active { background: var(--accent); }
+.live-headline { margin: 3px 0 0; font-size: 15px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-context { flex: 1 1 280px; max-width: 420px; min-width: 0; }
+.live-context-row { display: flex; justify-content: space-between; gap: var(--s-3); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.live-context-bar { display: flex; gap: 2px; height: 8px; margin: 5px 0; border-radius: 3px; overflow: hidden; background: var(--elevated); }
+.live-context-bar .cat-1 { background: var(--cat-1); }
+.live-context-bar .cat-2 { background: var(--cat-2); }
+.live-context-bar .cat-3 { background: var(--cat-3); }
+.live-context-bar .cat-4 { background: var(--cat-4); }
+.live-context-bar .cat-5 { background: var(--cat-5); }
+.live-context-bar .cat-6 { background: var(--cat-6); }
+
+/* Waiting for you: the Now line's place, so the eye already goes there. */
+.live-wait { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-wait-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.live-wait-why { color: var(--muted); }
+.live-wait-timer { display: flex; align-items: baseline; gap: var(--s-2); color: var(--muted); }
+.live-wait-timer strong { font-size: 15px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.live-ping { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); flex: none; animation: live-ping 1.6s ease-out 3; }
+@keyframes live-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+
+/* Three panes when there's room: needs you, the stage, the checks. */
+.live-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.7fr) minmax(300px, 1fr); gap: var(--s-2); padding: var(--s-2); }
+.live-stage, .live-trust { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-2); min-height: 0; min-width: 0; }
+.live-trust { grid-template-rows: minmax(0, auto) minmax(0, 1fr); }
+.live-pane { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-lg); min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.live-pane-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s-1) var(--s-3); padding: var(--s-3) var(--s-4) var(--s-2); }
+.live-scroll { overflow: auto; min-height: 0; padding: 0 var(--s-4) var(--s-2); }
+.live-count { font-size: 12px; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* The switcher only shows at mid width. */
+.live-switch { display: none; gap: 4px; padding: var(--s-2); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.live-switch-item { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--s-3); border: 0; border-radius: var(--r-md); background: transparent; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.live-switch-item.on { background: var(--elevated); color: var(--fg); }
+.live-switch-bad { font-weight: 600; color: var(--err); }
+
+/* Mid width (Live inside a session): the stage keeps its room; the three lists share one column. */
+@container (max-width: 1180px) {
+  .live-shell { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .live-stage { grid-column: 1; grid-row: 1; }
+  .live-needs, .live-trust { grid-column: 2; grid-row: 1; }
+  .live-trust { grid-template-rows: minmax(0, 1fr); }
+  .live-shell:not([data-pick='needs']) .live-needs,
+  .live-shell:not([data-pick='checked']) .live-checked,
+  .live-shell:not([data-pick='looked']) .live-looked,
+  .live-shell[data-pick='needs'] .live-trust { display: none; }
+  .live-switch { display: flex; }
+  .live .switchable { display: none; }
+}
+/* Narrow: one column, needs you first; the page scrolls. */
+@container (max-width: 760px) {
+  .live-shell { display: flex; flex-direction: column; overflow: auto; }
+  .live-shell .live-needs, .live-shell .live-checked, .live-shell .live-looked { display: flex !important; }
+  .live-shell .live-trust { display: grid !important; }
+  .live-switch { display: none; }
+  .live .switchable { display: block; }
+  .live-pane, .live-stage, .live-trust { flex: none; }
+  .live-scroll { max-height: 320px; }
+  .live-edit { min-height: 280px; }
+}
+
+/* Needs you */
+.live-flag { padding: var(--s-3) 0; border-top: 1px solid var(--border); }
+.live-flag-head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: 3px; }
+.live-flag-title { font-weight: 600; line-height: 1.35; }
+.live-flag-detail { margin-top: 2px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.live-flag-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); margin-top: var(--s-2); }
+.live-flag-actions .link { margin-right: var(--s-2); }
+.live-badge { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+/* Severity words: an error loop reads in red; risks to look at in amber; the rest stay plain. */
+.live-badge.circles { color: var(--err); }
+.live-badge.blind, .live-badge.unread, .live-badge.clash { color: var(--warn); }
+
+/* Who's doing what */
+.live-legend { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); font-size: 12px; color: var(--muted); }
+.live-legend i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.live-lane-list { padding: 0 var(--s-4); }
+.live-lane { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: var(--s-3); align-items: center; padding: var(--s-2) 0; border-top: 1px solid var(--border); }
+.live-lane.ended { opacity: .62; }
+.live-lane-who { display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: var(--s-2); align-items: center; min-width: 0; }
+.live-lane-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tally-live); animation: on-air 2.4s ease-in-out infinite; }
+.live-lane-dot.done { background: var(--ok); animation: none; }
+.live-lane-dot.error { background: transparent; border: 2px solid var(--err); box-sizing: border-box; animation: none; }
+.live-lane-dot.paused { background: var(--warn); animation: none; }
+.live-lane-name { font-weight: 600; font-stretch: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-lane-meta { grid-column: 2; font-size: 12px; color: var(--subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.live-lane-track { min-width: 0; }
+.live-bar { position: relative; height: 12px; border-radius: 3px; background: var(--surface); overflow: hidden; }
+.live-bar > span { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; }
+.live-bar > span.dim { opacity: .35; }
+.live-lane-summary { margin-top: 3px; font-size: 12px; color: var(--fg); opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-lane-summary.you { color: var(--warn); opacity: 1; }
+.seg-read { background: var(--seg-read); }
+.seg-edit { background: var(--seg-edit); }
+.seg-run { background: var(--seg-run); }
+.seg-think { background: var(--seg-think); }
+.seg-you { background: repeating-linear-gradient(135deg, var(--muted) 0 3px, transparent 3px 6px); }
+.seg-wait { background: repeating-linear-gradient(135deg, var(--subtle) 0 3px, var(--elevated) 3px 6px); }
+.live-axis { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: var(--s-3); padding: 2px var(--s-4) var(--s-3); font-size: 11px; color: var(--subtle); }
+.live-axis > span:last-child { display: flex; justify-content: space-between; }
+
+/* The edit on stage */
+.live-edit { overflow: hidden; }
+.live-edit.idle { justify-content: center; align-items: center; }
+.live-edit-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); padding: var(--s-2) var(--s-4); min-height: 44px; box-sizing: border-box; border-bottom: 1px solid var(--border); }
+.live-edit-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--subtle); flex: none; }
+.live-edit.writing .live-edit-dot { background: var(--tally-live); animation: on-air 2.4s ease-in-out infinite; }
+.live-edit.held .live-edit-dot { background: var(--warn); }
+.live-edit-title { font-weight: 600; }
+.live-edit-path { height: auto; padding: 0; border: 0; background: none; font: 12px var(--mono); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-diff { flex: 1; min-height: 0; overflow: auto; background: var(--surface2); }
+/* Being written: the newest line stays in view. */
+.live-diff.follow { display: flex; flex-direction: column-reverse; }
+.live-diff-inner { padding: var(--s-2) 0; font: 12px/1.65 var(--mono); white-space: pre; }
+.live-diff .ln { padding: 0 var(--s-4); color: var(--subtle); }
+.live-diff .no { display: inline-block; width: 4ch; margin-right: var(--s-2); text-align: right; opacity: .6; }
+.live-diff .mk { display: inline-block; width: 2ch; }
+.live-diff .del { background: color-mix(in srgb, var(--err) 13%, transparent); color: var(--fg); }
+.live-diff .add { background: color-mix(in srgb, var(--ok) 13%, transparent); color: var(--fg); }
+.live-diff .del .mk { color: var(--err); }
+.live-diff .add .mk { color: var(--ok); }
+.live-caret { display: inline-block; width: 7px; height: 14px; margin-left: 1px; background: var(--accent); vertical-align: -2px; animation: live-blink 1s steps(1) infinite; }
+@keyframes live-blink { 50% { opacity: 0; } }
+.live-edit-held { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; padding: var(--s-3) var(--s-4); border-top: 1px solid var(--border); background: var(--surface); }
+.live-edit-held input { min-width: 200px; }
+
+/* A question, check-in or permission, centre stage */
+.live-ask-scroll { overflow: auto; min-height: 0; padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); }
+.live-ask-q { display: flex; flex-direction: column; gap: var(--s-3); align-items: flex-start; max-width: 760px; }
+.live-ask-q h2 { font-size: 15px; line-height: 1.3; }
+.live-ask-detail { margin: 0; color: var(--muted); max-width: 70ch; }
+.live-ask-input { margin: 0; max-width: 100%; max-height: 220px; overflow: auto; padding: var(--s-2) var(--s-3); border-radius: var(--r-md); background: var(--surface2); font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+.live-options { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; }
+.live-option { display: flex; justify-content: flex-start; gap: var(--s-3); align-items: flex-start; width: 100%; height: auto; padding: var(--s-3) var(--s-4); text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); white-space: normal; }
+.live-option:hover:not(:disabled) { background: var(--elevated); }
+/* The answer you picked: your selection, in your colour. */
+.live-option.on, .live-option.on:hover:not(:disabled) { border-color: var(--accent); background: var(--selection); }
+.live-option-n { flex: none; width: 1.2em; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.live-option-label { display: block; font-weight: 600; }
+.live-option-desc { display: block; font-size: 12px; color: var(--muted); }
+.live-ask-row { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; max-width: 760px; }
+.live-ask-row input { min-width: 220px; }
+
+/* Checked since the last edit? */
+.live-check { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s-3); align-items: center; padding: var(--s-2) 0; border-top: 1px solid var(--border); }
+.live-check-detail { grid-column: 1 / -1; font-size: 12px; color: var(--subtle); }
+.live-file { height: auto; padding: 0; border: 0; background: none; font: 12px var(--mono); color: var(--fg); text-align: left; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-state { font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--muted); }
+.live-state.failing { color: var(--err); }
+.live-state.builds { color: var(--warn); }
+.live-state.checking { color: var(--info); }
+.live-state.passed { color: var(--ok); }
+
+/* What Claude has looked at */
+.live-looked-sum { margin: 0; padding: 0 var(--s-4) var(--s-2); }
+.live-looked-row { padding: 7px 0; border-top: 1px solid var(--border); }
+.live-looked-row.quiet { padding: 4px 0; }
+.live-looked-name { display: flex; align-items: baseline; gap: var(--s-3); }
+.live-looked-name .live-file { flex: 1; }
+.live-tag { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.live-tag.warn { color: var(--warn); }
+.live-cover { position: relative; height: 6px; margin-top: 5px; border-radius: 2px; overflow: hidden; background: var(--elevated); }
+.live-cover > span { position: absolute; top: 0; bottom: 0; }
+.live-instructions { padding: var(--s-3) 0 var(--s-1); border-top: 1px solid var(--border); }
+.live-instructions h3 { margin: 0 0 var(--s-2); font-size: 13px; font-weight: 600; }
+.live-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.live-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px var(--s-2); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font: 12px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-chip .live-note { font-family: var(--font); }
+
+/* Popped out: its own message box */
+.live-composer { display: flex; gap: var(--s-2); align-items: flex-end; padding: var(--s-2) var(--s-4) var(--s-3); border-top: 1px solid var(--border); background: var(--surface); }
+.live-composer textarea { flex: 1; min-height: 36px; max-height: 160px; resize: vertical; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-ping, .live-caret, .live-lane-dot, .live-edit-dot, .live-dot { animation: none; }
+}
+
+/* Labels for screen readers only (the field's placeholder says the same on screen). */
+.live .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.live-loading { align-items: center; justify-content: center; color: var(--muted); }
+
+/* File names read as text (underlined on hover), not as accent links: the accent is kept for actions
+   and for what's live (an edit being written, the current step). */
+.live-file:hover:not(:disabled), .live-edit-path:hover:not(:disabled) { background: none; color: var(--fg); text-decoration: underline; }
+.live-flag-show { color: var(--fg); padding-left: 0; }
+.live-flag-actions .quiet:first-child { padding-left: 0; }
+.live-hold-policy { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.live-hold-policy select { height: 26px; font-size: 12px; background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0 var(--s-2); }

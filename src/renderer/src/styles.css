@@ -1800,3 +1800,48 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .read-receipt.read .codicon { color: var(--accent); }
 .read-receipt.dropped { color: var(--warn); }
 .read-receipt .link { margin-left: var(--s-1); }
+
+/* ── Your turn: Claude is stopped on you ── */
+/* The session tab says so in amber, with how long; its lamp pulses three times when the wait starts. */
+.tab.monitor.your-turn .tab-verb { color: var(--warn); font-variant-numeric: tabular-nums; }
+.tab.monitor.your-turn .tally-lamp { background: var(--warn); animation: your-turn-ping 1.6s ease-out 3; }
+@keyframes your-turn-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 60%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
+/* On any other tab, Conversation carries it. */
+.your-turn-lamp { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); animation: your-turn-ping 1.6s ease-out 3; }
+.work-tabs .pop-out { flex: none; gap: var(--s-1); height: var(--h-ctl); }
+@media (prefers-reduced-motion: reduce) {
+  .tab.monitor.your-turn .tally-lamp, .your-turn-lamp { animation: none; }
+}
+
+/* Your own accent: a swatch that shows the wheel until you've picked, then your colour. */
+.accent-swatch.custom { background: conic-gradient(from 0deg, #f44, #fd4, #4d6, #4cf, #46f, #c4f, #f44); }
+.accent-swatch.custom.on, .accent-swatch.custom.on:hover:not(:disabled) { background: var(--swatch); }
+.accent-swatch.custom:hover:not(:disabled) { background: conic-gradient(from 0deg, #f44, #fd4, #4d6, #4cf, #46f, #c4f, #f44); }
+.accent-custom { position: relative; display: inline-flex; }
+/* The wheel opens beside its swatch, over the settings, like a menu. */
+.accent-wheel { position: absolute; top: calc(100% + var(--s-2)); right: 0; z-index: 40; width: 220px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3); background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); }
+.accent-wheel .setting-note { margin: 0; }
+.colour-wheel { display: flex; flex-direction: column; gap: var(--s-2); align-items: flex-start; }
+.colour-wheel-disc { position: relative; flex: none; border-radius: 50%; cursor: crosshair; touch-action: none;
+  background: radial-gradient(circle closest-side, #fff, transparent), conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.colour-wheel-disc:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+.colour-wheel-marker { position: absolute; width: 14px; height: 14px; margin: -9px 0 0 -9px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); pointer-events: none; }
+.colour-wheel-hex { display: flex; align-items: center; gap: var(--s-2); font-size: 12px; color: var(--muted); }
+.colour-wheel-hex input { width: 92px; font: 12px var(--mono); }
+
+/* ── Changes: folders that fold, Claude's files marked, keyboard-friendly rows ── */
+.changes-list { padding-top: 0; }
+.changes-list-tools { display: flex; justify-content: flex-end; padding: var(--s-1) var(--s-2) 0; }
+.changes-list .change-folder-head { width: 100%; height: auto; border: 0; border-radius: var(--r-md); background: none; color: var(--fg); text-align: left; padding: var(--s-1) var(--s-2); font-weight: 400; }
+.changes-list .change-folder-head:hover:not(:disabled) { background: var(--elevated); }
+.changes-list .change-file { width: 100%; height: auto; border: 0; border-radius: var(--r-md); background: none; color: var(--fg); text-align: left; font-weight: 400; padding-left: calc(var(--s-2) + 22px); }
+.changes-list .change-file:hover:not(:disabled) { background: var(--elevated); }
+.changes-list .change-file.selected { background: var(--selection); }
+.changes-list .change-folder-head:focus-visible, .changes-list .change-file:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.change-file-name { min-width: 0; }
+.change-claude { display: inline-flex; align-items: center; gap: 2px; flex: none; font-size: 11px; color: var(--muted); }
+.change-claude .codicon { font-size: 12px; }
+.changes-more { margin-top: var(--s-2); }
+.changes-refreshing { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--muted); animation: changes-spin .8s linear infinite; }
+@keyframes changes-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .changes-refreshing { animation: none; } }

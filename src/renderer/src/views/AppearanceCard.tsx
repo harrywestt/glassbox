@@ -1,4 +1,7 @@
-import { ACCENTS, CHAT_SIZES, UI_SCALES, resetAppearance, setAppearance, useAppearance, type ChatWidth, type TableStyle, type ThemePreference } from '../appearance'
+import { useState } from 'react'
+import { ColourWheel } from '../components/ColourWheel'
+import { isHex } from '../colour'
+import { ACCENTS, accentFor, CHAT_SIZES, UI_SCALES, resetAppearance, setAppearance, useAppearance, type ChatWidth, type TableStyle, type ThemePreference } from '../appearance'
 import { useThemeTokens } from '../App'
 import { Segmented, Toggle } from '../components/ui'
 import { tr } from '../../../shared/i18n'
@@ -7,6 +10,8 @@ import { tr } from '../../../shared/i18n'
 export function AppearanceCard() {
   const a = useAppearance()
   const base = useThemeTokens().base
+  const custom = isHex(a.accent)
+  const [wheel, setWheel] = useState(false)
 
   return (
     <section className="card appearance">
@@ -50,9 +55,30 @@ export function AppearanceCard() {
               className={a.accent === c.id ? 'accent-swatch on' : 'accent-swatch'}
               style={{ ['--swatch' as string]: c[base] }}
               title={c.label}
-              onClick={() => setAppearance({ accent: c.id })}
+              onClick={() => (setAppearance({ accent: c.id }), setWheel(false))}
             />
           ))}
+          {/* Your own colour, from a wheel in a popover attached to this swatch. */}
+          <span className="accent-custom">
+          <button
+            role="radio"
+            aria-checked={custom}
+            aria-expanded={wheel}
+            className={custom ? 'accent-swatch custom on' : 'accent-swatch custom'}
+            style={custom ? { ['--swatch' as string]: accentFor(a, base) } : undefined}
+            title={tr('appearanceCard.customColour')}
+            onClick={() => setWheel((w) => !w)}
+          />
+          {wheel && (
+            <>
+              <div className="menu-scrim" onMouseDown={() => setWheel(false)} />
+              <div className="accent-wheel" role="dialog" aria-label={tr('appearanceCard.customColour')} onKeyDown={(e) => e.key === 'Escape' && setWheel(false)}>
+                <ColourWheel value={custom ? a.accent : '#4f8ff7'} onChange={(accent) => setAppearance({ accent })} />
+                <p className="setting-note">{tr('appearanceCard.customColourNote')}</p>
+              </div>
+            </>
+          )}
+          </span>
         </div>
       </div>
 

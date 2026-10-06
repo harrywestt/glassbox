@@ -18,7 +18,8 @@ const MARK_ICON = { read: 'eye', edit: 'edit', avoid: 'lock', ask: 'question', a
 /** How long Space must be held before it starts recording rather than typing a space. */
 const HOLD_MS = 200
 
-export function Composer({ compact }: { compact?: boolean } = {}) {
+/** `liveOwnsAsks`: Live shows Claude's questions and check-ins centre stage, so the box doesn't repeat them. */
+export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwnsAsks?: boolean } = {}) {
   const { s, tab, actions, send, composerRef, updateRequirements, markFile, showPanel, planFirst, setPlanFirst, everyday, openAttachment } = useSession()
   const [text, setText] = useState('')
   // Files going with the next message: picked, dropped on the window, or pasted.
@@ -136,7 +137,8 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
 
   // Claude's guess at your next message, shown while the box is empty and Claude is waiting.
   // While Claude is waiting on an answer, the message box answers it (unless you switch that off).
-  const asks = usePendingAsks()
+  const pending = usePendingAsks()
+  const asks = liveOwnsAsks ? pending.filter((a) => a.kind !== 'checkin') : pending
   const answerAll = useAnswerAll()
   const [askIndex, setAskIndex] = useState(0)
   const [answering, setAnswering] = useState(true)
@@ -207,7 +209,7 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
   return (
     <div className="composer">
       <LimitCard />
-      <QuestionsCard />
+      {!liveOwnsAsks && <QuestionsCard />}
       <Loaders />
       <AskDock asks={asks} index={askIndex} onIndex={setAskIndex} answering={answering} onAnswering={setAnswering} compact={compact} />
       {hasReq ? (

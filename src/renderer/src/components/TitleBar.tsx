@@ -1,3 +1,5 @@
+import { blockedOnYou } from '../session'
+import { clock } from '../live/model'
 import { useEffect, useState, type Dispatch } from 'react'
 import type { UpdateState } from '../../../shared/events'
 import { useActions } from '../App'
@@ -39,12 +41,14 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
           const s = state.sessions[tab.id]
           const tally = tallyOf(s)
           const verb = liveVerb(s)
+          // Claude is stopped on you: the tab says so, with how long it's been waiting.
+          const yours = !!s && blockedOnYou(s)
           return (
             <div
               key={tab.id}
               role="tab"
               aria-selected={state.active === tab.id}
-              className={`tab monitor tally-${tally}${state.active === tab.id ? ' active' : ''}${dragId === tab.id ? ' dragging' : ''}`}
+              className={`tab monitor tally-${tally}${yours ? ' your-turn' : ''}${state.active === tab.id ? ' active' : ''}${dragId === tab.id ? ' dragging' : ''}`}
               draggable
               onDragStart={() => setDragId(tab.id)}
               onDragEnd={() => setDragId(null)}
@@ -57,7 +61,7 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
               <span className="tally-lamp" aria-hidden />
               <span className="tab-text">
                 <span className="tab-label">{tabTitle(tab, s)}</span>
-                <span className="tab-verb">{verb}</span>
+                <span className="tab-verb">{yours ? <YourTurn since={s.waitSince} /> : verb}</span>
               </span>
               <button
                 className="tab-close"
@@ -85,6 +89,16 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
       <div className="window-controls-space" />
     </header>
   )
+}
+
+/** "Your turn, 2:14": ticks while Claude waits on you. */
+function YourTurn({ since }: { since?: number }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  return <>{tr('titleBar.yourTurn', { time: clock(now - (since ?? now)) })}</>
 }
 
 /** A newer Glassbox, VS Code style: it downloads quietly and installs when you close the app; this just says so, and can restart now. */

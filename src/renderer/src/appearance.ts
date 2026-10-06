@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { tr } from '../../shared/i18n'
 import { AUTOMATION_DEFAULTS, type Automation } from '../../shared/events'
+import { isHex, readableOn } from './colour'
 
 export type ThemePreference = 'system' | 'dark' | 'light'
 export type ChatWidth = 'full' | 'wide' | 'comfortable'
@@ -8,7 +9,7 @@ export type TableStyle = 'striped' | 'grid' | 'minimal'
 
 export type Appearance = {
   theme: ThemePreference
-  accent: string // an ACCENTS id
+  accent: string // an ACCENTS id, or a colour you picked (#rrggbb)
   uiScale: number // whole-app zoom, 0.9 – 1.25
   chatSize: number // conversation text, px
   chatWidth: ChatWidth
@@ -79,6 +80,8 @@ export function useAppearance(): Appearance {
 }
 
 export function accentFor(a: Appearance, base: 'dark' | 'light'): string {
+  // A colour you picked from the wheel, kept readable on this theme's darkest (or lightest) surface.
+  if (isHex(a.accent)) return readableOn(a.accent, base === 'dark' ? '#16181b' : '#e9ecef', base)
   const preset = ACCENTS.find((x) => x.id === a.accent) ?? ACCENTS[0]
   return preset[base]
 }

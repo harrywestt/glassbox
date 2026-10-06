@@ -145,7 +145,9 @@
     "previewLines": "Lines",
     "previewAddedJsdoc": "Added JSDoc",
     "previewNewModule": "New module",
-    "previewNewTests": "New tests"
+    "previewNewTests": "New tests",
+    "customColour": "Pick your own colour",
+    "customColourNote": "Drag round the wheel for the colour and out from the centre for its strength. Glassbox lightens or darkens it just enough to stay readable in each theme."
   },
   "architecture": {
     "reading": "Reading",
@@ -216,7 +218,9 @@
     "voiceAccurate": "More accurate dictation",
     "voiceAccurateNote": "Use the larger speech model for the final text (a one-time 240 MB download, a second or two slower).",
     "micWarm": "Keep the microphone ready",
-    "micWarmNote": "Leave it open for two minutes after you speak, so the next hold starts at once."
+    "micWarmNote": "Leave it open for two minutes after you speak, so the next hold starts at once.",
+    "holdEdits": "Edits wait for you",
+    "holdEditsNote": "Before an edit reaches the file, Live shows it and waits for you to let it land."
   },
   "awayDigest": {
     "title": "While you were away",
@@ -353,7 +357,16 @@
     "loadingDiff": "Loading diff…",
     "projectRoot": "Project root",
     "folderFiles_one": "1 file",
-    "folderFiles_other": "{count} files"
+    "folderFiles_other": "{count} files",
+    "refreshing": "Refreshing the list",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "claudeInFolder_one": "Claude changed {count} file here this session",
+    "claudeInFolder_other": "Claude changed {count} files here this session",
+    "claudeEdited_one": "Claude edited this {count} time this session",
+    "claudeEdited_other": "Claude edited this {count} times this session",
+    "showMore_one": "Show {count} more file",
+    "showMore_other": "Show {count} more files"
   },
   "code": {
     "commentOnSelectionTip": "Select lines in the file, then comment on them",
@@ -1133,7 +1146,8 @@
       "blocked": "Blocked: {label}",
       "stoppedWithError": "Claude stopped with an error.",
       "finished": "Claude finished and is waiting for you.",
-      "backgroundFinished": "Claude’s background agents finished; it’s waiting for you."
+      "backgroundFinished": "Claude’s background agents finished; it’s waiting for you.",
+      "held": "An edit you held is waiting for you"
     },
     "buildShowcase": "Build a showcase",
     "notSavedToolOutput": "Not a saved tool output",
@@ -1992,7 +2006,10 @@
     "makingCopy": "Making a copy…",
     "giveOwnCopy": "Give this session its own copy",
     "hide": "Hide",
-    "claudeBrowsing": "Claude is using the Browser"
+    "claudeBrowsing": "Claude is using the Browser",
+    "yourTurn": "Your turn",
+    "popOut": "Pop out",
+    "popOutTitle": "Open Live in its own window, for a second screen"
   },
   "sessionsOverview": {
     "columnPlan": "Plan",
@@ -2446,7 +2463,8 @@
     "updateAvailableTip": "Glassbox {version} is out. Opens the download page.",
     "updateReady": "Update ready",
     "getVersion": "Get {version}",
-    "downloadingTitle": "Downloading Glassbox {version} in the background"
+    "downloadingTitle": "Downloading Glassbox {version} in the background",
+    "yourTurn": "Your turn, {time}"
   },
   "ui": {
     "loading": "Loading"
@@ -2456,5 +2474,203 @@
     "micBlocked": "Microphone access is blocked. Allow desktop apps to use the microphone in Windows privacy settings.",
     "couldNotOpenMic": "Couldn't open the microphone: {error}",
     "couldNotTranscribe": "Couldn't transcribe that: {error}"
+  },
+  "live": {
+    "title": "Live",
+    "windowTitle": "{name}: Live",
+    "loading": "Getting the session…",
+    "gone": "This session isn't open in Glassbox any more.",
+    "spent": "Spent {cost}",
+    "stop": "Stop",
+    "now": {
+      "label": "Right now",
+      "step": "Step {n} of {total}",
+      "working": "Working",
+      "finished": "Finished. Nothing is waiting on you.",
+      "idle": "Not started yet",
+      "context": "Context used",
+      "contextOf": "{used} of {total}",
+      "ready": "Ready. Live fills in as soon as Claude starts."
+    },
+    "wait": {
+      "title": "Claude is waiting for you",
+      "waiting": "Waiting",
+      "held": "You held an edit. Claude has stopped until you let it land or turn it down.",
+      "permission": "Claude needs your permission to carry on. Nothing on the main thread moves until you answer.",
+      "question": "Claude asked you a question. Nothing on the main thread moves until you answer.",
+      "checkin": "Claude paused to check something with you. Nothing on the main thread moves until you answer.",
+      "questionLabel": "Claude's question",
+      "questionBadge": "Question",
+      "checkinLabel": "Claude is checking in",
+      "checkinBadge": "Check-in",
+      "permissionLabel": "Permission",
+      "permissionBadge": "Permission",
+      "wantsTool": "Claude wants to use {tool}",
+      "guard": "A guardrail asks first: {label}",
+      "permissionInApp": "Answer in the prompt in front of you.",
+      "allow": "Allow",
+      "deny": "Deny",
+      "other": "Or write your own answer",
+      "otherLabel": "Your own answer",
+      "send": "Send"
+    },
+    "needs": {
+      "title": "Needs you",
+      "riskiest": "Riskiest first",
+      "none": "Nothing needs you right now."
+    },
+    "switch": {
+      "label": "Live lists",
+      "checked": "Checked",
+      "looked": "Looked at"
+    },
+    "flags": {
+      "kind": {
+        "blind": "Blind spot",
+        "circles": "Going in circles",
+        "unread": "Unread change",
+        "offplan": "Off plan",
+        "assumption": "Assumption",
+        "clash": "Same file"
+      },
+      "blindTitle_one": "Changed {file} without opening the file that uses it",
+      "blindTitle_other": "Changed {file} without opening {count} files that use it",
+      "andMore": " and {n} more",
+      "showCallers": "Show what uses it",
+      "blindTell": "You changed {file}, but didn't open what uses it: {callers}. Check they still work with the change.",
+      "unreadTitle_one": "Changed a line of {file} it never read",
+      "unreadTitle_other": "Changed {count} lines of {file} it never read",
+      "unreadDetail": "The edit landed in a part of the file Claude hadn't opened.",
+      "unreadTell": "You changed parts of {file} you hadn't read. Read the code around your change and check it still fits.",
+      "circlesTitle": "Same command, same failure, 3 times",
+      "circlesTell": "{command} has failed the same way three times. Stop and work out why before trying again.",
+      "clashTitle": "Two threads changed {file}",
+      "clashDetail": "Changed by {a} and {b}, {gap} apart. One may have worked from the old version.",
+      "clashTell": "{file} was changed by {a} and by {b} close together. Check neither undid the other.",
+      "offPlanTitle": "Changed {file}, which no plan step mentions",
+      "offPlanDetail": "Not in any step's list of files.",
+      "offPlanTell": "Why did you change {file}? It isn't part of the plan.",
+      "assumptionDetail": "Nobody has confirmed it.",
+      "assumptionTell": "About your assumption, \"{title}\": ",
+      "viewChange": "View the change",
+      "tell": "Tell Claude",
+      "tellTitle": "Puts a message in the box for you to edit and send",
+      "fine": "It's fine",
+      "fineTitle": "Dismiss this"
+    },
+    "lanes": {
+      "title": "Who's doing what",
+      "window": "Last 10 minutes",
+      "main": "Main thread",
+      "anAgent": "An agent",
+      "command": "Command",
+      "tools_one": "{count} tool",
+      "tools_other": "{count} tools",
+      "agentRunning_one": "{time}, {count} tool",
+      "agentRunning_other": "{time}, {count} tools",
+      "agentDone_one": "Done, {count} tool",
+      "agentDone_other": "Done, {count} tools",
+      "agentFailed": "Stopped",
+      "background": "In the background, {time}",
+      "paused": "Paused",
+      "waitingForYou": "Waiting for you",
+      "pausedNote_one": "Main is paused. {count} agent is still working.",
+      "pausedNote_other": "Main is paused. {count} agents are still working.",
+      "kind": {
+        "read": "Reading",
+        "edit": "Editing",
+        "run": "Running",
+        "think": "Thinking",
+        "wait": "Waiting"
+      },
+      "tenAgo": "10m ago",
+      "fiveAgo": "5m",
+      "now": "now",
+      "pausedAlone": "Main is paused.",
+      "mainInSentence": "the main thread",
+      "anAgentInSentence": "an agent"
+    },
+    "edit": {
+      "label": "The edit on stage",
+      "none": "No edits yet. Claude's next edit appears here as it's written.",
+      "writing": "{who} is writing an edit",
+      "held": "Held: waiting for you",
+      "landed": "Landed {ago}",
+      "lands": "Lands when Claude finishes writing it",
+      "willHold": "Will wait for you before it lands",
+      "tooLate": "Too late: it had already landed",
+      "hold": "Hold it",
+      "holdTitle": "Stop this edit before it reaches the file, so you can look first",
+      "letLand": "Let it land",
+      "dontMake": "Don't make this edit",
+      "reasonLabel": "Why not (Claude reads this)",
+      "reasonPlaceholder": "Why not? Claude reads this (optional)",
+      "openTitle": "Open this file",
+      "diffLabel": "The change, with the code around it",
+      "policyLabel": "Edits wait for you",
+      "policy": {
+        "ask": "Only when I press Hold",
+        "offplan": "When the file isn’t in the plan",
+        "all": "Always"
+      }
+    },
+    "checked": {
+      "title": "Checked since the last edit?",
+      "empty": "Nothing changed yet.",
+      "changed": "Changed {ago}.",
+      "running": "A check is running.",
+      "testsFailed": "Tests {ago}: failed.",
+      "testsPassed": "Tests {ago}: passed.",
+      "buildFailed": "Build {ago}: failed.",
+      "builds": "Built {ago}; no tests since.",
+      "none": "No build or test run since.",
+      "failingCount_one": "{count} failing",
+      "failingCount_other": "{count} failing",
+      "state": {
+        "failing": "Failing",
+        "unchecked": "Not checked",
+        "builds": "Untested",
+        "checking": "Checking",
+        "passed": "Passed"
+      }
+    },
+    "looked": {
+      "title": "What Claude has looked at",
+      "read": "Read",
+      "changed": "Changed",
+      "summary": "{read} files read, {searches} searches, {changed} changed",
+      "callerNotOpened": "Uses a changed file, never opened",
+      "written": "Written new",
+      "unread_one": "Changed a line it didn't read",
+      "unread_other": "Changed {count} lines it didn't read",
+      "changedTag": "Changed",
+      "readAll": "Read all",
+      "readPct": "Read {pct}%",
+      "readOnly": "Read",
+      "instructions": "Instructions in play",
+      "skill": "Skill",
+      "memory": {
+        "User": "Yours",
+        "Project": "Project",
+        "Local": "Local",
+        "Managed": "Organisation"
+      }
+    },
+    "composer": {
+      "label": "Message Claude",
+      "busy": "Message Claude (it reads it when the current step ends)",
+      "idle": "Message Claude",
+      "send": "Send"
+    },
+    "time": {
+      "justNow": "just now",
+      "seconds": "{n}s ago",
+      "minutes": "{n}m ago",
+      "hours": "{n}h ago"
+    }
+  },
+  "colourWheel": {
+    "label": "Colour wheel: left and right change the colour, up and down its strength",
+    "hex": "Hex"
   }
 }
