@@ -4,6 +4,7 @@ import type { Tab } from '../tabs'
 import { baseName, relPath } from '../lib'
 import { setAppearance, useAppearance } from '../appearance'
 import { Select } from '../components/Select'
+import { IconButton } from '../components/ui'
 import type { HoldPolicy } from '../../../shared/events'
 import { tr } from '../../../shared/i18n'
 import {
@@ -128,38 +129,35 @@ function NowStrip({ s }: { s: SessionState }) {
   const k = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
   return (
     <section className="live-now" aria-label={tr('live.now.label')}>
+      {/* One line: the step, what's happening, and what Claude is thinking. */}
       <div className="live-now-main">
         {steps.length > 0 && (
-          <div className="live-steps">
-            <span className="live-note">{tr('live.now.step', { n: current >= 0 ? current + 1 : Math.min(doneCount + 1, steps.length), total: steps.length })}</span>
+          <span className="live-steps" title={current >= 0 ? steps[current].label : undefined}>
             <span className="live-step-bars" aria-hidden>
               {steps.map((x, i) => (
                 <span key={i} className={`live-step ${x.status}`} />
               ))}
             </span>
-            {current >= 0 && <span className="live-note ellipsis">{steps[current].label}</span>}
-          </div>
+            <span className="live-note">{tr('live.now.step', { n: current >= 0 ? current + 1 : Math.min(doneCount + 1, steps.length), total: steps.length })}</span>
+          </span>
         )}
-        <p className="live-headline">{headline}</p>
+        <span className={s.status === 'running' ? 'live-headline' : 'live-headline quiet'}>{headline}</span>
         {thought && (
-          <p className="live-thinking" title={thought.full}>
+          <span className="live-thinking" title={thought.full}>
             <span className="live-thinking-label">{thought.live ? tr('live.now.thinkingNow') : tr('live.now.thoughtLast')}</span>
             <span className="live-thinking-text">{thought.text}</span>
-          </p>
+          </span>
         )}
       </div>
       {s.context && total > 0 && (
         <div className="live-context" title={used.map((c) => `${c.name}: ${k(c.tokens)}`).join('\n')}>
-          <div className="live-context-row">
-            <span>{tr('live.now.context')}</span>
-            <span>{tr('live.now.contextOf', { used: k(s.context.totalTokens), total: k(total) })}</span>
-          </div>
-          <div className="live-context-bar" aria-hidden>
+          <span>{tr('live.now.context')}</span>
+          <span className="live-context-bar" aria-hidden>
             {used.map((c, i) => (
               <span key={c.name} className={`cat-${(i % 6) + 1}`} style={{ width: `${(c.tokens / total) * 100}%` }} />
             ))}
-          </div>
-          <div className="live-note ellipsis">{used.slice(0, 4).map((c) => `${c.name} ${k(c.tokens)}`).join(', ')}</div>
+          </span>
+          <span className="live-context-num">{tr('live.now.contextOf', { used: k(s.context.totalTokens), total: k(total) })}</span>
         </div>
       )}
     </section>
@@ -264,7 +262,8 @@ function FlagRow({ f, now, nav, asked, onAsk, onDismiss }: { f: Flag; now: numbe
     <article className={asked ? 'live-flag asked' : 'live-flag'}>
       <div className="live-flag-head">
         <span className={`live-badge ${f.kind}`}>{tr(`live.flags.kind.${f.kind}`)}</span>
-        <span className="live-note">{ago(now - f.at)}</span>
+        <span className="live-note grow">{ago(now - f.at)}</span>
+        <IconButton icon="close" title={tr('live.flags.fineTitle')} onClick={onDismiss} />
       </div>
       <div className="live-flag-title">{f.title}</div>
       <div className="live-flag-detail">{f.detail}</div>
@@ -286,9 +285,6 @@ function FlagRow({ f, now, nav, asked, onAsk, onDismiss }: { f: Flag; now: numbe
               {tr('live.flags.showMe')}
             </button>
           )}
-          <button className="quiet" onClick={onDismiss} title={tr('live.flags.fineTitle')}>
-            {tr('live.flags.fine')}
-          </button>
         </div>
       )}
     </article>
@@ -306,15 +302,6 @@ function Lanes({ s, now }: { s: SessionState; now: number }) {
       <header className="live-pane-h">
         <h2>{tr('live.lanes.title')}</h2>
         <span className="live-note">{blocked ? (working ? tr('live.lanes.pausedNote', { count: working }) : tr('live.lanes.pausedAlone')) : tr('live.lanes.window')}</span>
-        <span className="grow" />
-        <span className="live-legend" aria-hidden>
-          {(['read', 'edit', 'run', 'think', 'wait'] as const).map((k) => (
-            <span key={k}>
-              <i className={`seg-${k}`} />
-              {tr(`live.lanes.kind.${k}`)}
-            </span>
-          ))}
-        </span>
       </header>
       <div className="live-lane-list">
         {list.map((l) => (
@@ -327,6 +314,16 @@ function Lanes({ s, now }: { s: SessionState; now: number }) {
           <span>{tr('live.lanes.tenAgo')}</span>
           <span>{tr('live.lanes.fiveAgo')}</span>
           <span>{tr('live.lanes.now')}</span>
+        </span>
+      </div>
+      <div className="live-key" aria-hidden>
+        <span className="live-legend">
+          {(['read', 'edit', 'run', 'think', 'wait'] as const).map((k) => (
+            <span key={k}>
+              <i className={`seg-${k}`} />
+              {tr(`live.lanes.kind.${k}`)}
+            </span>
+          ))}
         </span>
       </div>
     </section>
@@ -424,7 +421,11 @@ function EditStage({ tab, s, st, nav, now }: { tab: Tab; s: SessionState; st: St
 }
 
 /** The change with the code around it: before the edit lands its old text, after it the new. */
-function Diff({ text, before, after, landed, streaming }: { text: string | null; before: string; after: string; landed: boolean; streaming: boolean }) {
+function Diff({ text, before: rawBefore, after: rawAfter, landed, streaming }: { text: string | null; before: string; after: string; landed: boolean; streaming: boolean }) {
+  // An edit that ends at a line break on both sides doesn't change that break: don't show it as a line.
+  const shared = rawBefore.endsWith('\n') && rawAfter.endsWith('\n')
+  const before = shared ? rawBefore.slice(0, -1) : rawBefore
+  const after = shared ? rawAfter.slice(0, -1) : rawAfter
   // While it's written the newest line stays in view (pinned to the bottom); otherwise it reads from the top.
   const anchor = landed ? after : before
   const at = text && anchor ? text.indexOf(anchor) : -1
@@ -684,7 +685,9 @@ function LookedAt({ s, looked, rel, nav, switcher }: { s: SessionState; looked: 
       {switcher}
       <header className="live-pane-h">
         <h2 className="switchable">{tr('live.looked.title')}</h2>
-        <span className="grow" />
+      </header>
+      <div className="live-looked-sum">
+        <span className="live-note">{tr('live.looked.summary', { read: looked.files.filter((f) => f.read.length).length + looked.readOnly.length, searches: looked.searches, changed: looked.files.length })}</span>
         <span className="live-legend" aria-hidden>
           <span>
             <i className="seg-read" />
@@ -695,8 +698,7 @@ function LookedAt({ s, looked, rel, nav, switcher }: { s: SessionState; looked: 
             {tr('live.looked.changed')}
           </span>
         </span>
-      </header>
-      <p className="live-note live-looked-sum">{tr('live.looked.summary', { read: looked.files.filter((f) => f.read.length).length + looked.readOnly.length, searches: looked.searches, changed: looked.files.length })}</p>
+      </div>
       <div className="live-scroll">
         {uniqueCallers.map((c) => (
           <div key={`caller:${c.path}`} className="live-looked-row">

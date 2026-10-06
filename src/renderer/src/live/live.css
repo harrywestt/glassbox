@@ -20,18 +20,19 @@
 .live .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .live-empty { margin: 0; padding: var(--s-3) var(--s-4); color: var(--muted); }
 
-/* Now: one line you can read from across the desk. */
-.live-now { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-6); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
-.live-now-main { flex: 999 1 420px; min-width: 0; }
-.live-steps { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+/* Now: one 40px bar, like the app's other bars. */
+.live-now { display: flex; align-items: center; gap: var(--s-2) var(--s-5); min-height: 40px; box-sizing: border-box; padding: var(--s-1) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-now-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s-3); }
+.live-steps { display: flex; align-items: center; gap: var(--s-2); flex: none; }
 .live-step-bars { display: flex; gap: 3px; flex: none; }
-.live-step { width: 16px; height: 4px; border-radius: 2px; background: var(--border); }
+.live-step { width: 12px; height: 4px; border-radius: 2px; background: var(--border); }
 .live-step.done { background: var(--ok); }
 .live-step.active { background: var(--accent); }
-.live-headline { margin: 3px 0 0; font-size: 15px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.live-context { flex: 1 1 280px; max-width: 420px; min-width: 0; }
-.live-context-row { display: flex; justify-content: space-between; gap: var(--s-3); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.live-context-bar { display: flex; gap: 2px; height: 8px; margin: 5px 0; border-radius: 3px; overflow: hidden; background: var(--elevated); }
+.live-headline { flex: 0 1 auto; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-headline.quiet { font-weight: 400; color: var(--muted); }
+.live-context { flex: none; display: flex; align-items: center; gap: var(--s-2); font-size: 12px; color: var(--muted); }
+.live-context-bar { display: flex; gap: 1px; width: 96px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--elevated); }
+.live-context-num { font-variant-numeric: tabular-nums; }
 .live-context-bar .cat-1 { background: var(--cat-1); }
 .live-context-bar .cat-2 { background: var(--cat-2); }
 .live-context-bar .cat-3 { background: var(--cat-3); }
@@ -40,12 +41,14 @@
 .live-context-bar .cat-6 { background: var(--cat-6); }
 
 /* Waiting for you: the Now line's place, so the eye already goes there. */
-.live-wait { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
-.live-wait-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
-.live-wait-why { color: var(--muted); }
+.live-wait { display: flex; align-items: center; gap: var(--s-3); min-height: 40px; box-sizing: border-box; padding: var(--s-1) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-wait > .grow { display: flex; align-items: baseline; gap: var(--s-3); min-width: 0; }
+.live-wait-title { flex: none; font-weight: 600; }
+.live-wait-why { min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-wait-timer { display: flex; align-items: baseline; gap: var(--s-2); color: var(--muted); }
-.live-wait-timer strong { font-size: 15px; color: var(--fg); font-variant-numeric: tabular-nums; }
-.live-ping { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); flex: none; animation: live-ping 1.6s ease-out 3; }
+.live-wait-timer { font-size: 12px; }
+.live-wait-timer strong { font-size: 13px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.live-ping { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; animation: live-ping 1.6s ease-out 3; }
 @keyframes live-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
 
 /* Three panes when there's room: needs you, the stage, the checks. */
@@ -76,6 +79,8 @@
   .live-shell[data-pick='needs'] .live-trust { display: none; }
   .live-switch { display: flex; }
   .live .switchable { display: none; }
+  /* The switcher names the list, so their own header strips step aside. */
+  .live-needs .live-pane-h, .live-checked .live-pane-h, .live-looked .live-pane-h { display: none; }
 }
 /* Narrow: one column, needs you first; the page scrolls. */
 @container (max-width: 760px) {
@@ -84,9 +89,11 @@
   .live-shell .live-trust { display: grid !important; }
   .live-switch { display: none; }
   .live .switchable { display: block; }
+  .live-needs .live-pane-h, .live-checked .live-pane-h, .live-looked .live-pane-h { display: flex; }
   .live-pane, .live-stage, .live-trust { flex: none; }
   .live-scroll { max-height: 320px; }
   .live-edit { min-height: 280px; }
+  .live-now { flex-wrap: wrap; }
 }
 
 /* Needs you */
@@ -94,6 +101,9 @@
 .live-flag.asked .live-flag-title { color: var(--muted); }
 .live-flag-asked { margin-top: var(--s-2); font-size: 12px; color: var(--muted); }
 .live-flag-head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: 3px; }
+/* Dismiss sits quietly in the corner, so the actions stay on one line. */
+.live-flag-head .icon-btn { width: 22px; height: 22px; margin: -3px -6px -3px 0; opacity: .7; }
+.live-flag-head .icon-btn:hover { opacity: 1; }
 .live-flag-title { font-weight: 600; line-height: 1.35; }
 .live-flag-detail { margin-top: 2px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .live-flag-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); margin-top: var(--s-2); }
@@ -129,6 +139,8 @@
 .seg-wait { background: repeating-linear-gradient(135deg, var(--subtle) 0 3px, var(--elevated) 3px 6px); }
 .live-axis { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: var(--s-3); padding: 2px var(--s-4) var(--s-3); font-size: 11px; color: var(--subtle); }
 .live-axis > span:last-child { display: flex; justify-content: space-between; }
+/* The lanes' colour key, under the axis, so the header stays one line. */
+.live-key { padding: 0 var(--s-4) var(--s-3); }
 
 /* The edit on stage */
 .live-edit { overflow: hidden; }
@@ -183,12 +195,12 @@
 .live-state.passed { color: var(--ok); }
 
 /* What Claude has looked at */
-.live-looked-sum { margin: 0; padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--border); }
+.live-looked-sum { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-1) var(--s-3); margin: 0; padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--border); }
 .live-looked-row { padding: 7px var(--s-4); border-bottom: 1px solid var(--border); }
 .live-looked-row.quiet { padding: 4px var(--s-4); }
 .live-looked-name { display: flex; align-items: baseline; gap: var(--s-3); }
-.live-looked-name .live-file { flex: 1; }
-.live-tag { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.live-looked-name .live-file { flex: 1 0 auto; max-width: 100%; }
+.live-tag { flex: 0 1 auto; min-width: 0; margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-tag.warn { color: var(--warn); }
 .live-cover { position: relative; height: 6px; margin-top: 5px; border-radius: 2px; overflow: hidden; background: var(--elevated); }
 .live-cover > span { position: absolute; top: 0; bottom: 0; }
@@ -212,7 +224,7 @@
 .live-flag-actions .quiet:first-child { padding-left: 0; }
 .live-hold-policy { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 
-/* What Claude is thinking about, under the headline. */
-.live-thinking { display: flex; align-items: baseline; gap: var(--s-2); margin: 4px 0 0; min-width: 0; font-size: 13px; }
+/* What Claude is thinking about, beside the headline. */
+.live-thinking { display: flex; align-items: baseline; gap: var(--s-2); flex: 1 1 0; min-width: 0; }
 .live-thinking-label { flex: none; font-size: 12px; font-weight: 600; color: var(--muted); }
 .live-thinking-text { min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
