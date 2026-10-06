@@ -679,9 +679,6 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               views={VIEWS.filter((v) => !everyday || v.everyday).map((v) => ({ ...v, has: viewHas(v.kind) }))}
               onOpenView={(kind) => openWork(kind === 'map' ? MAP : viewTab(kind))}
               onFullScreen={() => void workContent.current?.requestFullscreen().catch(() => {})}
-              // Live can go to a second screen from Live itself or from the conversation beside it.
-              onPopOut={current.kind === 'live' || current.kind === 'conversation' ? () => void window.glassbox.live.popout(tab.id, tab.title ?? tab.cwd) : undefined}
-              popOutLabel={current.kind === 'live' ? tr('sessionView.popOut') : tr('sessionView.popOutLive')}
               yourTurn={blockedOnYou(session)}
             />
             {claudeNote && claudeNote.work === current.id && (
@@ -904,8 +901,6 @@ function WorkTabs({
   views,
   onOpenView,
   onFullScreen,
-  onPopOut,
-  popOutLabel,
   yourTurn
 }: {
   tabs: WorkTab[]
@@ -921,9 +916,6 @@ function WorkTabs({
   views: { kind: ViewKind; label: string; note: string; has: boolean }[]
   onOpenView: (kind: ViewKind) => void
   onFullScreen: () => void
-  /** Live only: open it in its own window. */
-  onPopOut?: () => void
-  popOutLabel: string
   /** Claude is stopped on you: the Conversation tab says so while you're on another. */
   yourTurn: boolean
 }) {
@@ -973,11 +965,6 @@ function WorkTabs({
         ))}
       </div>
       <span className="spacer" />
-      {onPopOut && (
-        <button className="quiet pop-out" onClick={onPopOut} title={tr('sessionView.popOutTitle')}>
-          <Icon name="link-external" /> {popOutLabel}
-        </button>
-      )}
       <IconButton icon="screen-full" title={tr('sessionView.fullScreenTitle')} onClick={onFullScreen} />
       {/* Outside the scrolling list, so its menu isn't clipped. */}
       <div className="work-tab-add">

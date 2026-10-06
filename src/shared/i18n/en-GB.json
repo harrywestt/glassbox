@@ -2007,10 +2007,7 @@
     "giveOwnCopy": "Give this session its own copy",
     "hide": "Hide",
     "claudeBrowsing": "Claude is using the Browser",
-    "yourTurn": "Your turn",
-    "popOut": "Pop out",
-    "popOutTitle": "Open Live in its own window, for a second screen",
-    "popOutLive": "Pop out Live"
+    "yourTurn": "Your turn"
   },
   "sessionsOverview": {
     "columnPlan": "Plan",
@@ -2478,11 +2475,6 @@
   },
   "live": {
     "title": "Live",
-    "windowTitle": "{name}: Live",
-    "loading": "Getting the session…",
-    "gone": "This session isn't open in Glassbox any more.",
-    "spent": "Spent {cost}",
-    "stop": "Stop",
     "now": {
       "label": "Right now",
       "step": "Step {n} of {total}",
@@ -2509,8 +2501,6 @@
       "wantsTool": "Claude wants to use {tool}",
       "guard": "A guardrail asks first: {label}",
       "permissionInApp": "Answer in the prompt in front of you.",
-      "allow": "Allow",
-      "deny": "Deny",
       "other": "Or write your own answer",
       "otherLabel": "Your own answer",
       "send": "Send"
@@ -2656,12 +2646,6 @@
         "Local": "Local",
         "Managed": "Organisation"
       }
-    },
-    "composer": {
-      "label": "Message Claude",
-      "busy": "Message Claude (it reads it when the current step ends)",
-      "idle": "Message Claude",
-      "send": "Send"
     },
     "time": {
       "justNow": "just now",
