@@ -94,8 +94,14 @@ function UpdateButton() {
     void window.glassbox.update.state().then(setU)
     return window.glassbox.update.onChange(setU)
   }, [])
-  // Downloading happens quietly; there's only something to show once it's ready.
-  if (u.status === 'idle' || u.status === 'downloading') return null
+  // Downloading shows quietly with its progress; there's a button once it's ready.
+  if (u.status === 'downloading')
+    return (
+      <span className="update-chip" title={tr('titleBar.downloadingTitle', { version: u.version })}>
+        <Icon name="cloud-download" /> {u.percent}%
+      </span>
+    )
+  if (u.status !== 'ready' && u.status !== 'available') return null
   const ready = u.status === 'ready'
   return (
     <button

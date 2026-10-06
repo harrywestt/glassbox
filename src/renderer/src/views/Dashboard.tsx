@@ -16,6 +16,7 @@ import { SessionsOverview } from './SessionsOverview'
 import { GitHubSection } from './GitHubSection'
 import { money, useFx } from '../money'
 import { tr } from '../../../shared/i18n'
+import type { UpdateState } from '../../../shared/events'
 
 type Props = { tabs: Tab[]; sessions: Record<string, SessionState>; visible: boolean }
 
@@ -332,14 +333,40 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
 /** Which Glassbox this is, at the foot of the dashboard. */
 function AppVersion() {
   const [version, setVersion] = useState<string>()
+  const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
   useEffect(() => void window.glassbox.appVersion().then(setVersion), [])
+  useEffect(() => {
+    void window.glassbox.update.state().then(setUpdate)
+    return window.glassbox.update.onChange(setUpdate)
+  }, [])
   if (!version) return null
+  const ago = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  // Where updates stand, in a few words, with a way to look now.
+  const status =
+    update.status === 'checking' ? tr('dashboard.update.checking')
+    : update.status === 'current' ? tr('dashboard.update.current', { at: ago(update.checkedAt) })
+    : update.status === 'error' ? tr('dashboard.update.error', { at: ago(update.checkedAt) })
+    : update.status === 'downloading' ? tr('dashboard.update.downloading', { version: update.version, percent: update.percent })
+    : update.status === 'ready' ? tr('dashboard.update.ready', { version: update.version })
+    : update.status === 'available' ? tr('dashboard.update.available', { version: update.version })
+    : ''
   return (
     <footer className="dash-version muted small">
       {tr('dashboard.version', { version })}{' '}
       <button className="link small" onClick={() => void window.glassbox.openExternal(`https://github.com/harrywestt/glassbox/releases/tag/v${version}`)} title={tr('dashboard.releaseNotesTitle')}>
         {tr('dashboard.releaseNotes')}
       </button>
+      {status && <span className={update.status === 'ready' || update.status === 'available' ? 'dash-update accent' : 'dash-update'}>{status}</span>}
+      {(update.status === 'ready' || update.status === 'available') && (
+        <button className="link small" onClick={() => void window.glassbox.update.install()}>
+          {update.status === 'ready' ? tr('dashboard.update.restart') : tr('dashboard.update.download')}
+        </button>
+      )}
+      {(update.status === 'current' || update.status === 'error') && (
+        <button className="link small" onClick={() => void window.glassbox.update.check()}>
+          {tr('dashboard.update.checkNow')}
+        </button>
+      )}
     </footer>
   )
 }

@@ -290,7 +290,8 @@ export type ProjectDecision = { id: string; kind: 'decision' | 'assumption'; tit
 export type ModuleExplain = { why: Record<string, string>; error?: string }
 
 /** A newer Glassbox: downloading (Windows), ready to restart into (Windows), or out to download (Mac). */
-export type UpdateState = { status: 'idle' } | { status: 'downloading'; version: string; percent: number } | { status: 'ready'; version: string } | { status: 'available'; version: string }
+/** `idle`: not an installed copy (no updates); `current`: up to date as of `checkedAt`. */
+export type UpdateState = { status: 'idle' } | { status: 'checking' } | { status: 'current'; checkedAt: number } | { status: 'error'; checkedAt: number } | { status: 'downloading'; version: string; percent: number } | { status: 'ready'; version: string } | { status: 'available'; version: string }
 
 /** The automatic features you can turn off or tune (Settings, Automation). */
 export type Automation = {

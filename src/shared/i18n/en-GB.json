@@ -416,7 +416,9 @@
     "micStop": "Stop and transcribe",
     "micStart": "Speak to Claude (or hold Space). Transcribed on this machine",
     "queuedHint": "Sends when Claude finishes this step",
-    "send": "Send"
+    "send": "Send",
+    "stopAndSend": "Stop and send",
+    "stopAndSendTitle": "Stop what Claude is doing now and send this straight away (Ctrl+Enter). Background agents keep going."
   },
   "connectorsPanel": {
     "title": "Connectors",
@@ -507,7 +509,18 @@
     "pinTitle": "Pin to keep it for good",
     "version": "Glassbox {version}",
     "releaseNotesTitle": "What's in this version",
-    "releaseNotes": "Release notes"
+    "releaseNotes": "Release notes",
+    "update": {
+      "checking": "Checking for updates…",
+      "current": "Up to date (checked {at}).",
+      "error": "Couldn’t check for updates at {at}.",
+      "downloading": "Downloading {version}: {percent}%.",
+      "ready": "{version} is ready.",
+      "available": "{version} is out.",
+      "restart": "Restart to update",
+      "download": "Download it",
+      "checkNow": "Check now"
+    }
   },
   "decisionsPanel": {
     "title": "Decisions",
@@ -2420,7 +2433,8 @@
     "updateReadyTip": "Glassbox {version} installs by itself when you close Glassbox. Click to restart into it now; your tabs reopen.",
     "updateAvailableTip": "Glassbox {version} is out. Opens the download page.",
     "updateReady": "Update ready",
-    "getVersion": "Get {version}"
+    "getVersion": "Get {version}",
+    "downloadingTitle": "Downloading Glassbox {version} in the background"
   },
   "ui": {
     "loading": "Loading"
