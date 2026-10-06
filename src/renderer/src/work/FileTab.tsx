@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { absPath, mediaKind, mediaUrl, relPath } from '../lib'
 import { MediaView } from '../components/MediaView'
@@ -31,10 +31,19 @@ export function FileTab({ path, line, endLine }: { path: string; line?: number; 
   const outside = /^\.\.|^[a-z]:|^\//i.test(rel)
   const touches = s.files.filter((f) => relPath(tab.cwd, f.path) === rel).length
 
+  // A different file starts blank; the same file changing (Claude editing it) refreshes in place once edits settle.
+  const shownRel = useRef<string | null>(null)
   useEffect(() => {
     if (!asText) return
-    setFile(null)
-    window.glassbox.fs.read(tab.cwd, rel).then(setFile, (e) => setFile({ error: String(e) }))
+    const same = shownRel.current === rel
+    shownRel.current = rel
+    if (!same) setFile(null)
+    let live = true
+    const t = setTimeout(() => window.glassbox.fs.read(tab.cwd, rel).then((f) => live && setFile(f), (e) => live && setFile({ error: String(e) })), same ? 500 : 0)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
   }, [rel, tab.cwd, s.git?.dirty, asText])
 
   return (

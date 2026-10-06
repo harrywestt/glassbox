@@ -1,3 +1,4 @@
+import { useSettledSession } from '../session'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { dependentsOf, moduleOf } from '../../../shared/architecture'
@@ -13,7 +14,8 @@ const CX = 320, CY = 230
  * change reaches stays amber unless the module has tests; the ripple plays each time you open it.
  */
 export function RippleTab({ module, path, onPick }: { module?: string; path?: string; onPick: (id: string) => void }) {
-  const { tab, s, composerRef } = useSession()
+  const { tab, s: session, composerRef } = useSession()
+  const s = useSettledSession(session)
   const arch = useArchitecture(tab.cwd, 0)
   // The diagram scales to fit; its labels shouldn't. --rs is the drawn scale, so text stays 11px on screen.
   const svgRef = useRef<SVGSVGElement>(null)

@@ -11,7 +11,7 @@ import type { SessionState } from '../session'
 import type { FileMark, PlanMap } from '../../../shared/events'
 import type { MapGroups } from '../../../main/mapGroups'
 import type { MapAnswer } from '../../../main/mapAsk'
-import { searchHits, taskOf } from '../session'
+import { useSettledSession, searchHits, taskOf } from '../session'
 import { Icon, IconButton, Segmented } from '../components/ui'
 import { tr } from '../../../shared/i18n'
 import './MapTab.css'
@@ -292,7 +292,9 @@ type Crew = { key: string; who: string; say: string; mod: string; kind: 'main' |
  * underneath winds the whole map back to any earlier moment.
  */
 export function MapTab() {
-  const { tab, s, peers, markFile, openRipple, openDiff, openFile, composerRef, openPlan } = useSession()
+  const { tab, s: session, peers, markFile, openRipple, openDiff, openFile, composerRef, openPlan } = useSession()
+  // The map redraws when Claude's work changes, not for every word of its reply.
+  const s = useSettledSession(session)
   const writes = s.files.filter((f) => f.tool === 'Write').length
   const arch = useArchitecture(tab.cwd, writes)
   const scroller = useRef<HTMLDivElement>(null)
