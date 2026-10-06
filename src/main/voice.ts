@@ -38,8 +38,28 @@ export function prepareVoice(onProgress: (p: VoiceProgress) => void): Promise<Tr
   return loading
 }
 
-/** Transcribes 16 kHz mono samples. */
-export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgress) => void): Promise<string> {
+/**
+ * One transcription at a time: running the model on two clips at once (a live pass still going as
+ * the final one starts) garbles both. A live pass is skipped when the model is busy; the final pass
+ * waits its turn and then runs alone.
+ */
+let busy: Promise<unknown> = Promise.resolve()
+let running = 0
+
+/** Transcribes 16 kHz mono samples. `live`: a quick pass while you're still talking, skipped if the model is busy. */
+export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgress) => void, live = false): Promise<string> {
+  if (live && running) return ''
+  running++
+  const turn = busy.then(() => run(audio, onProgress))
+  busy = turn.catch(() => undefined)
+  try {
+    return await turn
+  } finally {
+    running--
+  }
+}
+
+async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void): Promise<string> {
   // Too short to be speech, or effectively silent: Whisper hallucinates on these, so skip them.
   if (audio.length < 16_000 * 0.8 || !hasSpeech(audio)) return ''
   const asr = await prepareVoice(onProgress)

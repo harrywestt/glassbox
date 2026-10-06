@@ -145,7 +145,8 @@ const api = {
   },
   voice: {
     prepare: (): Promise<void> => invoke('voice:prepare'),
-    transcribe: (audio: Float32Array): Promise<string> => invoke('voice:transcribe', audio),
+    /** `live`: a quick pass while you're still talking (skipped if the model is busy). */
+    transcribe: (audio: Float32Array, live?: boolean): Promise<string> => invoke('voice:transcribe', audio, live),
     onProgress(callback: (p: { status: 'downloading' | 'loading' | 'ready'; progress?: number }) => void) {
       const listener = (_e: IpcRendererEvent, p: { status: 'downloading' | 'loading' | 'ready'; progress?: number }) => callback(p)
       ipcRenderer.on('glassbox:voice', listener)
