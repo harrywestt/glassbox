@@ -367,6 +367,7 @@ ipcMain.handle('app:version', () => app.getVersion())
 ipcMain.handle('update:state', () => updates.state)
 ipcMain.handle('update:install', () => updates.install())
 ipcMain.handle('session:interrupt', (_e, tabId: string) => host(tabId).interrupt())
+ipcMain.handle('session:setModel', (_e, tabId: string, model: string) => host(tabId).setModel(model))
 ipcMain.handle('session:stopTask', (_e, tabId: string, taskId: string) => host(tabId).stopTask(taskId))
 ipcMain.handle('session:close', (_e, tabId: string) => {
   closeTerminals(tabId)

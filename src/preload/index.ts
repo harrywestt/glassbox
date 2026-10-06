@@ -48,6 +48,7 @@ const api = {
     setAutoCommit: (tabId: string, on: boolean): Promise<void> => invoke('session:autoCommit', tabId, on),
     commitNow: (tabId: string): Promise<void> => invoke('session:commitNow', tabId),
     interrupt: (tabId: string): Promise<void> => invoke('session:interrupt', tabId),
+    setModel: (tabId: string, model: string): Promise<void> => invoke('session:setModel', tabId, model),
     stopTask: (tabId: string, taskId: string): Promise<void> => invoke('session:stopTask', tabId, taskId),
     setMode: (tabId: string, mode: AccessMode): Promise<void> => invoke('session:setMode', tabId, mode),
     exitPlan: (tabId: string): Promise<void> => invoke('session:exitPlan', tabId),
