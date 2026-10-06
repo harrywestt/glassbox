@@ -1,28 +1,33 @@
 import { join } from 'node:path'
 import { app } from 'electron'
 
-/** Speech model: English Whisper, quantised (~80 MB, downloaded once into the app's data folder). */
-const MODEL = 'onnx-community/whisper-base.en'
+/**
+ * Speech models: English Whisper, quantised, downloaded once into the app's data folder. The small
+ * one (~80 MB) writes the live words while you talk; the larger one (~240 MB) writes the final
+ * transcript when you let go: about half the mistakes on regional accents, a second or two slower.
+ */
+const LIVE_MODEL = 'onnx-community/whisper-base.en'
+const FINAL_MODEL = 'onnx-community/whisper-small.en'
 
 export type VoiceProgress = { status: 'downloading' | 'loading' | 'ready'; progress?: number; file?: string }
 
 type Transcriber = (audio: Float32Array, opts?: Record<string, unknown>) => Promise<{ text: string } | { text: string }[]>
 
-let loading: Promise<Transcriber> | undefined
+const loading = new Map<string, Promise<Transcriber>>()
+const ready = new Set<string>()
 
-/**
- * Local speech-to-text. Runs Whisper on the CPU in the main process, so audio never leaves the
- * machine and nothing is sent to a speech service.
- */
-export function prepareVoice(onProgress: (p: VoiceProgress) => void): Promise<Transcriber> {
-  loading ??= (async () => {
+function loadModel(model: string, onProgress?: (p: VoiceProgress) => void): Promise<Transcriber> {
+  let job = loading.get(model)
+  if (job) return job
+  job = (async () => {
     const { pipeline, env } = await import('@huggingface/transformers')
     env.cacheDir = join(app.getPath('userData'), 'models')
     const files = new Map<string, number>()
-    const asr = await pipeline('automatic-speech-recognition', MODEL, {
+    const asr = await pipeline('automatic-speech-recognition', model, {
       dtype: 'q8',
       device: 'cpu',
       progress_callback: (p: { status: string; file?: string; progress?: number }) => {
+        if (!onProgress) return
         if (p.status === 'progress' && p.file) {
           files.set(p.file, p.progress ?? 0)
           const avg = [...files.values()].reduce((a, b) => a + b, 0) / files.size
@@ -30,12 +35,25 @@ export function prepareVoice(onProgress: (p: VoiceProgress) => void): Promise<Tr
         } else if (p.status === 'ready') onProgress({ status: 'loading' })
       }
     })
-    onProgress({ status: 'ready' })
+    ready.add(model)
+    onProgress?.({ status: 'ready' })
     return asr as unknown as Transcriber
   })()
+  loading.set(model, job)
   // A failed load (e.g. offline on first use) can be retried.
-  loading.catch(() => (loading = undefined))
-  return loading
+  job.catch(() => loading.delete(model))
+  return job
+}
+
+/**
+ * Local speech-to-text. Runs Whisper on the CPU in the main process, so audio never leaves the
+ * machine and nothing is sent to a speech service. Readies the live model (with progress shown),
+ * then the final one quietly in the background.
+ */
+export function prepareVoice(onProgress: (p: VoiceProgress) => void): Promise<Transcriber> {
+  const live = loadModel(LIVE_MODEL, onProgress)
+  void live.then(() => loadModel(FINAL_MODEL)).catch(() => undefined)
+  return live
 }
 
 /**
@@ -50,7 +68,7 @@ let running = 0
 export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgress) => void, live = false): Promise<string> {
   if (live && running) return ''
   running++
-  const turn = busy.then(() => run(audio, onProgress))
+  const turn = busy.then(() => run(audio, onProgress, live))
   busy = turn.catch(() => undefined)
   try {
     return await turn
@@ -59,10 +77,11 @@ export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgr
   }
 }
 
-async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void): Promise<string> {
+async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void, live: boolean): Promise<string> {
   // Too short to be speech, or effectively silent: Whisper hallucinates on these, so skip them.
   if (audio.length < 16_000 * 0.8 || !hasSpeech(audio)) return ''
-  const asr = await prepareVoice(onProgress)
+  // The final transcript uses the larger model once it's ready (until its first download finishes, the small one).
+  const asr = !live && ready.has(FINAL_MODEL) ? await loadModel(FINAL_MODEL) : await prepareVoice(onProgress)
   const out = await asr(audio, { chunk_length_s: 30, stride_length_s: 5 })
   const text = (Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text).trim()
   // Whisper emits these for silence or noise.
