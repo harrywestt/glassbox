@@ -939,7 +939,12 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     const info = msg.rate_limit_info
     const window = info.rateLimitType ?? 'limit'
     const resets = info.resetsAt ? new Date(info.resetsAt * (info.resetsAt < 1e12 ? 1000 : 1)) : undefined
-    const at = resets ? resets.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : undefined
+    // Today: just the time. Another day (a weekly limit): the day as well, e.g. "Thu 06:00".
+    const at = resets
+      ? resets.toDateString() === new Date().toDateString()
+        ? resets.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        : resets.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+      : undefined
     const label = tr(`mainAgentHost.limitWindow.${['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet'].includes(window) ? window : 'other'}`)
     if (info.status === 'rejected') {
       this.limitHitAt = resets?.getTime()

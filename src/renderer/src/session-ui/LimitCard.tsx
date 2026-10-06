@@ -2,7 +2,11 @@ import { useSession } from '../views/SessionView'
 import { Icon } from '../components/ui'
 import { tr } from '../../../shared/i18n'
 
-const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+/** Today: the time. Another day: the day and time. */
+const time = (ms: number) => {
+  const d = new Date(ms)
+  return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+}
 
 /** A usage limit stopped Claude: when it resets, and a way to have Glassbox carry on then by itself. */
 export function LimitCard() {

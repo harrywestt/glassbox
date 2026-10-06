@@ -21,6 +21,21 @@ type WC = Electron.WebContents
 const ok = (text: string) => ({ content: [{ type: 'text' as const, text }] })
 const fail = (text: string) => ({ ...ok(text), isError: true })
 
+/** Thrown when a page doesn't answer in time. */
+class TimedOut extends Error {}
+
+/**
+ * Every call into a page has its own short time limit: a stalled or hidden page, or a script that
+ * waits for something that never happens, used to hold Claude until the 15-minute connector timeout.
+ */
+function inTime<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([work, new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new TimedOut(`The page didn't answer within ${Math.round(ms / 1000)}s, so Glassbox stopped waiting. It may be stalled or still loading: check it with browser_snapshot or browser_screenshot, or reload it with browser_open, rather than retrying the same thing.`)), ms)))]).finally(() => clearTimeout(timer))
+}
+const PAGE_MS = 20_000
+const slow = (what: string, ms: number) =>
+  fail(`${what} didn't answer within ${Math.round(ms / 1000)}s, so Glassbox stopped waiting. The page may be stalled, still loading, or waiting on something. Don't retry the same thing: check the page with browser_snapshot or browser_screenshot, reload it with browser_open, or take another approach.`)
+
 async function contents(bridge: BrowserBridge, tab?: string): Promise<{ wc: WC; tab: string } | string> {
   const { webContents } = await import('electron')
   const list = await bridge.tabs()
@@ -135,7 +150,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
           // Reusing a tab: give the new address a moment to start loading before waiting on it.
           await new Promise((r) => setTimeout(r, 350))
           await settle(wc)
-          return ok(`Tab ${tab}.\n${await wc.executeJavaScript(SNAPSHOT(find ?? '', 4000))}`)
+          return ok(`Tab ${tab}.\n${await inTime(wc.executeJavaScript(SNAPSHOT(find ?? '', 4000)), PAGE_MS)}`)
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e))
         }
@@ -150,7 +165,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
         await settle(c.wc, 3000)
-        return ok(await c.wc.executeJavaScript(SNAPSHOT(find ?? '', limit ?? 4000)))
+        return ok(await inTime(c.wc.executeJavaScript(SNAPSHOT(find ?? '', limit ?? 4000)), PAGE_MS))
       },
       { alwaysLoad: true }
     ),
@@ -161,7 +176,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
       async ({ ref, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
-        const at = (await c.wc.executeJavaScript(LOCATE(ref))) as { x: number; y: number; name: string } | null
+        const at = (await inTime(c.wc.executeJavaScript(LOCATE(ref)), PAGE_MS)) as { x: number; y: number; name: string } | null
         if (!at) return fail(`No control [${ref}] on the page now. Take a new browser_snapshot.`)
         await new Promise((r) => setTimeout(r, 120))
         c.wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
@@ -179,7 +194,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
       async ({ ref, text, submit, append, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
-        const found = await c.wc.executeJavaScript(`(() => { const el = document.querySelector('[data-gb="${ref}"]'); if (!el) return false; el.scrollIntoView({ block: 'center' }); el.focus(); ${append ? '' : "if ('select' in el) el.select(); else document.execCommand('selectAll')"}; return true })()`)
+        const found = await inTime(c.wc.executeJavaScript(`(() => { const el = document.querySelector('[data-gb="${ref}"]'); if (!el) return false; el.scrollIntoView({ block: 'center' }); el.focus(); ${append ? '' : "if ('select' in el) el.select(); else document.execCommand('selectAll')"}; return true })()`), PAGE_MS)
         if (!found) return fail(`No control [${ref}] on the page now. Take a new browser_snapshot.`)
         if (!append) press(c.wc, 'Backspace')
         await c.wc.insertText(text)
@@ -206,16 +221,22 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
     ),
     tool(
       'browser_eval',
-      "Run JavaScript in the page and get back its result as JSON (the body of an async function: use return). The most efficient way to pull out exactly what you need (a table's rows, an element's state, console-free checks) or to do several steps at once.",
-      { code: z.string().describe('e.g. return [...document.querySelectorAll("tr")].map(r => r.innerText)'), tab: TAB },
-      async ({ code, tab }) => {
+      "Run JavaScript in the page and get back its result as JSON (the body of an async function: use return). The most efficient way to pull out exactly what you need (a table's rows, an element's state, console-free checks) or to do several steps at once. Keep each call to one page and a few seconds: it gives up after timeout_seconds (default 30). Never loop through page navigations with sleeps in one script; open each page with browser_open and check it with its own call.",
+      {
+        code: z.string().describe('e.g. return [...document.querySelectorAll("tr")].map(r => r.innerText)'),
+        tab: TAB,
+        timeout_seconds: z.number().min(1).max(120).optional().describe('How long to wait for the script (default 30, at most 120)')
+      },
+      async ({ code, tab, timeout_seconds }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
+        const ms = (timeout_seconds ?? 30) * 1000
         try {
-          const value = await c.wc.executeJavaScript(`(async () => { ${code} })().then((v) => { try { return JSON.stringify(v) } catch { return String(v) } })`)
+          const value = await inTime(c.wc.executeJavaScript(`(async () => { ${code} })().then((v) => { try { return JSON.stringify(v) } catch { return String(v) } })`), ms)
           const text = value === undefined ? 'undefined' : String(value)
           return ok(text.length > 12000 ? `${text.slice(0, 12000)}\n(cut at 12000 characters)` : text)
         } catch (e) {
+          if (e instanceof TimedOut) return slow('The script', ms)
           return fail(`The script failed: ${e instanceof Error ? e.message : String(e)}`)
         }
       },
@@ -229,7 +250,12 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
         await settle(c.wc, 4000)
-        const img = await c.wc.capturePage()
+        let img: Electron.NativeImage
+        try {
+          img = await inTime(c.wc.capturePage(), PAGE_MS)
+        } catch (e) {
+          return e instanceof TimedOut ? slow('The screenshot', PAGE_MS) : fail(`Couldn't take the screenshot: ${e instanceof Error ? e.message : String(e)}`)
+        }
         const small = img.getSize().width > 1400 ? img.resize({ width: 1400 }) : img
         const jpeg = small.toJPEG(72)
         mkdirSync(shotsDir, { recursive: true })
@@ -258,7 +284,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
         if (typeof c === 'string') return fail(c)
         const until = Date.now() + (seconds ?? (text ? 15 : 2)) * 1000
         while (Date.now() < until) {
-          if (text && (await c.wc.executeJavaScript(`document.body && document.body.innerText.includes(${JSON.stringify(text)})`))) return ok(`"${text}" is on the page. ${where(c.wc)}`)
+          if (text && (await inTime(c.wc.executeJavaScript(`document.body && document.body.innerText.includes(${JSON.stringify(text)})`), PAGE_MS))) return ok(`"${text}" is on the page. ${where(c.wc)}`)
           await new Promise((r) => setTimeout(r, 300))
         }
         return text ? fail(`"${text}" didn't appear within ${seconds ?? 15}s. ${where(c.wc)}`) : ok(`Waited. ${where(c.wc)}`)
