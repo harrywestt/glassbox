@@ -1845,10 +1845,10 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 @keyframes changes-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .changes-refreshing { animation: none; } }
 
-/* Beside another view (Live, a diff, the map) the message box starts as one line and opens up when
-   you're in it or it has text, so the view keeps its room. */
+/* Beside another view (Live, a diff, the map) the message box is one line until you click into it,
+   so the view keeps its room. It opens and closes from what you do, never from focus moving. */
 .composer.compact { padding-top: var(--s-2); padding-bottom: var(--s-2); }
-.composer.compact .composer-box:not(:focus-within) textarea:placeholder-shown { min-height: 0; height: 40px; }
+.composer.small .composer-box textarea { min-height: 0; height: 40px; }
 /* Switching between the conversation and another view (or clicking in) slides between the two heights. */
 .composer-box textarea { interpolate-size: allow-keywords; transition: height .2s var(--ease); }
 @media (prefers-reduced-motion: reduce) { .composer-box textarea { transition: none; } }

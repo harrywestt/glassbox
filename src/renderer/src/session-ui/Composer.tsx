@@ -154,6 +154,12 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
   const predicted = !text && s.status === 'ready' && voice.state === 'idle' && !currentAsk ? s.suggestion : undefined
 
   const submit = () => sendPrompt(text)
+
+  // Beside another view (Live, a diff) the box is one line until you click into it. Once open it stays
+  // open, wherever else you click, until you send, press Esc with it empty, or move to another view.
+  const [opened, setOpened] = useState(false)
+  useEffect(() => setOpened(false), [compact])
+  const small = !!compact && !opened && !text
   /**
    * Don't wait for the step Claude is on (a long command, a slow tool): stop it and send this now.
    * Claude reads queued messages only between steps, so a plain Send waits for the step to end.
@@ -182,6 +188,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
     const prompt = withAttachments(value.trim(), files)
     if ((!value.trim() && !files.length) || !canSend) return
     setText('')
+    setOpened(false)
     setAttached([])
     setError(null)
     // Whatever you'd scrolled up to, sending takes the conversation back to the bottom.
@@ -207,7 +214,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
   const hasReq = req.files.length || req.connectors.length || req.skills.length
 
   return (
-    <div className={compact ? 'composer compact' : 'composer'}>
+    <div className={small ? 'composer compact small' : compact ? 'composer compact' : 'composer'}>
       <LimitCard />
       {!liveOwnsAsks && <QuestionsCard />}
       <Loaders />
@@ -323,6 +330,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
           rows={currentAsk ? 1 : 3}
           className={predicted ? 'has-prediction' : undefined}
           placeholder={currentAsk ? (targets.length > 1 ? tr('composer.placeholderAnswerAll', { count: targets.length }) : tr('composer.placeholderAnswer')) : predicted ?? (canSend ? tr('composer.placeholderMessage') : tr('composer.placeholderStarting'))}
+          onFocus={() => setOpened(true)}
           onChange={(e) => {
             setText(e.target.value)
             setPick(0)
@@ -342,6 +350,8 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
             }
             // Esc stops Claude, like the CLI (voice recording handles its own Esc first).
             if (e.key === 'Escape' && s.status === 'running' && voice.state === 'idle') return e.preventDefault(), stop()
+            // Otherwise Esc in an empty box beside another view folds it back to one line.
+            if (e.key === 'Escape' && compact && !text) return e.preventDefault(), setOpened(false), area.current?.blur()
             // The predicted next message: Tab sends it as is, → puts it in the box to edit first.
             if (predicted && e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey) return e.preventDefault(), void sendPrompt(predicted)
             if (predicted && e.key === 'ArrowRight') return e.preventDefault(), setText(predicted)
