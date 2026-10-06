@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, powerMonitor, protocol, shell } from 'electron'
 import { Updater } from './updater'
 import { setAutomation } from './automation'
 import type { Automation } from '../shared/events'
@@ -77,6 +77,11 @@ const TITLEBAR_OVERLAY_H = 39
 let titleBar = { color: '#121418', symbolColor: '#d8dce4' }
 const hosts = new Map<string, AgentHost>()
 const usage = new UsageService()
+
+// A screen lock, sleep or graphics-driver reset kills Chromium's graphics process. After a few such
+// crashes Chromium gives up on the graphics card and draws everything on the CPU for the rest of the
+// session, which is why Glassbox turned laggy after an accidental lock. Keep restarting it instead.
+app.commandLine.appendSwitch('disable-gpu-process-crash-limit')
 
 // Dev aid: snapshot runs keep painting while other windows cover this one (Windows otherwise pauses
 // a covered window, and capturePage hands back an old frame).
@@ -602,6 +607,29 @@ function taskbarIcon(): string {
 }
 
 app.whenReady().then(async () => {
+  // After unlocking or waking, redraw at once (the graphics process may just have restarted).
+  const repaint = () => win && !win.isDestroyed() && win.webContents.invalidate()
+  powerMonitor.on('unlock-screen', repaint)
+  powerMonitor.on('resume', repaint)
+  // Dev aid: GLASSBOX_GPU_TEST=1 kills the graphics process a few times, as a screen lock or driver
+  // reset does, and logs whether drawing stays on the graphics card.
+  if (process.env.GLASSBOX_GPU_TEST) {
+    void (async () => {
+      const status = () => JSON.stringify(app.getGPUFeatureStatus())
+      await new Promise((r) => setTimeout(r, 3000))
+      console.log('GPUTEST before', status())
+      console.log('GPUTEST info', JSON.stringify((await app.getGPUInfo('basic')) as object).slice(0, 600))
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 4000))
+        const gpu = app.getAppMetrics().find((m) => m.type === 'GPU')
+        console.log('GPUTEST kill', i + 1, gpu?.pid)
+        if (gpu) try { process.kill(gpu.pid) } catch (e) { console.log('GPUTEST kill failed', String(e)) }
+      }
+      await new Promise((r) => setTimeout(r, 5000))
+      console.log('GPUTEST after', status())
+      app.quit()
+    })()
+  }
   setMacMenu()
   // Asked to run as administrator: hand over to an elevated instance (via UAC) and quit this one.
   if (await elevateAtStartupIfWanted()) return app.quit()
@@ -647,6 +675,18 @@ app.whenReady().then(async () => {
     },
     onQuit: () => app.quit()
   })
+})
+
+// A graphics-process crash (a screen lock or driver reset) goes in the log, so lag after one can be traced.
+app.on('child-process-gone', (_e, d) => {
+  if (d.type !== 'GPU') return
+  try {
+    const dir = join(app.getPath('userData'), 'logs')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'renderer.log'), `[${new Date().toISOString()}] v${app.getVersion()} gpu: graphics process ${d.reason} (exit ${d.exitCode}); restarted\n`, { flag: 'a' })
+  } catch {
+    /* logging is best effort */
+  }
 })
 
 app.on('window-all-closed', () => (closeTerminals(), stopAllBangs(), app.quit()))
