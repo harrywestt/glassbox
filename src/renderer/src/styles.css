@@ -1818,7 +1818,7 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .accent-swatch.custom:hover:not(:disabled) { background: conic-gradient(from 0deg, #f44, #fd4, #4d6, #4cf, #46f, #c4f, #f44); }
 .accent-custom { position: relative; display: inline-flex; }
 /* The wheel opens beside its swatch, over the settings, like a menu. */
-.accent-wheel { position: absolute; top: calc(100% + var(--s-2)); right: 0; z-index: 40; width: 220px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3); background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); }
+.accent-wheel { animation: pop-in .15s var(--ease); position: absolute; top: calc(100% + var(--s-2)); right: 0; z-index: 40; width: 220px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3); background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); }
 .accent-wheel .setting-note { margin: 0; }
 .colour-wheel { display: flex; flex-direction: column; gap: var(--s-2); align-items: flex-start; }
 .colour-wheel-disc { position: relative; flex: none; border-radius: 50%; cursor: crosshair; touch-action: none;
@@ -1844,3 +1844,21 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .changes-refreshing { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--muted); animation: changes-spin .8s linear infinite; }
 @keyframes changes-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .changes-refreshing { animation: none; } }
+
+/* Beside another view (Live, a diff, the map) the message box starts as one line and opens up when
+   you're in it or it has text, so the view keeps its room. */
+.composer.compact { padding-top: var(--s-2); padding-bottom: var(--s-2); }
+.composer.compact .composer-box:not(:focus-within) textarea:placeholder-shown { min-height: 0; height: 40px; }
+/* Switching between the conversation and another view (or clicking in) slides between the two heights. */
+.composer-box textarea { interpolate-size: allow-keywords; transition: height .2s var(--ease); }
+@media (prefers-reduced-motion: reduce) { .composer-box textarea { transition: none; } }
+
+/* The side panel slides: its width animates while the content keeps its full width (no squashing). */
+.session-body > .side { transition: width .2s var(--ease), opacity .2s var(--ease), border-color .2s; }
+.session-body > .side > * { min-width: calc(var(--side-w) - 2px); }
+.session-body > .side.closed { opacity: 0; border-color: transparent; }
+.splitter { transition: width .2s var(--ease); }
+.splitter.closed { width: 0; }
+body.resizing .session-body > .side, body.resizing .splitter { transition: none; }
+.side-reveal { animation: fade .2s var(--ease); }
+@media (prefers-reduced-motion: reduce) { .session-body > .side, .splitter, .side-reveal { transition: none; animation: none; } }

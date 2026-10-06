@@ -207,7 +207,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
   const hasReq = req.files.length || req.connectors.length || req.skills.length
 
   return (
-    <div className="composer">
+    <div className={compact ? 'composer compact' : 'composer'}>
       <LimitCard />
       {!liveOwnsAsks && <QuestionsCard />}
       <Loaders />

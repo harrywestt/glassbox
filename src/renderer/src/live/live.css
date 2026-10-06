@@ -53,8 +53,12 @@
 
 /* Three panes when there's room: needs you, the stage, the checks. */
 .live-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.7fr) minmax(300px, 1fr); gap: var(--s-2); padding: var(--s-2); }
-.live-stage, .live-trust { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-2); min-height: 0; min-width: 0; }
-.live-trust { grid-template-rows: minmax(0, auto) minmax(0, 1fr); }
+/* Each column shares its height: the top pane takes what it needs up to about half, the lower one
+   keeps a usable minimum, and both scroll inside rather than pushing the other off screen. */
+.live-stage, .live-trust { display: flex; flex-direction: column; gap: var(--s-2); min-height: 0; min-width: 0; }
+.live-stage > .live-lanes, .live-trust > .live-checked { flex: 0 1 auto; max-height: 50%; min-height: 0; }
+.live-stage > :last-child, .live-trust > .live-looked { flex: 1 1 0; min-height: 160px; }
+.live-lanes .live-lane-list { overflow: auto; min-height: 0; }
 .live-pane { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-lg); min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 /* Each pane opens with a label strip; its rows run edge to edge beneath it. */
 .live-pane-h { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-3); min-height: 36px; box-sizing: border-box; padding: var(--s-1) var(--s-4); border-bottom: 1px solid var(--border); }
@@ -72,7 +76,8 @@
   .live-shell { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); grid-template-rows: minmax(0, 1fr); }
   .live-stage { grid-column: 1; grid-row: 1; }
   .live-needs, .live-trust { grid-column: 2; grid-row: 1; }
-  .live-trust { grid-template-rows: minmax(0, 1fr); }
+  /* One list at a time here, so it gets the whole column. */
+  .live-trust > .live-checked, .live-trust > .live-looked { flex: 1 1 0; max-height: none; min-height: 0; }
   .live-shell:not([data-pick='needs']) .live-needs,
   .live-shell:not([data-pick='checked']) .live-checked,
   .live-shell:not([data-pick='looked']) .live-looked,
@@ -86,7 +91,7 @@
 @container (max-width: 760px) {
   .live-shell { display: flex; flex-direction: column; overflow: auto; }
   .live-shell .live-needs, .live-shell .live-checked, .live-shell .live-looked { display: flex !important; }
-  .live-shell .live-trust { display: grid !important; }
+  .live-shell .live-trust { display: flex !important; }
   .live-switch { display: none; }
   .live .switchable { display: block; }
   .live-needs .live-pane-h, .live-checked .live-pane-h, .live-looked .live-pane-h { display: flex; }
@@ -228,3 +233,8 @@
 .live-thinking { display: flex; align-items: baseline; gap: var(--s-2); flex: 1 1 0; min-width: 0; }
 .live-thinking-label { flex: none; font-size: 12px; font-weight: 600; color: var(--muted); }
 .live-thinking-text { min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* A new item needing you, and the question or held edit taking the stage, arrive rather than appear. */
+.live-flag, .live-ask, .live-edit.held { animation: pop-in .2s var(--ease); }
+.live-wait, .live-now { animation: fade .2s var(--ease); }
+@media (prefers-reduced-motion: reduce) { .live-flag, .live-ask, .live-edit.held, .live-wait, .live-now { animation: none; } }
