@@ -1786,3 +1786,10 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .change-folder-head { display: flex; align-items: center; gap: var(--s-2); min-height: 28px; padding: var(--s-1) var(--s-4) 0; font-size: 12px; }
 .change-folder-path { font-family: var(--mono); color: color-mix(in srgb, var(--fg) 80%, var(--muted)); }
 .list-row.change-file { padding-left: calc(var(--s-4) + 18px); }
+
+.dash-update { margin-left: var(--s-2); }
+.dash-update.accent { color: var(--accent); }
+
+/* Stop Claude's current step and send now. */
+.stop-send { gap: var(--s-2); }
+.stop-square.small { width: 8px; height: 8px; }

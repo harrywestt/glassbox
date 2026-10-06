@@ -374,6 +374,7 @@ ipcMain.handle('session:exitPlan', (_e, tabId: string) => host(tabId).exitPlan()
 ipcMain.handle('app:version', () => app.getVersion())
 ipcMain.handle('update:state', () => updates.state)
 ipcMain.handle('update:install', () => updates.install())
+ipcMain.handle('update:check', () => updates.check())
 ipcMain.handle('session:interrupt', (_e, tabId: string) => host(tabId).interrupt())
 ipcMain.handle('session:continueAfterReset', (_e, tabId: string, on: boolean) => host(tabId).continueAfterReset(on))
 ipcMain.handle('session:setModel', (_e, tabId: string, model: string) => host(tabId).setModel(model))
@@ -609,8 +610,8 @@ function taskbarIcon(): string {
 app.whenReady().then(async () => {
   // After unlocking or waking, redraw at once (the graphics process may just have restarted).
   const repaint = () => win && !win.isDestroyed() && win.webContents.invalidate()
-  powerMonitor.on('unlock-screen', repaint)
-  powerMonitor.on('resume', repaint)
+  powerMonitor.on('unlock-screen', () => (repaint(), void updates.check()))
+  powerMonitor.on('resume', () => (repaint(), void updates.check()))
   // Dev aid: GLASSBOX_GPU_TEST=1 kills the graphics process a few times, as a screen lock or driver
   // reset does, and logs whether drawing stays on the graphics card.
   if (process.env.GLASSBOX_GPU_TEST) {

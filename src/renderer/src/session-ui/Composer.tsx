@@ -152,6 +152,17 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
   const predicted = !text && s.status === 'ready' && voice.state === 'idle' && !currentAsk ? s.suggestion : undefined
 
   const submit = () => sendPrompt(text)
+  /**
+   * Don't wait for the step Claude is on (a long command, a slow tool): stop it and send this now.
+   * Claude reads queued messages only between steps, so a plain Send waits for the step to end.
+   * Background agents keep going; only Claude's current step is stopped.
+   */
+  const stopAndSend = async () => {
+    const value = text
+    if (!value.trim()) return
+    await window.glassbox.session.interrupt(tab.id).catch(() => undefined)
+    await sendPrompt(value)
+  }
   const stop = () => void window.glassbox.session.interrupt(tab.id)
 
   const sendPrompt = async (value: string) => {
@@ -332,6 +343,12 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
             // The predicted next message: Tab sends it as is, → puts it in the box to edit first.
             if (predicted && e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey) return e.preventDefault(), void sendPrompt(predicted)
             if (predicted && e.key === 'ArrowRight') return e.preventDefault(), setText(predicted)
+            // Ctrl+Enter while Claude works: stop the current step and send this now.
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && s.status === 'running' && text.trim()) {
+              e.preventDefault()
+              void stopAndSend()
+              return
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               void submit()
@@ -378,6 +395,11 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
             <Icon name={voice.state === 'listening' || voice.state === 'starting' ? 'debug-stop' : 'mic'} />
           </button>
           {s.status === 'running' && text.trim() && <span className="hint">{tr('composer.queuedHint')}</span>}
+          {s.status === 'running' && text.trim() && (
+            <button className="chip-btn stop-send" onClick={() => void stopAndSend()} title={tr('composer.stopAndSendTitle')}>
+              <span className="stop-square small" aria-hidden /> {tr('composer.stopAndSend')}
+            </button>
+          )}
           {/* While Claude or its agents work and the box is empty, Send becomes Stop; typing turns it back into Send (queued). */}
           {(s.status === 'running' || stoppableTasks(s).length > 0) && !text.trim() && !attached.length ? (
             <StopButton />

@@ -141,6 +141,7 @@ const api = {
   update: {
     state: (): Promise<UpdateState> => invoke('update:state'),
     install: (): Promise<void> => invoke('update:install'),
+    check: (): Promise<void> => invoke('update:check'),
     onChange(callback: (s: UpdateState) => void) {
       const listener = (_e: IpcRendererEvent, s: UpdateState) => callback(s)
       ipcRenderer.on('glassbox:update', listener)
