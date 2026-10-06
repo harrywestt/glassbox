@@ -1,7 +1,7 @@
 import { setAppearance, useAppearance } from '../appearance'
 import { Segmented, Toggle } from '../components/ui'
 import { tr } from '../../../shared/i18n'
-import type { Automation } from '../../../shared/events'
+import type { Automation, HoldPolicy } from '../../../shared/events'
 
 /** Settings for what Glassbox does by itself: quick answers, the watchdog, and voice. Saved on this machine. */
 export function AutomationCard() {
@@ -18,6 +18,21 @@ export function AutomationCard() {
         </span>
         <Toggle checked={auto.quickAnswers} onChange={(quickAnswers) => set({ quickAnswers })} />
       </label>
+      <div className="setting">
+        <span className="setting-text">
+          <span className="setting-label">{tr('automationCard.holdEdits')}</span>
+          <span className="setting-note">{tr('automationCard.holdEditsNote')}</span>
+        </span>
+        <Segmented<HoldPolicy>
+          value={auto.holdEdits ?? 'ask'}
+          onChange={(holdEdits) => set({ holdEdits })}
+          options={[
+            { value: 'ask', label: tr('live.edit.policy.ask') },
+            { value: 'offplan', label: tr('live.edit.policy.offplan') },
+            { value: 'all', label: tr('live.edit.policy.all') }
+          ]}
+        />
+      </div>
       <label className="setting">
         <span className="setting-text">
           <span className="setting-label">{tr('automationCard.watchdog')}</span>

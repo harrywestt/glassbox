@@ -38,7 +38,7 @@ import { automation } from './automation'
 
 /** A message asking how something works (it gets a diagram as well as words). */
 const EXPLAIN = /\b(how does|how do (?:the|these|they)|explain|walk me through|architecture|data ?flow|what happens when|diagram|flow of)\b/i
-const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification']
+const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification', 'InstructionsLoaded']
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell'])
 /** Nothing at all from Claude (no words, no steps) for this long while it isn't running a tool. */
@@ -350,7 +350,10 @@ export class AgentHost {
         mcpServers: {
           glassbox: createGlassboxServer(
             (signal) => {
-              if (signal.type === 'task') this.currentTask = signal.summary
+              if (signal.type === 'task') {
+                this.currentTask = signal.summary
+                this.planFiles = (signal.steps ?? []).flatMap((st) => st.files ?? [])
+              }
               this.emit({ kind: 'glassbox', signal })
             },
             (q) => this.askUser(q),
@@ -376,6 +379,8 @@ export class AgentHost {
         enableFileCheckpointing: true,
         // Glassbox can stop agents one at a time, so Stop ends only Claude's reply and background agents keep going.
         perTaskStopAffordance: true,
+        // A one-line "what it's doing now" for each agent, for Live's lanes.
+        agentProgressSummaries: true,
         stderr: (text) => this.emit({ kind: 'stderr', text })
       }
     })
@@ -498,6 +503,44 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
    * Take back a message you sent while Claude was mid-step, before it reads it (to edit it).
    * False if Claude has already started on it.
    */
+  /** Edits you asked to hold, before Claude finished writing them; and the ones waiting on you now. */
+  private holdWanted = new Set<string>()
+  private holdWaiting = new Map<string, (d: { allow: boolean; reason?: string }) => void>()
+  /** Files the plan's steps say they'll change (set_current_task), for holding edits off the plan. */
+  private planFiles: string[] = []
+
+  /** Whether your hold setting makes this edit wait for you. */
+  private holdsByPolicy(toolName: string, input: Record<string, unknown>): boolean {
+    const policy = automation().holdEdits ?? 'ask'
+    if (policy === 'ask' || !EDIT_TOOLS.has(toolName)) return false
+    const path = String(input.file_path ?? input.notebook_path ?? '').replace(/\\/g, '/')
+    // Claude's own notes (plans, memory) never wait.
+    if (!path || /\/\.claude\//.test(path)) return false
+    if (policy === 'all') return true
+    const planned = this.planFiles.map((p) => p.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase())
+    return planned.length > 0 && !planned.some((p) => path.toLowerCase().endsWith(p))
+  }
+
+  /** Tool calls that have already started (too late to hold), newest last. */
+  private started: string[] = []
+
+  /**
+   * Hold an edit Claude is still writing: when it's about to run, it waits for you instead.
+   * False if it has already run.
+   */
+  hold(toolUseId: string): boolean {
+    if (this.started.includes(toolUseId)) return false
+    this.holdWanted.add(toolUseId)
+    return true
+  }
+
+  /** Let a held edit land, or turn it down (with your reason, which Claude reads). */
+  releaseHold(toolUseId: string, allow: boolean, reason?: string) {
+    const waiting = this.holdWaiting.get(toolUseId)
+    this.holdWanted.delete(toolUseId)
+    if (waiting) waiting({ allow, reason })
+  }
+
   async withdraw(uuid: string): Promise<boolean> {
     // Not in the SDK's published types, but on its Query (the cancel_async_message control request).
     const q = this.q as unknown as { cancelAsyncMessage?: (uuid: string) => Promise<boolean> } | undefined
@@ -539,6 +582,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       this.emit({ kind: 'checkin-resolved', id, answer: 'closed' })
     }
     this.checkins.clear()
+    // Anything you held is let go (turned down), so nothing waits on a closed session.
+    for (const id of [...this.holdWaiting.keys()]) this.releaseHold(id, false)
     this.reviewer.dispose()
     for (const t of this.sideTasks.values()) t.abort.abort()
     this.q = undefined
@@ -1163,6 +1208,27 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   private onPreToolUse: HookCallback = async (input, toolUseId) => {
     if (input.hook_event_name !== 'PreToolUse') return {}
+    const callId = (toolUseId ?? input.tool_use_id) as string | undefined
+    if (callId) {
+      this.started = [...this.started.slice(-199), callId]
+      if (this.holdsByPolicy(input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>)) this.holdWanted.add(callId)
+      // An edit you held while it was being written (or your hold setting caught): it waits here for you.
+      if (this.holdWanted.has(callId)) {
+        this.emit({ kind: 'held', toolUseId: callId })
+        const d = await new Promise<{ allow: boolean; reason?: string }>((resolve) => this.holdWaiting.set(callId, resolve))
+        this.holdWaiting.delete(callId)
+        this.holdWanted.delete(callId)
+        this.emit({ kind: 'hold-done', toolUseId: callId, allowed: d.allow })
+        if (!d.allow)
+          return {
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: `The user held this edit before it landed and turned it down.${d.reason ? ` Their note: ${d.reason}` : ''} Don't retry it as it was; take their note into account, or ask them.`
+            }
+          }
+      }
+    }
     if (input.tool_name.startsWith('mcp__glassbox__')) this.turnShown.add(input.tool_name.slice('mcp__glassbox__'.length))
     // Decks go through build_showcase so they land in the Showcase view, not a skill's own flow.
     const skill = input.tool_name === 'Skill' ? String((input.tool_input as { skill?: string } | undefined)?.skill ?? '') : ''

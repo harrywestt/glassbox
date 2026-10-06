@@ -1,10 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useSession } from '../views/SessionView'
 import { CHANGE_TOOLS, isClaudeOwnFile, type ToolCall } from '../session'
 import { baseName, relPath } from '../lib'
-
-/** A changed file's folder, relative to the project (empty for the project root). */
-const dirOf = (p: string) => p.split('/').slice(0, -1).join('/')
 import { DiffView } from '../components/Code'
 import type { editor } from 'monaco-editor'
 import { Empty, Icon, IconButton, Segmented, useFolded } from '../components/ui'
@@ -14,7 +11,11 @@ import { useArchitecture } from '../architecture'
 import type { Architecture } from '../../../shared/architecture'
 import { tr } from '../../../shared/i18n'
 
-type Row = { path: string; status: string; oldPath?: string; additions?: number; deletions?: number; claudeEdits: number }
+/** A changed file's folder, relative to the project (empty for the project root). */
+const dirOf = (p: string) => p.split('/').slice(0, -1).join('/')
+
+type Row = { path: string; abs: string; status: string; oldPath?: string; additions?: number; deletions?: number; claudeEdits: number }
+type Group = { dir: string; files: Row[]; additions: number; deletions: number; claude: number }
 
 const STATUS: Record<string, { label: string; cls: string; title: string }> = {
   A: { label: 'A', cls: 'ok', title: tr('changesPanel.statusAdded') },
@@ -24,9 +25,12 @@ const STATUS: Record<string, { label: string; cls: string; title: string }> = {
   '?': { label: 'U', cls: 'ok', title: tr('changesPanel.statusUntracked') }
 }
 
+/** Past this many files a long list shows the first ones, with a button for the rest (it stays quick). */
+const PAGE = 150
+
 /**
- * Everything changed on this branch, in one list, with Claude's changes from this session tagged.
- * Clicking a file opens its diff full size in the work area.
+ * Everything changed on this branch, in one list grouped by folder, with Claude's changes from this
+ * session marked. Clicking a file opens its diff full size in the work area.
  */
 export function ChangesPanel() {
   const { tab, s, openDiff, workPath, openRipple } = useSession()
@@ -35,6 +39,7 @@ export function ChangesPanel() {
   const [diffMode, setDiffMode] = useState<DiffMode>('merge-base')
   const [diff, setDiff] = useState<DiffResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
   const [onlyClaude, setOnlyClaude] = useState(false)
   const [filter, setFilter] = useState('')
   const [showUntracked, setShowUntracked] = useState(false)
@@ -49,12 +54,34 @@ export function ChangesPanel() {
     })
   }, [tab.cwd, repo])
 
+  // One diff at a time: while one runs, further changes ask for a single follow-up, not a pile of them.
+  const running = useRef(false)
+  const again = useRef(false)
   const load = useCallback(() => {
     if (!base) return
+    if (running.current) return void (again.current = true)
+    running.current = true
+    setLoading(true)
     setError(null)
-    window.glassbox.git.diff(tab.cwd, base, diffMode).then(setDiff, (e) => setError(String(e)))
+    window.glassbox.git
+      .diff(tab.cwd, base, diffMode)
+      .then(setDiff, (e) => setError(String(e)))
+      .finally(() => {
+        running.current = false
+        setLoading(false)
+        if (again.current) {
+          again.current = false
+          load()
+        }
+      })
   }, [tab.cwd, base, diffMode])
-  useEffect(load, [load, s.git?.dirty, s.git?.head])
+  useEffect(load, [load])
+  // Claude editing quickly changes the tree many times a second: refresh once it settles.
+  useEffect(() => {
+    const t = setTimeout(load, 700)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.git?.dirty, s.git?.head])
 
   // Files Claude edited this session, keyed by path relative to the repo root.
   const claude = useMemo(() => {
@@ -69,32 +96,54 @@ export function ChangesPanel() {
     return m
   }, [s.files, s.toolCalls, root])
 
-  const rows: Row[] = useMemo(() => {
-    const list: Row[] = (diff?.files ?? []).map((f) => ({ ...f, claudeEdits: claude.get(f.path)?.edits ?? 0 }))
+  const all: Row[] = useMemo(() => {
+    const list: Row[] = (diff?.files ?? []).map((f) => ({ ...f, abs: claude.get(f.path)?.abs ?? `${root}/${f.path}`, claudeEdits: claude.get(f.path)?.edits ?? 0 }))
     // Claude's edits that git can't show (not a repo, or a file outside it) still belong here. Inside the
     // repo, an edit missing from the diff has no net change (made then undone, or created then deleted).
-    for (const [rel, c] of claude) if (!list.some((r) => r.path === rel) && (!diff || rel.startsWith('..') || /^[a-z]:/i.test(rel))) list.push({ path: rel, status: 'M', claudeEdits: c.edits })
+    const listed = new Set(list.map((r) => r.path))
+    for (const [rel, c] of claude) if (!listed.has(rel) && (!diff || rel.startsWith('..') || /^[a-z]:/i.test(rel))) list.push({ path: rel, abs: c.abs, status: 'M', claudeEdits: c.edits })
     return list
-      .filter((r) => showUntracked || !isStrayUntracked(r))
-      .filter((r) => !onlyClaude || r.claudeEdits > 0)
-      .filter((r) => !filter || r.path.toLowerCase().includes(filter.toLowerCase()))
-      .sort((a, b) => b.claudeEdits - a.claudeEdits || a.path.localeCompare(b.path))
-  }, [diff, claude, onlyClaude, filter, showUntracked])
-  const strays = (diff?.files ?? []).filter((f) => f.status === '?' && !claude.has(f.path)).length
+  }, [diff, claude, root])
 
-  const total = diff ? diff.files.length - (showUntracked ? 0 : strays) : claude.size
-  const adds = diff?.files.reduce((n, f) => n + (f.additions ?? 0), 0) ?? 0
-  const dels = diff?.files.reduce((n, f) => n + (f.deletions ?? 0), 0) ?? 0
-  const absOf = (r: Row) => claude.get(r.path)?.abs ?? `${root}/${r.path}`
+  const strays = all.filter((r) => isStrayUntracked(r)).length
+  const rows = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    return all.filter((r) => (showUntracked || !isStrayUntracked(r)) && (!onlyClaude || r.claudeEdits > 0) && (!q || r.path.toLowerCase().includes(q)))
+  }, [all, onlyClaude, filter, showUntracked])
+
+  // Grouped by folder; a folder with Claude's changes in it comes first.
+  const groups: Group[] = useMemo(() => {
+    const by = new Map<string, Row[]>()
+    for (const r of rows) by.set(dirOf(r.path), [...(by.get(dirOf(r.path)) ?? []), r])
+    return [...by]
+      .map(([dir, files]) => ({
+        dir,
+        files: files.sort((a, b) => b.claudeEdits - a.claudeEdits || a.path.localeCompare(b.path)),
+        additions: files.reduce((n, f) => n + (f.additions ?? 0), 0),
+        deletions: files.reduce((n, f) => n + (f.deletions ?? 0), 0),
+        claude: files.filter((f) => f.claudeEdits).length
+      }))
+      .sort((a, b) => (b.claude ? 1 : 0) - (a.claude ? 1 : 0) || a.dir.localeCompare(b.dir))
+  }, [rows])
+
+  const counted = all.filter((r) => showUntracked || !isStrayUntracked(r))
+  const adds = counted.reduce((n, f) => n + (f.additions ?? 0), 0)
+  const dels = counted.reduce((n, f) => n + (f.deletions ?? 0), 0)
+
+  // The session's openDiff changes identity on every event; the list keeps one that doesn't.
+  const latest = useRef({ openDiff, base, diffMode })
+  latest.current = { openDiff, base, diffMode }
+  const open = useCallback((r: Row) => latest.current.openDiff({ path: r.abs, base: latest.current.base, diffMode: latest.current.diffMode, source: r.claudeEdits ? 'session' : 'branch' }), [])
 
   return (
     <div className="panel">
       {/* One row: what changed, against what (base branch and how, in one control), and refresh. */}
       <div className="changes-summary">
         <span className="small changes-count">
-          <strong>{tr('changesPanel.files', { count: total })}</strong>
+          <strong>{tr('changesPanel.files', { count: counted.length })}</strong>
           {diff && <> <span className="ok">+{adds}</span> <span className="err">−{dels}</span></>}
         </span>
+        {loading && diff && <span className="changes-refreshing" title={tr('changesPanel.refreshing')} aria-label={tr('changesPanel.refreshing')} />}
         <span className="spacer" />
         {repo && (
           <Select
@@ -111,7 +160,7 @@ export function ChangesPanel() {
             ])}
           />
         )}
-        {total > 0 && <IconButton icon="radio-tower" title={tr('changesPanel.rippleTitle')} onClick={() => openRipple()} />}
+        {counted.length > 0 && <IconButton icon="radio-tower" title={tr('changesPanel.rippleTitle')} onClick={() => openRipple()} />}
         {repo && <IconButton icon="refresh" title={tr('changesPanel.refresh')} onClick={load} />}
       </div>
       <div className="changes-filters">
@@ -124,70 +173,160 @@ export function ChangesPanel() {
           ]}
         />
         {/* Filtering only earns its space in a long list. */}
-        {(total > 10 || filter) && (
+        {(counted.length > 10 || filter) && (
           <div className="search grow">
             <Icon name="search" />
-            <input placeholder={tr('changesPanel.filterFiles')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <input placeholder={tr('changesPanel.filterFiles')} aria-label={tr('changesPanel.filterFiles')} value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
         )}
       </div>
       {error && <div className="note note-error">{error}</div>}
       {strays > 0 && (
         <div className="changes-untracked small muted">
-          {showUntracked
-            ? tr('changesPanel.showingUntracked', { count: strays })
-            : tr('changesPanel.untrackedHidden', { count: strays })}{' '}
-          <button className="link small" onClick={() => setShowUntracked(!showUntracked)}>{showUntracked ? tr('changesPanel.hideThem') : tr('changesPanel.showThem')}</button>
+          {showUntracked ? tr('changesPanel.showingUntracked', { count: strays }) : tr('changesPanel.untrackedHidden', { count: strays })}{' '}
+          <button className="link small" onClick={() => setShowUntracked(!showUntracked)}>
+            {showUntracked ? tr('changesPanel.hideThem') : tr('changesPanel.showThem')}
+          </button>
         </div>
       )}
       {repo && base && diff && <ArchitectureChanges base={base} diffMode={diffMode} diff={diff} />}
-      <div className="file-list full">
-        {repo && !diff && !error && <div className="muted pad">{tr('changesPanel.comparing')}</div>}
-        {(diff || !repo) && rows.length === 0 && (
-          <Empty icon={onlyClaude ? 'edit' : 'check'} title={onlyClaude ? tr('changesPanel.claudeNoChanges') : base ? tr('changesPanel.noDifferencesFrom', { base }) : tr('changesPanel.noChanges')}>
-            {tr('changesPanel.emptyBody')}
-          </Empty>
-        )}
-        {/* Grouped by folder, so where each change lives reads at a glance. */}
-        {[...rows.reduce((m, r) => m.set(dirOf(r.path), [...(m.get(dirOf(r.path)) ?? []), r]), new Map<string, typeof rows>())]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([dir, files]) => (
-            <div key={dir} className="change-folder">
-              <div className="change-folder-head" title={dir || tr('changesPanel.projectRoot')}>
-                <Icon name="folder" className="muted" />
-                <span className="grow ellipsis change-folder-path">{dir || tr('changesPanel.projectRoot')}</span>
-                <span className="muted small">{tr('changesPanel.folderFiles', { count: files.length })}</span>
-                {files.some((f) => f.additions !== undefined) && (
-                  <span className="small num">
-                    <span className="ok">+{files.reduce((n, f) => n + (f.additions ?? 0), 0)}</span> <span className="err">−{files.reduce((n, f) => n + (f.deletions ?? 0), 0)}</span>
-                  </span>
-                )}
-              </div>
-              {files.map((r) => {
-                const st = STATUS[r.status] ?? { label: r.status, cls: 'muted', title: r.status }
-                const abs = absOf(r)
-                return (
-                  <div
-                    key={r.path}
-                    className={abs === workPath ? 'list-row clickable selected change-file' : 'list-row clickable change-file'}
-                    onClick={() => openDiff({ path: abs, base, diffMode, source: r.claudeEdits ? 'session' : 'branch' })}
-                    title={r.oldPath ? `${r.oldPath} → ${r.path}` : r.path}
-                  >
-                    <span className={`status-letter ${st.cls}`} title={st.title}>{st.label}</span>
-                    <span className="grow ellipsis">{baseName(r.path)}</span>
-                    {r.additions !== undefined && (
-                      <span className="small num">
-                        <span className="ok">+{r.additions}</span> <span className="err">−{r.deletions}</span>
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-      </div>
+      {repo && !diff && !error && <div className="muted pad">{tr('changesPanel.comparing')}</div>}
+      {(diff || !repo) && rows.length === 0 && (
+        <Empty icon={onlyClaude ? 'edit' : 'check'} title={onlyClaude ? tr('changesPanel.claudeNoChanges') : base ? tr('changesPanel.noDifferencesFrom', { base }) : tr('changesPanel.noChanges')}>
+          {tr('changesPanel.emptyBody')}
+        </Empty>
+      )}
+      {rows.length > 0 && <FileList groups={groups} total={rows.length} selected={workPath} onOpen={open} root={tab.cwd} />}
     </div>
   )
+}
+
+/**
+ * The changed files by folder. Kept apart (and memoised) so a session event that doesn't change the
+ * list doesn't redraw it. Folders fold away; arrow keys move between files, Enter opens one.
+ */
+const FileList = memo(function FileList({ groups, total, selected, onOpen, root }: { groups: Group[]; total: number; selected: string | null; onOpen: (r: Row) => void; root: string }) {
+  const [folded, setFolded] = useState<Set<string>>(() => loadFoldedDirs(root))
+  const [limit, setLimit] = useState(PAGE)
+  const list = useRef<HTMLDivElement>(null)
+  const toggle = (dir: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev)
+      if (next.has(dir)) next.delete(dir)
+      else next.add(dir)
+      saveFoldedDirs(root, next)
+      return next
+    })
+  const allFolded = groups.length > 1 && groups.every((g) => folded.has(g.dir))
+  const foldAll = () => {
+    const next = allFolded ? new Set<string>() : new Set(groups.map((g) => g.dir))
+    saveFoldedDirs(root, next)
+    setFolded(next)
+  }
+  // Up and down move between the visible rows (folders and files); left and right fold a folder.
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const items = [...(list.current?.querySelectorAll<HTMLElement>('[data-nav]') ?? [])]
+    const i = items.indexOf(document.activeElement as HTMLElement)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      items[Math.min(items.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+    } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && i >= 0 && items[i].dataset.dir !== undefined) {
+      const dir = items[i].dataset.dir!
+      if ((e.key === 'ArrowLeft') !== folded.has(dir)) (e.preventDefault(), toggle(dir))
+    }
+  }
+  let shown = 0
+  return (
+    <div className="file-list full changes-list" ref={list} onKeyDown={onKey}>
+      {groups.length > 1 && (
+        <div className="changes-list-tools">
+          <button className="link small" onClick={foldAll}>
+            {allFolded ? tr('changesPanel.expandAll') : tr('changesPanel.collapseAll')}
+          </button>
+        </div>
+      )}
+      {groups.map((g) => {
+        if (shown >= limit) return null
+        const isFolded = folded.has(g.dir)
+        const files = isFolded ? [] : g.files.slice(0, Math.max(0, limit - shown))
+        shown += isFolded ? 1 : files.length
+        return (
+          <div key={g.dir} className="change-folder">
+            <button className="change-folder-head" data-nav data-dir={g.dir} aria-expanded={!isFolded} onClick={() => toggle(g.dir)} title={g.dir || tr('changesPanel.projectRoot')}>
+              <Icon name={isFolded ? 'chevron-right' : 'chevron-down'} className="muted" />
+              <span className="grow change-folder-path">{shortDir(g.dir) || tr('changesPanel.projectRoot')}</span>
+              {g.claude > 0 && (
+                <span className="change-claude" title={tr('changesPanel.claudeInFolder', { count: g.claude })}>
+                  <Icon name="sparkle" /> {g.claude}
+                </span>
+              )}
+              <span className="muted small">{tr('changesPanel.folderFiles', { count: g.files.length })}</span>
+              {g.files.some((f) => f.additions !== undefined) && (
+                <span className="small num">
+                  <span className="ok">+{g.additions}</span> <span className="err">−{g.deletions}</span>
+                </span>
+              )}
+            </button>
+            {files.map((r) => {
+              const st = STATUS[r.status] ?? { label: r.status, cls: 'muted', title: r.status }
+              return (
+                <button
+                  key={r.path}
+                  data-nav
+                  className={r.abs === selected ? 'list-row clickable selected change-file' : 'list-row clickable change-file'}
+                  aria-current={r.abs === selected ? 'true' : undefined}
+                  onClick={() => onOpen(r)}
+                  title={r.oldPath ? `${r.oldPath} → ${r.path}` : r.path}
+                >
+                  <span className={`status-letter ${st.cls}`} title={st.title}>
+                    {st.label}
+                  </span>
+                  <span className="grow ellipsis change-file-name">{baseName(r.path)}</span>
+                  {r.claudeEdits > 0 && (
+                    <span className="change-claude" title={tr('changesPanel.claudeEdited', { count: r.claudeEdits })}>
+                      <Icon name="sparkle" />
+                    </span>
+                  )}
+                  {r.additions !== undefined && (
+                    <span className="small num">
+                      <span className="ok">+{r.additions}</span> <span className="err">−{r.deletions}</span>
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )
+      })}
+      {total > limit && (
+        <button className="quiet wide changes-more" onClick={() => setLimit((n) => n + PAGE * 2)}>
+          {tr('changesPanel.showMore', { count: total - limit })}
+        </button>
+      )}
+    </div>
+  )
+})
+
+/** A long folder path keeps its start and end: "src/…/checkout/components". */
+function shortDir(dir: string): string {
+  const parts = dir.split('/')
+  return parts.length > 4 ? `${parts[0]}/…/${parts.slice(-2).join('/')}` : dir
+}
+
+const FOLD_KEY = (root: string) => `glassbox.changes.folded.${root}`
+function loadFoldedDirs(root: string): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(FOLD_KEY(root)) ?? '[]') as string[])
+  } catch {
+    return new Set()
+  }
+}
+function saveFoldedDirs(root: string, dirs: Set<string>) {
+  try {
+    localStorage.setItem(FOLD_KEY(root), JSON.stringify([...dirs].slice(-300)))
+  } catch {
+    /* folded for now only */
+  }
 }
 
 /**
@@ -205,9 +344,11 @@ function ArchitectureChanges({ base, diffMode, diff }: { base: string; diffMode:
   const sig = diff.files.map((f) => `${f.status}${f.path}${f.additions ?? ''}/${f.deletions ?? ''}`).join('|')
   useEffect(() => {
     let live = true
-    window.glassbox.architecture.diff(tab.cwd, base, diffMode, apiOnly).then((r) => live && setResult(r), () => live && setResult(null))
+    // It scans the project, so it waits for the edits to settle rather than running after each one.
+    const t = setTimeout(() => window.glassbox.architecture.diff(tab.cwd, base, diffMode, apiOnly).then((r) => live && setResult(r), () => live && setResult(null)), 1500)
     return () => {
       live = false
+      clearTimeout(t)
     }
   }, [tab.cwd, base, diffMode, sig, apiOnly])
   if (!result || !arch || (!diff.files.length && !result.error)) return null

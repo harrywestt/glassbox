@@ -99,6 +99,9 @@ export type SessionEvent =
   | { kind: 'limit'; hit: boolean; resetsAt?: number; type?: string; continueAt?: number }
   /** You took back a message before Claude read it (to edit it). */
   | { kind: 'withdrawn'; uuid: string }
+  /** You held an edit (Live's Hold it): Claude is stopped on it until you let it land or turn it down. */
+  | { kind: 'held'; toolUseId: string }
+  | { kind: 'hold-done'; toolUseId: string; allowed: boolean }
   /** The model the session now uses (you picked another). */
   | { kind: 'model'; model: string }
   | { kind: 'mcp'; servers: McpServerStatus[] }
@@ -309,6 +312,10 @@ export type Automation = {
   voiceAccurate: boolean
   /** Keep the microphone open for two minutes after speaking, so the next hold starts at once. */
   micWarm: boolean
+  /** When an edit waits for you before it lands: only when you press Hold, every edit, or edits to files the plan doesn't name. */
+  holdEdits: HoldPolicy
 }
 
-export const AUTOMATION_DEFAULTS: Automation = { quickAnswers: true, watchdog: true, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true }
+export type HoldPolicy = 'ask' | 'all' | 'offplan'
+
+export const AUTOMATION_DEFAULTS: Automation = { quickAnswers: true, watchdog: true, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask' }

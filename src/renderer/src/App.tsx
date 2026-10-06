@@ -92,6 +92,26 @@ export function App() {
     return () => (window.removeEventListener('error', onError), window.removeEventListener('unhandledrejection', onRejection))
   }, [])
 
+  // A popped-out Live window starts from this window's copy of its session.
+  useEffect(
+    () =>
+      window.glassbox.live.onSnapshotRequest(({ reqId, tabId }) => {
+        const s = stateRef.current.sessions[tabId]
+        const tab = stateRef.current.tabs.find((t) => t.id === tabId)
+        void window.glassbox.live.replySnapshot(reqId, s && tab ? { tab, s: { ...s, raw: [], stderr: [] } } : null)
+      }),
+    []
+  )
+  // Live (popped out) asked to show a diff, a file or Ripple: on that session, here.
+  useEffect(
+    () =>
+      window.glassbox.live.onShow(({ tabId, target }) => {
+        dispatch({ type: 'activate', id: tabId })
+        dispatch({ type: 'session', tabId, action: { type: 'show', target: target as OpenTarget } })
+      }),
+    []
+  )
+
   // A desktop notification click brings its session to the front.
   useEffect(() => window.glassbox.onFocusTab((id) => dispatch({ type: 'activate', id })), [])
 

@@ -289,7 +289,22 @@ export interface SessionState {
   suggestion?: string
   /** Index of the current user turn; tool calls and edits are tagged with it for checkpoints. */
   turn: number
+  /** Edits as Claude writes them, before they run (the tool input streaming in), newest last. */
+  writing?: Writing[]
+  /** Which tool call each thread (main, or an agent's id) is writing right now. */
+  writingNow?: Record<string, string>
+  /** Spells of thinking, per thread, for Live's lanes (end missing while it goes on). */
+  thinking?: { agentId: string | null; at: number; end?: number }[]
+  /** Edits you held (Live's Hold it) that now wait for you, by tool call id. */
+  held?: Record<string, number>
+  /** Instruction files Claude Code loaded (CLAUDE.md, rules), in the order they loaded. */
+  instructions?: { path: string; type: string; at: number }[]
+  /** When Claude started waiting on you (a question, a permission, a check-in or a held edit). */
+  waitSince?: number
 }
+
+/** An edit Claude is writing: the tool call's input, as much as has arrived. */
+export type Writing = { id: string; name: string; agentId: string | null; json: string; at: number }
 
 export type SessionAction =
   | { type: 'event'; event: SessionEvent }
@@ -353,6 +368,20 @@ const FILE_TOOLS = new Set(['Read', ...EDIT_TOOLS])
 export const HIDDEN_TOOLS = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'ToolSearch', 'mcp__glassbox__show_progress', 'mcp__glassbox__present_file', 'mcp__glassbox__set_current_task', 'mcp__glassbox__log_decision', 'mcp__glassbox__set_acceptance_criteria', 'mcp__glassbox__report_finding', 'mcp__glassbox__check_in', 'mcp__glassbox__pin_file'])
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
+  const next = reduce(state, action)
+  // How long Claude has been stopped on you, from the moment it first was.
+  const waiting = blockedOnYou(next)
+  if (waiting && next.waitSince === undefined) return { ...next, waitSince: Date.now() }
+  if (!waiting && next.waitSince !== undefined) return { ...next, waitSince: undefined }
+  return next
+}
+
+/** Claude can't carry on until you answer: a question, a permission, a check-in or an edit you held. */
+export function blockedOnYou(s: SessionState): boolean {
+  return !!(s.permissions.length || s.userQuestions?.length || s.checkins.some((c) => c.answer === undefined) || Object.keys(s.held ?? {}).length)
+}
+
+function reduce(state: SessionState, action: SessionAction): SessionState {
   const at = Date.now()
   switch (action.type) {
     case 'user-prompt': {
@@ -441,6 +470,13 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       return { ...state, commands: event.commands, models: event.models }
     case 'model':
       return { ...state, model: event.model }
+    case 'held':
+      return { ...state, held: { ...state.held, [event.toolUseId]: Date.now() } }
+    case 'hold-done': {
+      const held = { ...state.held }
+      delete held[event.toolUseId]
+      return { ...state, held }
+    }
     case 'withdrawn':
       return { ...state, readReceipts: { ...state.readReceipts, [event.uuid]: 'withdrawn' } }
     case 'limit':
@@ -533,6 +569,9 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
     case 'hook': {
       const h = event.input
       switch (h.hook_event_name) {
+        case 'InstructionsLoaded':
+          if ((state.instructions ?? []).some((i) => i.path === h.file_path)) return state
+          return { ...state, instructions: [...(state.instructions ?? []), { path: h.file_path, type: h.memory_type, at: Date.now() }] }
         case 'PreCompact':
           return note(state, tr('session.compacting'), 'warn')
         case 'PostCompact':
@@ -555,6 +594,30 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
 function applyStream(state: SessionState, msg: Extract<SDKMessage, { type: 'stream_event' }>): SessionState {
   const key = msg.parent_tool_use_id ?? 'main'
   const e = msg.event
+  const now = Date.now()
+  // Thinking ends when the next block starts (or this one stops).
+  const endThinking = (s: SessionState): SessionState =>
+    s.thinking?.some((t) => t.agentId === msg.parent_tool_use_id && t.end === undefined)
+      ? { ...s, thinking: s.thinking.map((t) => (t.agentId === msg.parent_tool_use_id && t.end === undefined ? { ...t, end: now } : t)) }
+      : s
+  if (e.type === 'content_block_stop') {
+    const writingNow = state.writingNow?.[key] ? { ...state.writingNow } : state.writingNow
+    if (writingNow) delete writingNow[key]
+    return endThinking({ ...state, writingNow })
+  }
+  if (e.type === 'content_block_start' && e.content_block.type === 'thinking')
+    state = { ...endThinking(state), thinking: [...(state.thinking ?? []).slice(-299), { agentId: msg.parent_tool_use_id, at: now }] }
+  // An edit starting to stream in: Live shows it as it's written, and you can hold it.
+  if (e.type === 'content_block_start' && e.content_block.type === 'tool_use' && CHANGE_TOOLS.has(e.content_block.name)) {
+    const w: Writing = { id: e.content_block.id, name: e.content_block.name, agentId: msg.parent_tool_use_id, json: '', at: now }
+    return { ...endThinking(state), writing: [...(state.writing ?? []).slice(-7), w], writingNow: { ...state.writingNow, [key]: w.id } }
+  }
+  if (e.type === 'content_block_delta' && e.delta.type === 'input_json_delta') {
+    const id = state.writingNow?.[key]
+    if (!id) return state
+    const part = e.delta.partial_json
+    return { ...state, writing: (state.writing ?? []).map((w) => (w.id === id ? { ...w, json: w.json + part } : w)) }
+  }
   if (e.type === 'content_block_start') {
     const kind = e.content_block.type === 'text' ? 'text' : e.content_block.type === 'thinking' ? 'thinking' : null
     if (!kind) return state
@@ -577,7 +640,6 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
   if (life.type === 'command_lifecycle' && life.command_uuid && life.state) {
     const seen = (state.readReceipts ?? {})[life.command_uuid]
     if (seen === 'withdrawn') return state
-    // Once read, it stays read (a later "completed" doesn't change that).
     // Read is final: a turn that's stopped later reports its message "cancelled", but Claude did read it.
     const next = seen === 'read' ? 'read' : life.state === 'started' || life.state === 'completed' ? 'read' : life.state === 'queued' ? 'queued' : life.state === 'cancelled' || life.state === 'discarded' || life.state === 'refused' ? 'dropped' : seen
     return next === seen ? state : { ...state, readReceipts: { ...state.readReceipts, [life.command_uuid]: next! } }

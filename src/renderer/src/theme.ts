@@ -1,3 +1,4 @@
+import { isHex, textOn } from './colour'
 import { useEffect, useMemo, useState } from 'react'
 import { accentFor, setAppearance, useAppearance, type Appearance } from './appearance'
 
@@ -82,7 +83,9 @@ function resolve(a: Appearance): ThemeTokens {
   const dark = a.theme === 'dark' || (a.theme === 'system' && media.matches)
   const base = THEMES[dark ? 'glassbox-dark' : 'glassbox-light']
   const accent = accentFor(a, base.base)
-  return { ...base, accent, accentSoft: `color-mix(in srgb, ${accent} ${base.base === 'dark' ? 16 : 12}%, transparent)` }
+  // A picked colour can be light or dark: text on it takes whichever of black and white reads.
+  const accentFg = isHex(a.accent) ? textOn(accent) : base.accentFg
+  return { ...base, accent, accentFg, accentSoft: `color-mix(in srgb, ${accent} ${base.base === 'dark' ? 16 : 12}%, transparent)` }
 }
 
 function apply(t: ThemeTokens) {

@@ -1,6 +1,6 @@
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
-import { claudeInBrowser, type SessionState } from '../session'
+import { blockedOnYou, claudeInBrowser, type SessionState } from '../session'
 import { useScrollStrip } from '../components/useScrollStrip'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { defaultView, tabTitle, type Tab } from '../tabs'
@@ -45,7 +45,7 @@ import { BrowserTab } from '../work/BrowserTab'
 import { activeBrowserTab, browserTabs, openInBrowser, waitForPage } from '../browser'
 import { GitPanel } from '../panels/GitPanel'
 import { loadAutoCommit } from '../panels/GitPanel'
-import { LiveTab } from '../work/LiveTab'
+import { LiveScreen, type LiveNav } from '../live/LiveScreen'
 import { useGuardrails } from '../review'
 import { TicketPanel } from '../panels/TicketPanel'
 import { MapTab } from '../work/MapTab'
@@ -126,7 +126,7 @@ const ROUTES: Partial<Record<PanelId, SideTab>> = {
  * The Everyday view keeps the conversation and what anyone would want from it (diagrams, decisions,
  * files, previews); the engineering views below only show when Claude brings one up.
  */
-const ENGINEERING_WORK = new Set(['map', 'ripple', 'flows', 'live', 'replay'])
+const ENGINEERING_WORK = new Set(['map', 'ripple', 'flows', 'replay'])
 const EVERYDAY_SIDE = new Set<SideTab>(['route', 'decisions', 'context', 'connectors', 'skills'])
 const EVERYDAY_WORK = new Set(['diagrams', 'showcase', 'attachments', 'preview'])
 
@@ -201,9 +201,10 @@ const WIDTH_KEY = 'glassbox.sideWidth2'
 const CONVERSATION: WorkTab = { id: 'conversation', kind: 'conversation' }
 const MAP: WorkTab = { id: 'map', kind: 'map' }
 const PLAN: WorkTab = { id: 'plan', kind: 'plan' }
-/** Only the conversation is always there; every other view is a tab you open (or Claude does) and can close. */
-const FIXED: WorkTab[] = [CONVERSATION]
-const isFixed = (t: WorkTab) => t.kind === 'conversation'
+const LIVE: WorkTab = { id: 'live', kind: 'live' }
+/** The conversation and Live are always there, side by side; every other view is a tab you open (or Claude does) and can close. */
+const FIXED: WorkTab[] = [CONVERSATION, LIVE]
+const isFixed = (t: WorkTab) => t.kind === 'conversation' || t.kind === 'live'
 
 /** The views the + in the tab strip opens, with what each is for. */
 type ViewKind = 'plan' | 'terminal' | 'map' | 'erd' | 'ripple' | 'flows' | 'live' | 'diagrams' | 'replay' | 'attachments' | 'preview' | 'showcase'
@@ -212,7 +213,6 @@ const VIEWS: { kind: ViewKind; label: string; note: string; everyday?: boolean }
   { kind: 'map', label: tr('sessionView.views.map.label'), note: tr('sessionView.views.map.note') },
   { kind: 'terminal', label: tr('sessionView.views.terminal.label'), note: tr('sessionView.views.terminal.note') },
   { kind: 'erd', label: tr('sessionView.views.erd.label'), note: tr('sessionView.views.erd.note') },
-  { kind: 'live', label: tr('sessionView.views.live.label'), note: tr('sessionView.views.live.note') },
   { kind: 'ripple', label: tr('sessionView.views.ripple.label'), note: tr('sessionView.views.ripple.note') },
   { kind: 'flows', label: tr('sessionView.views.flows.label'), note: tr('sessionView.views.flows.note') },
   { kind: 'diagrams', label: tr('sessionView.views.diagrams.label'), note: tr('sessionView.views.diagrams.note'), everyday: true },
@@ -273,7 +273,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const [moreOpen, setMoreOpen] = useState(false)
   // The conversation, plus any views you keep open for this project.
   const [kept, setKeptState] = useState<ViewKind[]>(() => keptViews(tab.cwd))
-  const [work, setWork] = useState<WorkTab[]>(() => [...FIXED, ...keptViews(tab.cwd).map(viewTab)])
+  const [work, setWork] = useState<WorkTab[]>(() => [...FIXED, ...keptViews(tab.cwd).filter((k) => k !== 'live').map(viewTab)])
   const [activeWork, setActiveWork] = useState('conversation')
   const [unseen, setUnseen] = useState<Set<string>>(new Set())
   // The main conversation by default; an agent's own work is one pick away (the switcher above it).
@@ -512,6 +512,20 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const updateRequirements = useCallback((fn: (r: Requirements) => Requirements) => actions.setRequirements(tab.id, fn(reqRef.current)), [actions, tab.id])
 
   const current = work.find((w) => w.id === activeWork) ?? CONVERSATION
+
+  // Where Live's buttons go, and "Tell Claude" fills the message box.
+  const liveNav = useMemo<LiveNav>(() => {
+    const abs = (p: string) => (/^([a-z]:|\/|\\)/i.test(p) ? p : `${tab.cwd.replace(/[\\/]+$/, '')}/${p.replace(/^\.\//, '')}`)
+    return {
+      show: (t) => {
+        const path = abs(t.path)
+        if (t.view === 'diff') openWork({ id: `diff:session:${path}`, kind: 'diff', path, base: null, diffMode: 'merge-base', source: 'session' })
+        else if (t.view === 'ripple') openWork({ id: 'ripple', kind: 'ripple', path })
+        else openWork({ id: `file:${path}`, kind: 'file', path })
+      },
+      tell: (text) => composerRef.current?.insert(text)
+    }
+  }, [tab.cwd, openWork])
   const workPath = current.kind === 'file' || current.kind === 'diff' ? current.path : null
 
   const ui = useMemo<SessionUi>(
@@ -665,6 +679,8 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               views={VIEWS.filter((v) => !everyday || v.everyday).map((v) => ({ ...v, has: viewHas(v.kind) }))}
               onOpenView={(kind) => openWork(kind === 'map' ? MAP : viewTab(kind))}
               onFullScreen={() => void workContent.current?.requestFullscreen().catch(() => {})}
+              onPopOut={current.kind === 'live' ? () => void window.glassbox.live.popout(tab.id, tab.title ?? tab.cwd) : undefined}
+              yourTurn={blockedOnYou(session)}
             />
             {claudeNote && claudeNote.work === current.id && (
               <div className="claude-note" role="status">
@@ -686,7 +702,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
                 {appearance.awayDigest && <AwayDigest active={active && current.kind === 'conversation'} />}
                 <Timeline />
               </div>
-              {current.kind === 'live' && <LiveTab />}
+              {current.kind === 'live' && <LiveScreen tab={tab} s={session} nav={liveNav} active={active} />}
               {current.kind === 'diagrams' && <DiagramsPanel />}
               {current.kind === 'replay' && <ReplayPanel />}
               {current.kind === 'showcase' && <ShowcasePanel />}
@@ -705,7 +721,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               </ErrorBoundary>
               {current.kind === 'diff' && <DiffTab key={current.id} path={current.path} base={current.base} diffMode={current.diffMode} source={current.source} />}
             </div>
-            <Composer compact={current.kind !== 'conversation'} />
+            <Composer compact={current.kind !== 'conversation'} liveOwnsAsks={current.kind === 'live'} />
           </section>
           {sideOpen && (
             <>
@@ -879,7 +895,9 @@ function WorkTabs({
   onKeep,
   views,
   onOpenView,
-  onFullScreen
+  onFullScreen,
+  onPopOut,
+  yourTurn
 }: {
   tabs: WorkTab[]
   active: string
@@ -894,6 +912,10 @@ function WorkTabs({
   views: { kind: ViewKind; label: string; note: string; has: boolean }[]
   onOpenView: (kind: ViewKind) => void
   onFullScreen: () => void
+  /** Live only: open it in its own window. */
+  onPopOut?: () => void
+  /** Claude is stopped on you: the Conversation tab says so while you're on another. */
+  yourTurn: boolean
 }) {
   const [picking, setPicking] = useState(false)
   const strip = useScrollStrip<HTMLDivElement>(active)
@@ -915,6 +937,7 @@ function WorkTabs({
             <Icon name={WORK_ICON[t.kind]} />
             <span className="ellipsis">{workTitle(t)}</span>
             {t.kind === 'diagrams' && diagramCount > 0 && <span className="count">{diagramCount}</span>}
+            {t.kind === 'conversation' && yourTurn && t.id !== active && <span className="your-turn-lamp" role="img" aria-label={tr('sessionView.yourTurn')} title={tr('sessionView.yourTurn')} />}
             {t.kind === 'preview' && claudeBrowsing && (
               <span className="claude-browsing" title={tr('sessionView.claudeBrowsing')} aria-label={tr('sessionView.claudeBrowsing')}>
                 <Icon name="sparkle" />
@@ -940,6 +963,11 @@ function WorkTabs({
         ))}
       </div>
       <span className="spacer" />
+      {onPopOut && (
+        <button className="quiet pop-out" onClick={onPopOut} title={tr('sessionView.popOutTitle')}>
+          <Icon name="link-external" /> {tr('sessionView.popOut')}
+        </button>
+      )}
       <IconButton icon="screen-full" title={tr('sessionView.fullScreenTitle')} onClick={onFullScreen} />
       {/* Outside the scrolling list, so its menu isn't clipped. */}
       <div className="work-tab-add">
