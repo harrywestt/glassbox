@@ -2419,7 +2419,19 @@
     "showEarlier_other": "Show {count} earlier messages",
     "backgroundTaskOne": ", waiting on {what}",
     "backgroundTaskUnnamed": "a background task",
-    "backgroundTasks": ", waiting on {n} background tasks"
+    "backgroundTasks": ", waiting on {n} background tasks",
+    "receipt": {
+      "readTitle": "Claude has read this",
+      "queued": "Waiting for Claude to finish its current step",
+      "queuedTitle": "Claude reads it as soon as its current step ends (Stop and send skips the wait)",
+      "dropped": "Not read: stopped before Claude got to it",
+      "droppedTitle": "A Stop cleared this before Claude read it. Send it again if you still want it.",
+      "edit": "Edit",
+      "editTitle": "Take this back before Claude reads it and put it in the message box to change",
+      "sendNow": "Send now",
+      "sendNowTitle": "Stop Claude’s current step so it reads this straight away (background agents keep going)",
+      "tooLate": "Claude has just started on it."
+    }
   },
   "titleBar": {
     "dashboardTip": "Dashboard (Ctrl+T)",

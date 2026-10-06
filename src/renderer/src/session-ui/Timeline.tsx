@@ -32,6 +32,8 @@ export function toolLabel(name: string): string {
 const agentOf = (item: TimelineItem): string | null => ('agentId' in item ? item.agentId : null)
 
 function visible(item: TimelineItem, filter: AgentFilter, s: SessionState): boolean {
+  // A message you took back to edit: its text is in the message box now.
+  if (item.kind === 'user' && item.uuid && s.readReceipts?.[item.uuid] === 'withdrawn') return false
   // A service's errors are shown under Services, not in the conversation.
   if (item.kind === 'service-error') return false
   if (filter === 'all') return true
@@ -429,7 +431,7 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
       return (
         // Your message, then (when Claude was tied up) a line or quick answer underneath it, never beside it.
         <div className="user-turn">
-          <UserMessage text={item.text} uuid={item.uuid} turn={item.turn} />
+          <UserMessage text={item.text} uuid={item.uuid} turn={item.turn} receipt={item.uuid ? s.readReceipts?.[item.uuid] : undefined} />
           {item.uuid && s.quickAnswers?.[item.uuid] && s.quickAnswers[item.uuid].status !== 'failed' ? <QuickAnswer a={s.quickAnswers[item.uuid]} /> : <WaitingOnAgent at={item.at} s={s} />}
         </div>
       )
@@ -521,8 +523,16 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
   }
 }
 
-function UserMessage({ text: sent, uuid, turn }: { text: string; uuid?: string; turn: number }) {
-  const { showPanel, setCheckpoint, openAttachment } = useSession()
+function UserMessage({ text: sent, uuid, turn, receipt }: { text: string; uuid?: string; turn: number; receipt?: 'queued' | 'read' | 'dropped' | 'withdrawn' }) {
+  const { tab, showPanel, setCheckpoint, openAttachment, composerRef } = useSession()
+  const [late, setLate] = useState(false)
+  // Still waiting for Claude: take it back to edit, or stop Claude's current step so it's read now.
+  const edit = async () => {
+    if (!uuid) return
+    if (await window.glassbox.session.withdraw(tab.id, uuid)) composerRef.current?.insert(withoutBangs(sent))
+    else setLate(true)
+  }
+  const sendNow = () => void window.glassbox.session.interrupt(tab.id)
   // What you wrote, and the files you attached to it (shown as thumbnails and names, not paths).
   // Without the output of commands you ran ("! command"): those show as their own cards.
   const { text, paths } = splitAttachments(withoutBangs(sent))
@@ -557,6 +567,24 @@ function UserMessage({ text: sent, uuid, turn }: { text: string; uuid?: string; 
           </div>
         )}
         {text && <div className="msg user" data-turn={turn}>{text}</div>}
+        {/* Whether Claude has read it yet: an eye once it has, a clock while it waits for the current step. */}
+        {receipt && receipt !== 'withdrawn' && (
+          <span className={`read-receipt ${receipt}`} title={tr(`timeline.receipt.${receipt}Title`)}>
+            <Icon name={receipt === 'read' ? 'eye' : receipt === 'queued' ? 'clock' : 'circle-slash'} />
+            {receipt !== 'read' && <span>{tr(`timeline.receipt.${receipt}`)}</span>}
+            {receipt === 'queued' && (
+              <>
+                <button className="link small" onClick={() => void edit()} title={tr('timeline.receipt.editTitle')}>
+                  {tr('timeline.receipt.edit')}
+                </button>
+                <button className="link small" onClick={sendNow} title={tr('timeline.receipt.sendNowTitle')}>
+                  {tr('timeline.receipt.sendNow')}
+                </button>
+              </>
+            )}
+            {late && receipt === 'queued' && <span>{tr('timeline.receipt.tooLate')}</span>}
+          </span>
+        )}
       </div>
     </div>
   )

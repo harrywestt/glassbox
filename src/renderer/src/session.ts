@@ -274,6 +274,8 @@ export interface SessionState {
   permissions: PermissionRequest[]
   /** Questions Claude asked (AskUserQuestion) that wait for your answers. */
   userQuestions?: { id: string; questions: UserQuestion[] }[]
+  /** Whether Claude has read each message you sent, by its uuid. */
+  readReceipts?: Record<string, 'queued' | 'read' | 'dropped' | 'withdrawn'>
   /** Claude's own to-do list (Claude Code's TodoWrite, or TaskCreate/TaskUpdate), as it keeps it. */
   todos?: Todo[]
   /** Each subagent's own to-do list, by the agent's id. */
@@ -439,6 +441,8 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       return { ...state, commands: event.commands, models: event.models }
     case 'model':
       return { ...state, model: event.model }
+    case 'withdrawn':
+      return { ...state, readReceipts: { ...state.readReceipts, [event.uuid]: 'withdrawn' } }
     case 'limit':
       return { ...state, limitHit: event.hit ? { resetsAt: event.resetsAt, type: event.type, continueAt: event.continueAt } : undefined }
     case 'mcp':
@@ -567,6 +571,17 @@ function applyStream(state: SessionState, msg: Extract<SDKMessage, { type: 'stre
 
 function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, when?: number): SessionState {
   const at = when ?? Date.now()
+  // Where a message you sent has got to: queued (Claude is mid-step), started (Claude has read it),
+  // completed, or cancelled (a Stop swept it away before Claude read it).
+  const life = msg as unknown as { type: string; command_uuid?: string; state?: string }
+  if (life.type === 'command_lifecycle' && life.command_uuid && life.state) {
+    const seen = (state.readReceipts ?? {})[life.command_uuid]
+    if (seen === 'withdrawn') return state
+    // Once read, it stays read (a later "completed" doesn't change that).
+    // Read is final: a turn that's stopped later reports its message "cancelled", but Claude did read it.
+    const next = seen === 'read' ? 'read' : life.state === 'started' || life.state === 'completed' ? 'read' : life.state === 'queued' ? 'queued' : life.state === 'cancelled' || life.state === 'discarded' || life.state === 'refused' ? 'dropped' : seen
+    return next === seen ? state : { ...state, readReceipts: { ...state.readReceipts, [life.command_uuid]: next! } }
+  }
   switch (msg.type) {
     case 'stream_event':
       return applyStream(state, msg)

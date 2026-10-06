@@ -50,6 +50,8 @@ const api = {
     commitNow: (tabId: string): Promise<void> => invoke('session:commitNow', tabId),
     interrupt: (tabId: string): Promise<void> => invoke('session:interrupt', tabId),
     setModel: (tabId: string, model: string): Promise<void> => invoke('session:setModel', tabId, model),
+    /** Take back a message Claude hasn't read yet (false if it already has). */
+    withdraw: (tabId: string, uuid: string): Promise<boolean> => invoke('session:withdraw', tabId, uuid),
     /** Carry on by itself once the usage limit resets (or stop waiting). */
     continueAfterReset: (tabId: string, on: boolean): Promise<void> => invoke('session:continueAfterReset', tabId, on),
     stopTask: (tabId: string, taskId: string): Promise<void> => invoke('session:stopTask', tabId, taskId),

@@ -377,6 +377,7 @@ ipcMain.handle('update:install', () => updates.install())
 ipcMain.handle('update:check', () => updates.check())
 ipcMain.handle('session:interrupt', (_e, tabId: string) => host(tabId).interrupt())
 ipcMain.handle('session:continueAfterReset', (_e, tabId: string, on: boolean) => host(tabId).continueAfterReset(on))
+ipcMain.handle('session:withdraw', (_e, tabId: string, uuid: string) => host(tabId).withdraw(uuid))
 ipcMain.handle('session:setModel', (_e, tabId: string, model: string) => host(tabId).setModel(model))
 ipcMain.handle('session:stopTask', (_e, tabId: string, taskId: string) => host(tabId).stopTask(taskId))
 ipcMain.handle('session:close', (_e, tabId: string) => {
