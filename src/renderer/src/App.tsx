@@ -52,6 +52,8 @@ export const useActions = () => useContext(ActionsContext)!
 export function App() {
   const theme = useTheme()
   const [state, dispatch] = useReducer(appReducer, undefined, loadTabs)
+  // Dev aid: screenshot runs can feed a session synthetic events (to test long sessions).
+  if (window.glassbox.snapshots) (window as unknown as { __dispatch: typeof dispatch }).__dispatch = dispatch
   const opened = useRef(new Set<string>())
   const [launcher, setLauncher] = useState<{ cwd?: string } | null>(null)
   const stateRef = useRef(state)
