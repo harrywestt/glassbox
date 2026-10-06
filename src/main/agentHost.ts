@@ -36,6 +36,8 @@ import type { BrowserBridge } from './browserTools'
 import { tr } from '../shared/i18n'
 import { automation } from './automation'
 
+/** A message asking how something works (it gets a diagram as well as words). */
+const EXPLAIN = /\b(how does|how do (?:the|these|they)|explain|walk me through|architecture|data ?flow|what happens when|diagram|flow of)\b/i
 const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification']
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell'])
@@ -244,6 +246,11 @@ export class AgentHost {
   private autoCommitOn = true
   /** Files Claude edited this turn, and this session (for Commit now). */
   private turnEdits = new Set<string>()
+  /** Glassbox views Claude used this turn (show_diagram, show_progress…), and reminders already given. */
+  private turnShown = new Set<string>()
+  private turnNudged = new Set<string>()
+  /** Tasks Claude has added this turn (TaskCreate, one call each). */
+  private turnTasks = 0
   private sessionEdits = new Set<string>()
   /** What the transcript won't remember (shell edits, cost), saved beside it for a resume. */
   private sid?: string
@@ -320,7 +327,11 @@ export class AgentHost {
       ...Object.fromEntries(OBSERVED_HOOKS.map((event) => [event, [{ hooks: [this.onHook] }]])),
       UserPromptSubmit: [{ hooks: [this.onPromptSubmit] }],
       PreToolUse: [{ hooks: [this.onPreToolUse] }],
-      PostToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell', hooks: [this.onFileChange] }]
+      PostToolUse: [
+        { matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell', hooks: [this.onFileChange] },
+        { matcher: 'TodoWrite|TaskCreate|mcp__glassbox__set_current_task', hooks: [this.onTaskList] }
+      ],
+      Stop: [{ hooks: [this.onStop] }]
     }
 
     const q = query({
@@ -1006,6 +1017,9 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
           if (this.autoCommitOn && this.turnEdits.size) void this.commit([...this.turnEdits])
           else void this.refreshGit()
           this.turnEdits.clear()
+          this.turnShown.clear()
+          this.turnNudged.clear()
+          this.turnTasks = 0
         }
       }
     } catch (err) {
@@ -1025,10 +1039,47 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     return {}
   }
 
-  private onPromptSubmit: HookCallback = async () => {
+  private onPromptSubmit: HookCallback = async (input) => {
     void gitInfo(this.cwd).then((g) => (this.turnBranch = g.branch))
-    const additionalContext = requirementsContext(this.requirements)
+    const prompt = input.hook_event_name === 'UserPromptSubmit' ? String(input.prompt ?? '') : ''
+    // A question about how things work gets a picture as well as words.
+    const explain = EXPLAIN.test(prompt) ? 'Glassbox: this asks how something works. Answer with a show_diagram (or show_flow for a request path) alongside your text, and open_tab it.' : ''
+    const additionalContext = [requirementsContext(this.requirements), explain].filter(Boolean).join('\n\n')
     return additionalContext ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext } } : {}
+  }
+
+  /** Claude laid out several steps: a reminder (once a turn) to show them as a loader. */
+  private onTaskList: HookCallback = async (input) => {
+    if (input.hook_event_name !== 'PostToolUse' || this.turnShown.has('show_progress') || this.turnNudged.has('progress')) return {}
+    const given = input.tool_input as { todos?: { status?: string }[]; steps?: { status?: string }[] } | undefined
+    const open = (list?: { status?: string }[]) => (list ?? []).filter((t) => t.status !== 'completed' && t.status !== 'done').length
+    const steps = input.tool_name === 'TodoWrite' ? open(given?.todos) : input.tool_name === 'TaskCreate' ? ++this.turnTasks : open(given?.steps)
+    if (steps < 3) return {}
+    this.turnNudged.add('progress')
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PostToolUse',
+        additionalContext: `Glassbox: that's ${steps} steps. If they'll take more than a minute or two, show_progress now (step 1 of ${steps}, one id for the whole job) and move it on as each finishes, so the user sees how far along you are.`
+      }
+    }
+  }
+
+  /**
+   * Claude is about to finish a turn that changed several parts of the project without showing any
+   * of it: one nudge to draw it before the summary (it can decline when a picture adds nothing).
+   */
+  private onStop: HookCallback = async (input) => {
+    if (input.hook_event_name !== 'Stop' || input.stop_hook_active || this.turnNudged.has('picture')) return {}
+    if (['show_diagram', 'show_flow', 'show_on_map', 'show_plan_on_map'].some((t) => this.turnShown.has(t))) return {}
+    // Code only: notes, docs and lockfiles don't need drawing.
+    const code = [...this.turnEdits].filter((p) => !/\.(md|mdx|txt|lock)$/i.test(p))
+    const areas = new Set(code.map((p) => relative(this.cwd, isAbsolute(p) ? p : resolve(this.cwd, p)).replace(/\\/g, '/').split('/').slice(0, 2).join('/')))
+    if (code.length < 4 || areas.size < 3) return {}
+    this.turnNudged.add('picture')
+    return {
+      decision: 'block',
+      reason: `Glassbox: this turn changed ${code.length} files across ${areas.size} parts of the project and showed none of it. Before you finish, call show_flow (if a request or user action now moves differently) or show_diagram (how the changed parts fit together), then give your summary. If a picture wouldn't help (the change is small or doesn't touch how anything works), end your turn now without writing anything more.`
+    }
   }
 
   private onFileChange: HookCallback = async (input) => {
@@ -1112,6 +1163,11 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   private onPreToolUse: HookCallback = async (input, toolUseId) => {
     if (input.hook_event_name !== 'PreToolUse') return {}
+    if (input.tool_name.startsWith('mcp__glassbox__')) this.turnShown.add(input.tool_name.slice('mcp__glassbox__'.length))
+    // Decks go through build_showcase so they land in the Showcase view, not a skill's own flow.
+    const skill = input.tool_name === 'Skill' ? String((input.tool_input as { skill?: string } | undefined)?.skill ?? '') : ''
+    if (/showcase/i.test(skill))
+      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'In Glassbox, showcases are built with the build_showcase tool: call it now (with a name, and any notes from the user) and follow the instructions it returns, then call showcase_ready.' } }
     // Claude's own questions (AskUserQuestion): asked in the box under the conversation, in every
     // permission mode, and the answers go back with the tool call the way the CLI's prompt sends them.
     if (input.tool_name === 'AskUserQuestion') {
