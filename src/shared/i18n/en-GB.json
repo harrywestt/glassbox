@@ -2544,7 +2544,6 @@
       "assumptionDetail": "Claude assumed this. Is it right?",
       "assumptionTell": "About your assumption, \"{title}\": ",
       "viewChange": "View the change",
-      "fine": "It's fine",
       "fineTitle": "Dismiss this",
       "ask": "Ask Claude to check",
       "askTitle": "Sends Claude this check now; it reports back in the conversation",
