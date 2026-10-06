@@ -2009,7 +2009,8 @@
     "claudeBrowsing": "Claude is using the Browser",
     "yourTurn": "Your turn",
     "popOut": "Pop out",
-    "popOutTitle": "Open Live in its own window, for a second screen"
+    "popOutTitle": "Open Live in its own window, for a second screen",
+    "popOutLive": "Pop out Live"
   },
   "sessionsOverview": {
     "columnPlan": "Plan",
