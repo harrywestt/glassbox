@@ -20,7 +20,8 @@ import type { AccountsResult, ArchDiff, ModuleExplain, ProjectDecision, Standup,
   TicketActionResult,
   TicketResult,
   TicketTransitionsResult,
-  UpdateState
+  UpdateState,
+  Automation
 } from '../shared/events'
 import type { GitHubSummary } from '../shared/github'
 import type { BranchPr, LaunchPr } from '../main/launcher'
@@ -49,6 +50,8 @@ const api = {
     commitNow: (tabId: string): Promise<void> => invoke('session:commitNow', tabId),
     interrupt: (tabId: string): Promise<void> => invoke('session:interrupt', tabId),
     setModel: (tabId: string, model: string): Promise<void> => invoke('session:setModel', tabId, model),
+    /** Carry on by itself once the usage limit resets (or stop waiting). */
+    continueAfterReset: (tabId: string, on: boolean): Promise<void> => invoke('session:continueAfterReset', tabId, on),
     stopTask: (tabId: string, taskId: string): Promise<void> => invoke('session:stopTask', tabId, taskId),
     setMode: (tabId: string, mode: AccessMode): Promise<void> => invoke('session:setMode', tabId, mode),
     exitPlan: (tabId: string): Promise<void> => invoke('session:exitPlan', tabId),
@@ -234,10 +237,12 @@ const api = {
     pathFor: (file: File): string => webUtils.getPathForFile(file)
   },
   openExternal: (url: string): Promise<void> => invoke('shell:openExternal', url),
+  logError: (where: string, text: string): Promise<void> => invoke('log:error', where, text),
   appVersion: (): Promise<string> => invoke('app:version'),
   setTitleBar: (color: string, symbolColor: string): Promise<void> => invoke('window:titleBar', color, symbolColor),
   setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
   setNotifications: (on: boolean): Promise<void> => invoke('settings:notifications', on),
+  setAutomation: (next: Partial<Automation>): Promise<void> => invoke('settings:automation', next),
   platform: process.platform,
   defaultCwd: process.cwd(),
   onFocusTab(callback: (tabId: string) => void) {

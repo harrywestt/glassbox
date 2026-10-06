@@ -119,6 +119,24 @@ const recentAsks = (root: string): string[] => {
     return []
   }
 }
+/** Features you've asked the map about, kept per project with their answers (newest first), so you can go back to one without asking again. */
+const SAVED_MAX = 10
+const savedKey = (root: string) => `glassbox.mapFeatures.${root.toLowerCase()}`
+const savedFeatures = (root: string): MapAnswer[] => {
+  try {
+    return JSON.parse(localStorage.getItem(savedKey(root)) ?? '[]') as MapAnswer[]
+  } catch {
+    return []
+  }
+}
+const saveFeatures = (root: string, list: MapAnswer[]) => {
+  try {
+    localStorage.setItem(savedKey(root), JSON.stringify(list.slice(0, SAVED_MAX)))
+  } catch {
+    /* a nicety */
+  }
+}
+
 const rememberAsk = (root: string, q: string) => {
   try {
     localStorage.setItem(recentKey(root), JSON.stringify([q, ...recentAsks(root).filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 8)))
@@ -288,6 +306,8 @@ export function MapTab() {
   const [asking, setAsking] = useState<{ q: string; since: number } | null>(null)
   const [askError, setAskError] = useState<string | null>(null)
   const [askText, setAskText] = useState('')
+  const [saved, setSaved] = useState<MapAnswer[]>([])
+  useEffect(() => setSaved(arch ? savedFeatures(arch.root) : []), [arch?.root])
   // The feature's step list, folded by default: the map's numbered bands already show the steps.
   const [stepsOpen, setStepsOpen] = useState(false)
   const [, tick] = useState(0)
@@ -630,9 +650,26 @@ export function MapTab() {
     setSel(null)
     setAskText('')
     rememberAsk(arch.root, q)
+    // Kept for next time (an answer to the same question replaces the old one), if it found anything.
+    const list = [...(a.steps.length ? [a] : []), ...savedFeatures(arch.root).filter((x) => x.question.toLowerCase() !== q.toLowerCase())]
+    saveFeatures(arch.root, list)
+    setSaved(list)
+  }
+  const openSaved = (f: MapAnswer) => {
+    askedFor.set(tab.id, f)
+    setFeature(f)
+    setMode('ask')
+    setSel(null)
+  }
+  const forget = (f: MapAnswer) => {
+    if (!arch) return
+    const list = savedFeatures(arch.root).filter((x) => x.question !== f.question)
+    saveFeatures(arch.root, list)
+    setSaved(list)
   }
   const recent = arch ? recentAsks(arch.root) : []
   const askBox = arch && arch.modules.length > 0 && (
+    <>
     <form
       className={asking ? 'map-ask busy' : 'map-ask'}
       onSubmit={(e) => {
@@ -667,6 +704,22 @@ export function MapTab() {
         </button>
       )}
     </form>
+    {saved.length > 0 && !asking && (
+      <div className="map-saved" aria-label={tr('mapTab.saved.label')}>
+        <span className="muted small">{tr('mapTab.saved.label')}</span>
+        {saved.map((f) => (
+          <span key={f.question} className={feature?.question === f.question && mode === 'ask' ? 'map-saved-chip on' : 'map-saved-chip'}>
+            <button className="map-saved-open" title={f.question} onClick={() => openSaved(f)}>
+              {f.title}
+            </button>
+            <button className="map-saved-x" title={tr('mapTab.saved.forget')} aria-label={tr('mapTab.saved.forget')} onClick={() => forget(f)}>
+              <Icon name="close" />
+            </button>
+          </span>
+        ))}
+      </div>
+    )}
+    </>
   )
   const scopeBar = arch && arch.modules.length > 0 && scope && (
     <div className="map-bar">

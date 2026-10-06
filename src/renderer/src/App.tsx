@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { THEMES, useTheme, type ThemeTokens } from './theme'
+import { ErrorBoundary, logError } from './components/ErrorBoundary'
 import { appReducer, DASHBOARD, loadTabs, rememberView, saveTabs, type AppAction, type SessionViewMode } from './tabs'
 import { disposeTerminal } from './work/TerminalTab'
 import { TitleBar } from './components/TitleBar'
@@ -80,6 +81,15 @@ export function App() {
       off()
       flush()
     }
+  }, [])
+
+  // Errors outside any panel (an event handler, a promise nobody awaited) go to the log too.
+  useEffect(() => {
+    const onError = (e: ErrorEvent) => logError('window', e.error ?? e.message)
+    const onRejection = (e: PromiseRejectionEvent) => logError('promise', e.reason)
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onRejection)
+    return () => (window.removeEventListener('error', onError), window.removeEventListener('unhandledrejection', onRejection))
   }, [])
 
   // A desktop notification click brings its session to the front.
@@ -207,7 +217,7 @@ export function App() {
             </div>
             {state.tabs.map((tab) => (
               <div key={tab.id} className="view" hidden={tab !== activeTab}>
-                {opened.current.has(tab.id) && <SessionView tab={tab} session={state.sessions[tab.id]} active={tab === activeTab} peers={state.tabs.filter((t) => t.id !== tab.id && state.sessions[t.id]).map((t) => ({ tab: t, s: state.sessions[t.id] }))} />}
+                {opened.current.has(tab.id) && <ErrorBoundary where="session"><SessionView tab={tab} session={state.sessions[tab.id]} active={tab === activeTab} peers={state.tabs.filter((t) => t.id !== tab.id && state.sessions[t.id]).map((t) => ({ tab: t, s: state.sessions[t.id] }))} /></ErrorBoundary>}
               </div>
             ))}
           </div>

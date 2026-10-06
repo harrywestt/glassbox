@@ -95,6 +95,8 @@ export type SessionEvent =
   | { kind: 'permission-cancelled'; id: string } // answered, aborted or session closed
   | { kind: 'glassbox'; signal: GlassboxSignal }
   | { kind: 'capabilities'; commands: SlashCommand[]; models: ModelInfo[]; account?: AccountInfo }
+  /** A usage limit refused Claude's request; `continueAt`: Glassbox will carry on then (you asked it to). */
+  | { kind: 'limit'; hit: boolean; resetsAt?: number; type?: string; continueAt?: number }
   /** The model the session now uses (you picked another). */
   | { kind: 'model'; model: string }
   | { kind: 'mcp'; servers: McpServerStatus[] }
@@ -289,3 +291,21 @@ export type ModuleExplain = { why: Record<string, string>; error?: string }
 
 /** A newer Glassbox: downloading (Windows), ready to restart into (Windows), or out to download (Mac). */
 export type UpdateState = { status: 'idle' } | { status: 'downloading'; version: string; percent: number } | { status: 'ready'; version: string } | { status: 'available'; version: string }
+
+/** The automatic features you can turn off or tune (Settings, Automation). */
+export type Automation = {
+  /** Answer a message at once from a copy of the conversation while Claude is tied up. */
+  quickAnswers: boolean
+  /** Watch for stuck work: nudge Claude about quiet background work, stop agents with no progress. */
+  watchdog: boolean
+  /** Minutes of no progress before Claude is asked to check on background work. */
+  watchdogNudgeMinutes: number
+  /** Minutes of no progress before an agent Claude is waiting on is stopped (0: never). */
+  watchdogStopMinutes: number
+  /** The final voice transcript uses the larger, more accurate model. */
+  voiceAccurate: boolean
+  /** Keep the microphone open for two minutes after speaking, so the next hold starts at once. */
+  micWarm: boolean
+}
+
+export const AUTOMATION_DEFAULTS: Automation = { quickAnswers: true, watchdog: true, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true }

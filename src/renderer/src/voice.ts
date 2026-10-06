@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { tr } from '../../shared/i18n'
+import { getAppearance } from './appearance'
 import captureWorklet from './capture-worklet.js?url&no-inline'
 
 /** 'starting': the mic is opening, so nothing is recorded yet (only on the first hold in a while). */
@@ -9,6 +10,8 @@ export type ModelStatus = { status: 'downloading' | 'loading' | 'ready'; progres
 const SAMPLE_RATE = 16_000
 /** After you finish speaking the mic stays open this long, so the next hold starts at once. */
 const WARM_MS = 2 * 60_000
+/** Keeping the mic open between holds can be turned off (Settings, Automation). */
+const keepWarm = () => getAppearance().automation.micWarm
 /** Audio kept from just before a hold starts recording, so the first word isn't lost while Space is held down. */
 const PRE_ROLL_S = 0.5
 /** How often the words so far are transcribed while you talk. */
@@ -98,7 +101,7 @@ function closeMicSoon() {
   clearTimeout(closeTimer)
   closeTimer = setTimeout(() => {
     if (!sink) dropMic()
-  }, WARM_MS)
+  }, keepWarm() ? WARM_MS : 0)
 }
 
 /** Samples at the mic's rate, as the 16 kHz the speech model wants (a proper resample, not a pick of every nth sample). */

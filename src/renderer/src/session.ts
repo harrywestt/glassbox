@@ -269,6 +269,8 @@ export interface SessionState {
   /** costBase: the cost before this run of the session (a resume starts the query's own count at 0). */
   usage: { contextTokens: number; outputTokens: number; costUsd: number; turns: number; costBase?: number }
   rateLimits: Record<string, SDKRateLimitInfo>
+  /** A usage limit refused Claude: when it resets, and when Glassbox will carry on (if you asked it to). */
+  limitHit?: { resetsAt?: number; type?: string; continueAt?: number }
   permissions: PermissionRequest[]
   /** Questions Claude asked (AskUserQuestion) that wait for your answers. */
   userQuestions?: { id: string; questions: UserQuestion[] }[]
@@ -353,7 +355,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
   switch (action.type) {
     case 'user-prompt': {
       const turn = state.turn + 1
-      return { ...state, turn, status: 'running', busySince: at, suggestion: undefined, timeline: [...state.timeline, { kind: 'user', text: action.text, uuid: action.uuid, at, turn }] }
+      return { ...state, turn, status: 'running', busySince: at, suggestion: undefined, limitHit: state.limitHit?.continueAt ? state.limitHit : undefined, timeline: [...state.timeline, { kind: 'user', text: action.text, uuid: action.uuid, at, turn }] }
     }
     case 'comment': {
       const decisions =
@@ -437,6 +439,8 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       return { ...state, commands: event.commands, models: event.models }
     case 'model':
       return { ...state, model: event.model }
+    case 'limit':
+      return { ...state, limitHit: event.hit ? { resetsAt: event.resetsAt, type: event.type, continueAt: event.continueAt } : undefined }
     case 'mcp':
       return { ...state, mcp: event.servers }
     case 'context':
@@ -873,7 +877,7 @@ function historyPrompt(state: SessionState, text: string, uuid: string | undefin
   const command = text.match(/<command-name>([^<]+)<\/command-name>/)
   let shown: string | undefined
   if (command) shown = `${command[1]} ${text.match(/<command-args>([^<]*)<\/command-args>/)?.[1] ?? ''}`.trim()
-  else if (text.trim() && !text.startsWith('<') && !text.startsWith('Caveat:') && !text.startsWith('[Request interrupted') && !text.startsWith('[Glassbox watchdog')) shown = text
+  else if (text.trim() && !text.startsWith('<') && !text.startsWith('Caveat:') && !text.startsWith('[Request interrupted') && !text.startsWith('[Glassbox')) shown = text
   if (!shown) return state
   // An answer or comment sent from Glassbox: tie it back to what it was about, so a question you
   // answered stays answered when the session is reopened.

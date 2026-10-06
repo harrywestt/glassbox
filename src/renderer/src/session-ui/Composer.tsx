@@ -9,6 +9,7 @@ import { Loaders } from './Loaders'
 import { QuestionsCard } from './QuestionsCard'
 import { StopButton } from './StopButton'
 import { ModelPicker } from './ModelPicker'
+import { LimitCard } from './LimitCard'
 import { stoppableTasks } from '../tally'
 import { tr } from '../../../shared/i18n'
 
@@ -194,6 +195,7 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
 
   return (
     <div className="composer">
+      <LimitCard />
       <QuestionsCard />
       <Loaders />
       <AskDock asks={asks} index={askIndex} onIndex={setAskIndex} answering={answering} onAnswering={setAnswering} compact={compact} />

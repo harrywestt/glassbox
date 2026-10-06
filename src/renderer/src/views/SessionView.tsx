@@ -2,6 +2,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRe
 import { useActions, type AppActions } from '../App'
 import { claudeInBrowser, type SessionState } from '../session'
 import { useScrollStrip } from '../components/useScrollStrip'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 import { defaultView, tabTitle, type Tab } from '../tabs'
 import type { DiffMode, FileMark, Requirements, SideTaskSpec } from '../../../shared/events'
 import { sessionBrief } from '../side'
@@ -677,6 +678,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               <button className="fs-exit" onClick={() => void document.exitFullscreen().catch(() => {})} title={tr('sessionView.exitFullScreenTitle')}>
                 <Icon name="screen-normal" /> {tr('sessionView.exitFullScreen')}
               </button>
+              <ErrorBoundary key={current.id} where={`view:${current.kind}`}>
               {current.kind === 'map' && <MapTab />}
               {current.kind === 'ripple' && <RippleTab key={current.module ?? current.path ?? 'latest'} module={current.module} path={current.path} onPick={(m) => openWork({ id: 'ripple', kind: 'ripple', module: m })} />}
               {current.kind === 'flows' && <FlowTab />}
@@ -700,6 +702,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
                 </div>
               )}
               {current.kind === 'commit' && <CommitTab key={current.id} sha={current.sha} />}
+              </ErrorBoundary>
               {current.kind === 'diff' && <DiffTab key={current.id} path={current.path} base={current.base} diffMode={current.diffMode} source={current.source} />}
             </div>
             <Composer compact={current.kind !== 'conversation'} />
@@ -753,7 +756,9 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
                     <Icon name="layout-sidebar-right-off" />
                   </button>
                 </nav>
-                <SideBody key={side} tab={side} />
+                <ErrorBoundary key={side} where={`side:${side}`}>
+                  <SideBody tab={side} />
+                </ErrorBoundary>
               </aside>
             </>
           )}
