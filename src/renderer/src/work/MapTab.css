@@ -215,3 +215,12 @@ button.map-conn-file:hover:not(:disabled) { background: none; text-decoration: u
 .map-flow-arrowhead { fill: var(--accent); }
 .map-stop circle { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
 .map-stop text { fill: var(--bg); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Features you've asked about before, one click to reopen. */
+.map-saved { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); margin: var(--s-2) var(--s-4) 0; }
+.map-saved-chip { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); overflow: hidden; }
+.map-saved-chip.on { border-color: var(--accent); background: var(--accent-soft); }
+.map-saved-open { height: 24px; padding: 0 var(--s-1) 0 var(--s-3); border: none; background: none; font-size: 12px; color: var(--fg); }
+.map-saved-x { width: 22px; height: 24px; padding: 0; border: none; background: none; color: var(--muted); opacity: .6; }
+.map-saved-chip:hover .map-saved-x { opacity: 1; }
+.map-saved-x .codicon { font-size: 12px; }

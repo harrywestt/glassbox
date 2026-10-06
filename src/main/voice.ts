@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app } from 'electron'
+import { automation } from './automation'
 
 /**
  * Speech models: English Whisper, quantised, downloaded once into the app's data folder. The small
@@ -52,7 +53,7 @@ function loadModel(model: string, onProgress?: (p: VoiceProgress) => void): Prom
  */
 export function prepareVoice(onProgress: (p: VoiceProgress) => void): Promise<Transcriber> {
   const live = loadModel(LIVE_MODEL, onProgress)
-  void live.then(() => loadModel(FINAL_MODEL)).catch(() => undefined)
+  if (automation().voiceAccurate) void live.then(() => loadModel(FINAL_MODEL)).catch(() => undefined)
   return live
 }
 
@@ -81,7 +82,7 @@ async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void, 
   // Too short to be speech, or effectively silent: Whisper hallucinates on these, so skip them.
   if (audio.length < 16_000 * 0.8 || !hasSpeech(audio)) return ''
   // The final transcript uses the larger model once it's ready (until its first download finishes, the small one).
-  const asr = !live && ready.has(FINAL_MODEL) ? await loadModel(FINAL_MODEL) : await prepareVoice(onProgress)
+  const asr = !live && automation().voiceAccurate && ready.has(FINAL_MODEL) ? await loadModel(FINAL_MODEL) : await prepareVoice(onProgress)
   const out = await asr(audio, { chunk_length_s: 30, stride_length_s: 5 })
   const text = (Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text).trim()
   // Whisper emits these for silence or noise.

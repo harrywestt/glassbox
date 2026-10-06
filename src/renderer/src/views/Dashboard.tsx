@@ -1,6 +1,7 @@
 import { AccountsButton } from './AccountsButton'
 import { setPinned, usePinned } from '../pins'
 import { StandupButton } from './StandupButton'
+import { AutomationCard } from './AutomationCard'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useActions } from '../App'
 import type { SessionState } from '../session'
@@ -152,6 +153,7 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
             </section>
 
             <AppearanceCard />
+            <AutomationCard />
 
           </div>
 

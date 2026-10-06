@@ -1768,3 +1768,21 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .model-menu-label .codicon { margin-left: auto; color: var(--accent); }
 .model-menu-note { font-size: 12px; color: var(--muted); line-height: 1.4; }
 .model-menu-foot { padding: var(--s-2) var(--s-2) var(--s-1); border-top: 1px solid var(--border); margin-top: var(--s-1); }
+
+/* A usage limit stopped Claude: when it resets, and carrying on then. */
+.limit-card { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); padding: var(--s-2) var(--s-3); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border)); border-radius: var(--r-lg); background: var(--surface); font-size: 13px; }
+
+/* A panel that hit an error: says so and reloads itself, while the rest carries on. */
+.panel-error { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); margin: var(--s-4); padding: var(--s-4); border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border)); border-radius: var(--r-lg); background: var(--surface); }
+.panel-error-detail { font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+
+/* Settings with a line explaining them, and settings that belong to the one above. */
+.setting-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.setting-note { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.setting.sub { padding-left: var(--s-4); }
+
+/* Changes, grouped by folder: the folder as a heading, its files beneath. */
+.change-folder + .change-folder { border-top: 1px solid var(--border); }
+.change-folder-head { display: flex; align-items: center; gap: var(--s-2); min-height: 28px; padding: var(--s-1) var(--s-4) 0; font-size: 12px; }
+.change-folder-path { font-family: var(--mono); color: color-mix(in srgb, var(--fg) 80%, var(--muted)); }
+.list-row.change-file { padding-left: calc(var(--s-4) + 18px); }

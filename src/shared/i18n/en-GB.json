@@ -203,6 +203,21 @@
     "fromClaude": "From Claude",
     "fromYou": "From you"
   },
+  "automationCard": {
+    "title": "Automation",
+    "quickAnswers": "Quick answers",
+    "quickAnswersNote": "When Claude is tied up waiting on an agent, answer your message at once from a copy of the conversation.",
+    "watchdog": "Watch for stuck work",
+    "watchdogNote": "Ask Claude to check on background work that’s gone quiet, and stop an agent that makes no progress.",
+    "nudgeAfter": "Ask Claude to check after",
+    "stopAfter": "Stop a stuck agent after",
+    "minutes": "{n} min",
+    "never": "Never",
+    "voiceAccurate": "More accurate dictation",
+    "voiceAccurateNote": "Use the larger speech model for the final text (a one-time 240 MB download, a second or two slower).",
+    "micWarm": "Keep the microphone ready",
+    "micWarmNote": "Leave it open for two minutes after you speak, so the next hold starts at once."
+  },
   "awayDigest": {
     "title": "While you were away",
     "minutes": "{mins} min",
@@ -335,7 +350,10 @@
     "boundaryBreaks_other": "{count} boundary breaks",
     "andMore": "and {n} more",
     "openOnMap": "Open on the map",
-    "loadingDiff": "Loading diff…"
+    "loadingDiff": "Loading diff…",
+    "projectRoot": "Project root",
+    "folderFiles_one": "1 file",
+    "folderFiles_other": "{count} files"
   },
   "code": {
     "commentOnSelectionTip": "Select lines in the file, then comment on them",
@@ -674,6 +692,11 @@
       "optional": ", optional"
     }
   },
+  "errorBoundary": {
+    "title": "This part of Glassbox hit a problem.",
+    "body": "The rest of the app carries on. The error has been saved to Glassbox’s log.",
+    "reload": "Reload this panel"
+  },
   "explorerPanel": {
     "title": "Heatmap",
     "readTimes_one": "read {count} time",
@@ -954,6 +977,14 @@
     "minutesSeconds": "{m}m {s}s",
     "hoursMinutesPadded": "{h}h {m}m"
   },
+  "limitCard": {
+    "title": "Usage limit reached.",
+    "resets": "Your {window} resets at {at}.",
+    "noTime": "Claude can carry on once it resets.",
+    "waiting": "Glassbox will tell Claude to carry on at {at}.",
+    "continue": "Continue when it resets",
+    "cancel": "Don’t continue"
+  },
   "liveTab": {
     "nothingChanged": "Nothing changed yet",
     "nothingChangedBody": "When Claude edits a file it shows up here straight away, with its full diff, and updates after every edit.",
@@ -1022,7 +1053,16 @@
     "watchdogNudged_one": "Glassbox asked Claude to check on “{what}”: it has shown no progress for a while.",
     "watchdogNudged_other": "Glassbox asked Claude to check on {count} background tasks that have shown no progress for a while.",
     "watchdogStoppedAgent_one": "Glassbox stopped “{what}”: it made no progress for a minute. Claude has been told.",
-    "watchdogStoppedAgent_other": "Glassbox stopped “{what}”: it made no progress for {count} minutes. Claude has been told."
+    "watchdogStoppedAgent_other": "Glassbox stopped “{what}”: it made no progress for {count} minutes. Claude has been told.",
+    "limitNear": "You’ve used {percent}% of your {window}. It resets at {at}.",
+    "limitNearNoTime": "You’ve used {percent}% of your {window}.",
+    "limitWindow": {
+      "five_hour": "5-hour limit",
+      "seven_day": "weekly limit",
+      "seven_day_opus": "weekly Opus limit",
+      "seven_day_sonnet": "weekly Sonnet limit",
+      "other": "usage limit"
+    }
   },
   "mainArchDiff": {
     "notRepo": "Not a git repository"
@@ -1402,6 +1442,10 @@
       "valueText": "{time} in: {label}",
       "now": "Now",
       "backToNow": "Back to now"
+    },
+    "saved": {
+      "label": "Features you’ve looked at",
+      "forget": "Forget this feature"
     }
   },
   "mediaView": {

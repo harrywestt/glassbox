@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { CHANGE_TOOLS, isClaudeOwnFile, type ToolCall } from '../session'
 import { baseName, relPath } from '../lib'
+
+/** A changed file's folder, relative to the project (empty for the project root). */
+const dirOf = (p: string) => p.split('/').slice(0, -1).join('/')
 import { DiffView } from '../components/Code'
 import type { editor } from 'monaco-editor'
 import { Empty, Icon, IconButton, Segmented, useFolded } from '../components/ui'
@@ -145,28 +148,43 @@ export function ChangesPanel() {
             {tr('changesPanel.emptyBody')}
           </Empty>
         )}
-        {rows.map((r) => {
-          const st = STATUS[r.status] ?? { label: r.status, cls: 'muted', title: r.status }
-          const abs = absOf(r)
-          return (
-            <div
-              key={r.path}
-              className={abs === workPath ? 'list-row clickable selected' : 'list-row clickable'}
-              onClick={() => openDiff({ path: abs, base, diffMode, source: r.claudeEdits ? 'session' : 'branch' })}
-              title={r.oldPath ? `${r.oldPath} → ${r.path}` : r.path}
-            >
-              <span className={`status-letter ${st.cls}`} title={st.title}>{st.label}</span>
-              <span className="grow ellipsis">
-                {baseName(r.path)} <span className="muted small">{r.path.split('/').slice(0, -1).join('/')}</span>
-              </span>
-              {r.additions !== undefined && (
-                <span className="small num">
-                  <span className="ok">+{r.additions}</span> <span className="err">−{r.deletions}</span>
-                </span>
-              )}
+        {/* Grouped by folder, so where each change lives reads at a glance. */}
+        {[...rows.reduce((m, r) => m.set(dirOf(r.path), [...(m.get(dirOf(r.path)) ?? []), r]), new Map<string, typeof rows>())]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([dir, files]) => (
+            <div key={dir} className="change-folder">
+              <div className="change-folder-head" title={dir || tr('changesPanel.projectRoot')}>
+                <Icon name="folder" className="muted" />
+                <span className="grow ellipsis change-folder-path">{dir || tr('changesPanel.projectRoot')}</span>
+                <span className="muted small">{tr('changesPanel.folderFiles', { count: files.length })}</span>
+                {files.some((f) => f.additions !== undefined) && (
+                  <span className="small num">
+                    <span className="ok">+{files.reduce((n, f) => n + (f.additions ?? 0), 0)}</span> <span className="err">−{files.reduce((n, f) => n + (f.deletions ?? 0), 0)}</span>
+                  </span>
+                )}
+              </div>
+              {files.map((r) => {
+                const st = STATUS[r.status] ?? { label: r.status, cls: 'muted', title: r.status }
+                const abs = absOf(r)
+                return (
+                  <div
+                    key={r.path}
+                    className={abs === workPath ? 'list-row clickable selected change-file' : 'list-row clickable change-file'}
+                    onClick={() => openDiff({ path: abs, base, diffMode, source: r.claudeEdits ? 'session' : 'branch' })}
+                    title={r.oldPath ? `${r.oldPath} → ${r.path}` : r.path}
+                  >
+                    <span className={`status-letter ${st.cls}`} title={st.title}>{st.label}</span>
+                    <span className="grow ellipsis">{baseName(r.path)}</span>
+                    {r.additions !== undefined && (
+                      <span className="small num">
+                        <span className="ok">+{r.additions}</span> <span className="err">−{r.deletions}</span>
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          )
-        })}
+          ))}
       </div>
     </div>
   )

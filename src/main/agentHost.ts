@@ -34,6 +34,7 @@ import { isPublicEntry } from '../shared/architecture'
 import { isReadOnlyShell } from '../shared/readonlyShell'
 import type { BrowserBridge } from './browserTools'
 import { tr } from '../shared/i18n'
+import { automation } from './automation'
 
 const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification']
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
@@ -43,12 +44,11 @@ const IDLE_ALERT_MS = 5 * 60_000
 /** Calls that wait by design (an agent, a monitor, a wait for output): never "stuck". */
 const WAITS_ON_PURPOSE = new Set(['Agent', 'Task', 'Monitor', 'TaskOutput', 'BashOutput', 'TaskStop', 'ScheduleWakeup', 'mcp__glassbox__browser_wait', 'mcp__glassbox__check_in', 'AskUserQuestion', 'ExitPlanMode'])
 
-/** The watchdog: background work that's shown no progress this long, while Claude is idle, gets Claude to check on it. */
-const QUIET_NUDGE_MS = 10 * 60_000
+/** Quick answers use Sonnet while the conversation is under this many tokens (its window is 200k). */
+const QUICK_SONNET_MAX_TOKENS = 150_000
+
 /** …and at most this often per task. */
 const NUDGE_EVERY_MS = 20 * 60_000
-/** An agent Claude is waiting on that's made no progress this long is stopped, so Claude can carry on. */
-const AGENT_STALL_MS = 15 * 60_000
 
 /** A single tool (a build, a test run) running this long. */
 const TOOL_ALERT_MS = 15 * 60_000
@@ -423,7 +423,7 @@ export class AgentHost {
 
   private maybeQuickAnswer(text: string, uuid: string) {
     // Slash commands, and Glassbox's own notes to Claude (the watchdog), aren't yours to answer.
-    if (!this.sid || text.trim().startsWith('/') || text.startsWith('[Glassbox')) return
+    if (!automation().quickAnswers || !this.sid || text.trim().startsWith('/') || text.startsWith('[Glassbox')) return
     this.quickQueue.push({ text, uuid, at: Date.now() })
     // Give Claude a moment to pick it up itself (between steps it reads new messages straight away);
     // a burst of messages waits for the last one, then gets one answer.
@@ -463,8 +463,9 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
           resume: sid,
           forkSession: true,
           persistSession: false,
-          // The session's own model: a long conversation may only fit its (larger) context window.
-          ...(this.sessionModel ? { model: this.sessionModel } : {}),
+          // Sonnet (far cheaper) while the conversation fits its window comfortably; a very long one
+          // needs the session's own model, whose window it already fits in.
+          ...(this.contextTokens < QUICK_SONNET_MAX_TOKENS ? { model: 'sonnet' } : this.sessionModel ? { model: this.sessionModel } : {}),
           tools: ['Read', 'Grep', 'Glob'],
           allowedTools: ['Read', 'Grep', 'Glob'],
           settingSources: [],
@@ -771,6 +772,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   /** Tools Claude has started and not yet had a result for, with when each started. */
   private openTools = new Map<string, number>()
+  /** The conversation's size in tokens, as of Claude's last request. */
+  private contextTokens = 0
   /** The model the session runs on (from its init message). */
   private sessionModel?: string
 
@@ -826,7 +829,12 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     }
     const content = (msg.type === 'assistant' || msg.type === 'user') && Array.isArray(msg.message?.content) ? (msg.message.content as { type: string; id?: string; name?: string; tool_use_id?: string }[]) : []
     const main = (m as { parent_tool_use_id?: string | null }).parent_tool_use_id == null
-    if (main && msg.type === 'assistant') this.mainActivity = Date.now()
+    if (main && msg.type === 'assistant') {
+      this.mainActivity = Date.now()
+      // How big the conversation is now (what the last request sent), to pick the quick answer's model.
+      const u = (msg.message as { usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } } | undefined)?.usage
+      if (u) this.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+    }
     for (const b of content as { type: string; id?: string; name?: string; tool_use_id?: string; input?: { run_in_background?: boolean } }[]) {
       // An agent's own steps are tracked one by one; the call that started it stays open throughout, so it isn't.
       if (b.type === 'tool_use' && b.id && b.name && !WAITS_ON_PURPOSE.has(b.name)) this.openTools.set(b.id, Date.now())
@@ -885,6 +893,10 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
    */
   private watchdog() {
     const now = Date.now()
+    const { watchdog: on, watchdogNudgeMinutes, watchdogStopMinutes } = automation()
+    if (!on) return
+    const QUIET_NUDGE_MS = watchdogNudgeMinutes * 60_000
+    const AGENT_STALL_MS = watchdogStopMinutes ? watchdogStopMinutes * 60_000 : Infinity
     if (!this.busy) {
       const quiet = [...this.live.values()].filter((e) => e.background && now - e.at > QUIET_NUDGE_MS && (!e.nudged || now - e.nudged > NUDGE_EVERY_MS))
       if (quiet.length && this.input && this.q) {
@@ -913,11 +925,58 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     }
   }
 
+  /** Usage-limit warnings already shown (by window and threshold), and a pending carry-on after a reset. */
+  private limitWarned = new Set<string>()
+  private limitHitAt?: number
+  private continueTimer?: ReturnType<typeof setTimeout>
+
+  /**
+   * Usage limits, as Claude Code reports them: a warning at 80% and 95% of a window (once each,
+   * updated in place), and when a request is refused, the reset time so you can have Glassbox carry on then.
+   */
+  private watchLimits(msg: { type: string; rate_limit_info?: { status?: string; resetsAt?: number; rateLimitType?: string; utilization?: number } }) {
+    if (msg.type !== 'rate_limit_event' || !msg.rate_limit_info) return
+    const info = msg.rate_limit_info
+    const window = info.rateLimitType ?? 'limit'
+    const resets = info.resetsAt ? new Date(info.resetsAt * (info.resetsAt < 1e12 ? 1000 : 1)) : undefined
+    const at = resets ? resets.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : undefined
+    const label = tr(`mainAgentHost.limitWindow.${['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet'].includes(window) ? window : 'other'}`)
+    if (info.status === 'rejected') {
+      this.limitHitAt = resets?.getTime()
+      this.emit({ kind: 'limit', hit: true, resetsAt: resets?.getTime(), type: label })
+      return
+    }
+    const used = info.utilization === undefined ? undefined : info.utilization > 1 ? info.utilization : info.utilization * 100
+    const step = used === undefined ? (info.status === 'allowed_warning' ? 80 : 0) : used >= 95 ? 95 : used >= 80 ? 80 : 0
+    if (!step || this.limitWarned.has(`${window}:${step}`)) return
+    this.limitWarned.add(`${window}:${step}`)
+    this.emit({
+      kind: 'alert',
+      id: `limit-${window}`,
+      level: step >= 95 ? 'warn' : 'info',
+      text: at ? tr('mainAgentHost.limitNear', { percent: Math.round(used ?? step), window: label, at }) : tr('mainAgentHost.limitNearNoTime', { percent: Math.round(used ?? step), window: label })
+    })
+  }
+
+  /** Carry on by itself once the limit resets (a minute after, to be safe), or stop waiting (`at` undefined). */
+  continueAfterReset(on: boolean) {
+    clearTimeout(this.continueTimer)
+    if (!on || !this.limitHitAt) return this.emit({ kind: 'limit', hit: !!this.limitHitAt, resetsAt: this.limitHitAt })
+    const at = this.limitHitAt + 60_000
+    this.continueTimer = setTimeout(() => {
+      this.limitHitAt = undefined
+      this.emit({ kind: 'limit', hit: false })
+      void this.send('[Glassbox, not from the user] Your usage limit has reset. Continue the task you were working on when the limit was reached; do not repeat work that is already complete.', { uuid: randomUUID() }).catch(() => undefined)
+    }, Math.max(1_000, at - Date.now()))
+    this.emit({ kind: 'limit', hit: true, resetsAt: this.limitHitAt, continueAt: at })
+  }
+
   private async pump(q: Query) {
     try {
       for await (const msg of q) {
         this.touch()
         this.trackTools(msg)
+        this.watchLimits(msg as never)
         this.emit({ kind: 'sdk', msg })
         if ('session_id' in msg && typeof msg.session_id === 'string') this.sid = msg.session_id
         if (msg.type === 'result') {

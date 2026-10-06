@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { tr } from '../../shared/i18n'
+import { AUTOMATION_DEFAULTS, type Automation } from '../../shared/events'
 
 export type ThemePreference = 'system' | 'dark' | 'light'
 export type ChatWidth = 'full' | 'wide' | 'comfortable'
@@ -16,6 +17,8 @@ export type Appearance = {
   notifications: boolean
   /** "While you were away": a digest of what changed when you come back to a session. On unless turned off. */
   awayDigest: boolean
+  /** The automatic features (quick answers, the watchdog, voice). */
+  automation: Automation
 }
 
 /** Accent colours, each tuned separately for dark and light backgrounds. */
@@ -33,14 +36,15 @@ export const CHAT_SIZES = [13, 14, 15, 16, 18]
 const WIDTHS: Record<ChatWidth, string> = { full: 'none', wide: '1200px', comfortable: '860px' }
 
 const KEY = 'glassbox.appearance'
-const DEFAULTS: Appearance = { theme: 'system', accent: 'blue', uiScale: 1, chatSize: 15, chatWidth: 'full', tableStyle: 'striped', notifications: false, awayDigest: true }
+const DEFAULTS: Appearance = { theme: 'system', accent: 'blue', uiScale: 1, chatSize: 15, chatWidth: 'full', tableStyle: 'striped', notifications: false, awayDigest: true, automation: AUTOMATION_DEFAULTS }
 
 function load(): Appearance {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Appearance> | null
     // Older builds stored only the theme, under its own key.
     const legacyTheme = localStorage.getItem('glassbox.theme') as ThemePreference | null
-    return { ...DEFAULTS, ...(legacyTheme ? { theme: legacyTheme } : {}), ...(saved ?? {}) }
+    const merged = { ...DEFAULTS, ...(legacyTheme ? { theme: legacyTheme } : {}), ...(saved ?? {}) }
+    return { ...merged, automation: { ...AUTOMATION_DEFAULTS, ...(saved?.automation ?? {}) } }
   } catch {
     return DEFAULTS
   }
@@ -48,6 +52,9 @@ function load(): Appearance {
 
 let current = load()
 const listeners = new Set<() => void>()
+
+/** The settings as they are now (outside React). */
+export const getAppearance = (): Appearance => current
 
 export function setAppearance(change: Partial<Appearance>) {
   current = { ...current, ...change }

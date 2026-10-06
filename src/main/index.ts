@@ -1,5 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, protocol, shell } from 'electron'
 import { Updater } from './updater'
+import { setAutomation } from './automation'
+import type { Automation } from '../shared/events'
 import { abortAllQueries } from './claude'
 import { askMap, type MapAskModule } from './mapAsk'
 import { createHash } from 'node:crypto'
@@ -132,6 +134,7 @@ function trackTray(tabId: string, cwd: string, event: SessionEvent) {
 
 /** Off unless the user turns them on (dashboard Settings); the renderer tells us at startup. */
 let notificationsOn = false
+ipcMain.handle('settings:automation', (_e, next: Partial<Automation>) => setAutomation(next))
 ipcMain.handle('settings:notifications', (_e, on: boolean) => {
   notificationsOn = !!on
 })
@@ -367,6 +370,7 @@ ipcMain.handle('app:version', () => app.getVersion())
 ipcMain.handle('update:state', () => updates.state)
 ipcMain.handle('update:install', () => updates.install())
 ipcMain.handle('session:interrupt', (_e, tabId: string) => host(tabId).interrupt())
+ipcMain.handle('session:continueAfterReset', (_e, tabId: string, on: boolean) => host(tabId).continueAfterReset(on))
 ipcMain.handle('session:setModel', (_e, tabId: string, model: string) => host(tabId).setModel(model))
 ipcMain.handle('session:stopTask', (_e, tabId: string, taskId: string) => host(tabId).stopTask(taskId))
 ipcMain.handle('session:close', (_e, tabId: string) => {
@@ -530,6 +534,15 @@ ipcMain.handle('fs:stat', (_e, path: string) => {
   }
 })
 ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url))
+// Errors from the app's own pages, kept in its data folder (logs/renderer.log, trimmed to its last 1 MB).
+ipcMain.handle('log:error', (_e, where: string, text: string) => {
+  const dir = join(app.getPath('userData'), 'logs')
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, 'renderer.log')
+  const line = `[${new Date().toISOString()}] v${app.getVersion()} ${where}: ${String(text).slice(0, 8000)}\n`
+  const old = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  writeFileSync(file, (old.length > 1_000_000 ? old.slice(-500_000) : old) + line)
+})
 ipcMain.handle('window:titleBar', (_e, color: string, symbolColor: string) => {
   titleBar = { color, symbolColor }
   if (!isMac) win?.setTitleBarOverlay({ color, symbolColor, height: TITLEBAR_OVERLAY_H })

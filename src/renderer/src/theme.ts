@@ -107,6 +107,7 @@ export function useTheme() {
   useEffect(() => apply(tokens), [tokens])
   // The main process sends notifications only when they're turned on.
   useEffect(() => void window.glassbox.setNotifications(appearance.notifications), [appearance.notifications])
+  useEffect(() => void window.glassbox.setAutomation(appearance.automation), [appearance.automation])
 
   const toggle = () => setAppearance({ theme: tokens.base === 'dark' ? 'light' : 'dark' })
   return { pref: appearance.theme, tokens, toggle }
