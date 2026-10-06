@@ -251,6 +251,8 @@ const api = {
   setNotifications: (on: boolean): Promise<void> => invoke('settings:notifications', on),
   setAutomation: (next: Partial<Automation>): Promise<void> => invoke('settings:automation', next),
   platform: process.platform,
+  /** Dev aid: a screenshot run (GLASSBOX_SNAPSHOTS), which may drive the app from its scripts. */
+  snapshots: !!process.env.GLASSBOX_SNAPSHOTS,
   defaultCwd: process.cwd(),
   onFocusTab(callback: (tabId: string) => void) {
     const listener = (_e: IpcRendererEvent, tabId: string) => callback(tabId)

@@ -622,37 +622,59 @@ const Checked = memo(function Checked({ rows, rel, nav, failing, switcher }: { r
 type LookedFile = { path: string; at: number; total: number; read: [number, number][]; changed: [number, number][]; unread: number; written: boolean }
 type LookedAtData = { files: LookedFile[]; readOnly: { path: string; ranges: [number, number][] }[]; blind: { path: string; at: number; callers: string[] }[]; searches: number }
 
+/**
+ * What Live has already worked out, kept between visits (Live is rebuilt each time you open it):
+ * each changed file's text as of its last edit, and who depends on the changed files. Reading files
+ * and searching the project for dependents are the slow parts on a big repo, so neither repeats
+ * unless something changed.
+ */
+const fileTexts = new Map<string, string>() // `${cwd}|${path}@${editedAt}` -> text
+const dependents = new Map<string, Record<string, string[]>>() // `${cwd}|${paths}` -> dependents by file
+
 function useLookedAt(cwd: string, s: SessionState): LookedAtData {
   const reads = useMemo(() => readRanges(s), [s.toolCalls])
   const changed = useMemo(() => changedFiles(s), [s.files, s.toolCalls])
-  const key = [...changed].map(([p, at]) => `${p}@${at}`).join('|')
-  const [texts, setTexts] = useState<Record<string, string>>({})
-  const [deps, setDeps] = useState<Record<string, string[]>>({})
-  // The changed files as they are now (for where the changes sit and how long each file is).
+  const wanted = [...changed].slice(0, 16)
+  const textKey = (p: string, at: number) => `${cwd}|${p}@${at}`
+  const textsNow = () => Object.fromEntries(wanted.flatMap(([p, at]) => (fileTexts.has(textKey(p, at)) ? [[p, fileTexts.get(textKey(p, at))!]] : [])))
+  const key = wanted.map(([p, at]) => `${p}@${at}`).join('|')
+  const depsKey = `${cwd}|${wanted.map(([p]) => p).join('|')}`
+  const [texts, setTexts] = useState<Record<string, string>>(textsNow)
+  const [deps, setDeps] = useState<Record<string, string[]>>(() => dependents.get(depsKey) ?? {})
+  // The changed files as they are now (for where the changes sit and how long each file is): only
+  // the ones edited since Live last read them.
   useEffect(() => {
+    const missing = wanted.filter(([p, at]) => !fileTexts.has(textKey(p, at)))
+    if (!missing.length) return setTexts(textsNow())
     let live = true
     const t = setTimeout(async () => {
-      const out: Record<string, string> = {}
-      for (const [p] of [...changed].slice(0, 16)) {
+      for (const [p, at] of missing) {
         const r = await window.glassbox.fs.read(cwd, p).catch(() => null)
-        if (r?.content !== undefined) out[p] = r.content
+        if (r?.content !== undefined) fileTexts.set(textKey(p, at), r.content)
       }
-      if (live) setTexts(out)
-    }, 600)
+      if (fileTexts.size > 400) for (const k of [...fileTexts.keys()].slice(0, 100)) fileTexts.delete(k)
+      if (live) setTexts(textsNow())
+    }, 400)
     return () => ((live = false), clearTimeout(t))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cwd, key])
-  // Who depends on the changed files (the same graph as Ripple).
+  // Who depends on the changed files (the same graph as Ripple): again only when the set of changed
+  // files is new, not on every visit or every edit.
   useEffect(() => {
+    const known = dependents.get(depsKey)
+    if (known) return setDeps(known)
+    if (!wanted.length) return
     let live = true
-    const paths = [...changed.keys()].slice(0, 16)
-    if (!paths.length) return
     const t = setTimeout(async () => {
-      const r = await window.glassbox.deps.find(cwd, paths).catch(() => null)
-      if (!live || !r) return
-      setDeps(Object.fromEntries(r.files.map((f) => [f.path, [...new Set(f.dependents.map((d) => d.path))]])))
-    }, 3000)
+      const r = await window.glassbox.deps.find(cwd, wanted.map(([p]) => p)).catch(() => null)
+      if (!r) return
+      const found = Object.fromEntries(r.files.map((f) => [f.path, [...new Set(f.dependents.map((d) => d.path))]]))
+      dependents.set(depsKey, found)
+      if (live) setDeps(found)
+    }, 1500)
     return () => ((live = false), clearTimeout(t))
-  }, [cwd, key])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depsKey])
   return useMemo(() => {
     const norm = (p: string) => relPath(cwd, p).replace(/\\/g, '/').toLowerCase()
     const readKeys = new Set([...reads.keys()].map(norm))
@@ -808,8 +830,8 @@ function useFileText(cwd: string, path: string, version: number): string | null 
     const hit = fileCache.get(key)
     if (hit !== undefined) return setText(hit)
     let live = true
-    void window.glassbox.fs.read(cwd, path).then((r) => {
-      if (r.content === undefined) return
+    void window.glassbox.fs.read(cwd, path).catch(() => null).then((r) => {
+      if (r?.content === undefined) return
       fileCache.set(key, r.content)
       if (fileCache.size > 40) fileCache.delete(fileCache.keys().next().value!)
       if (live) setText(r.content)
