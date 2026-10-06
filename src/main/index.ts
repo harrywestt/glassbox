@@ -448,7 +448,7 @@ ipcMain.handle('ticket:comment', (_e, cwd: string, key: string, body: string) =>
 // Voice input
 const voiceProgress = (p: unknown) => toRenderer('glassbox:voice', p)
 ipcMain.handle('voice:prepare', async () => void (await prepareVoice(voiceProgress)))
-ipcMain.handle('voice:transcribe', (_e, audio: Float32Array) => transcribe(audio, voiceProgress))
+ipcMain.handle('voice:transcribe', (_e, audio: Float32Array, live?: boolean) => transcribe(audio, voiceProgress, live))
 ipcMain.handle('github:summary', (_e, dirs: string[], force?: boolean) => getGitHubSummary(dirs, { force }))
 
 // Files and git

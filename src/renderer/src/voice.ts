@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { tr } from '../../shared/i18n'
+import captureWorklet from './capture-worklet.js?url&no-inline'
 
 /** 'starting': the mic is opening, so nothing is recorded yet (only on the first hold in a while). */
 export type VoiceState = 'idle' | 'starting' | 'listening' | 'transcribing'
@@ -20,7 +21,7 @@ const LIVE_WINDOW_S = 25
  * it (longer with a Bluetooth headset), which made every hold wait. Captured as 16 kHz samples
  * straight from the mic, so there's nothing to decode afterwards.
  */
-type Mic = { stream: MediaStream; ctx: AudioContext; node: ScriptProcessorNode; ring: Float32Array; ringAt: number }
+type Mic = { stream: MediaStream; ctx: AudioContext; node: AudioWorkletNode; ring: Float32Array; ringAt: number; rate: number }
 let mic: Mic | null = null
 let opening: Promise<Mic> | null = null
 let closeTimer: ReturnType<typeof setTimeout> | undefined
@@ -53,7 +54,7 @@ async function openMic(): Promise<Mic> {
   opening ??= (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
     try {
-      return wire(stream)
+      return await wire(stream)
     } catch (e) {
       stream.getTracks().forEach((t) => t.stop())
       throw e
@@ -66,13 +67,17 @@ async function openMic(): Promise<Mic> {
   }
 }
 
-function wire(stream: MediaStream): Mic {
-  const ctx = new AudioContext({ sampleRate: SAMPLE_RATE })
+async function wire(stream: MediaStream): Promise<Mic> {
+  // Recorded at the mic's own rate (full quality) and resampled to 16 kHz properly before each
+  // transcription; asking the browser for 16 kHz live cost accuracy.
+  const ctx = new AudioContext()
+  // Captured on the audio thread (see capture-worklet.js): a busy page can't drop samples.
+  await ctx.audioWorklet.addModule(captureWorklet)
   const source = ctx.createMediaStreamSource(stream)
-  const node = ctx.createScriptProcessor(1024, 1, 1)
-  const m: Mic = { stream, ctx, node, ring: new Float32Array(Math.round(SAMPLE_RATE * PRE_ROLL_S)), ringAt: 0 }
-  node.onaudioprocess = (e) => {
-    const chunk = new Float32Array(e.inputBuffer.getChannelData(0))
+  const node = new AudioWorkletNode(ctx, 'glassbox-capture', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 })
+  const m: Mic = { stream, ctx, node, ring: new Float32Array(Math.round(ctx.sampleRate * PRE_ROLL_S)), ringAt: 0, rate: ctx.sampleRate }
+  node.port.onmessage = (e: MessageEvent<Float32Array>) => {
+    const chunk = e.data
     let peak = 0
     for (const v of chunk) peak = Math.max(peak, Math.abs(v))
     level = Math.min(1, peak * 2.5)
@@ -81,7 +86,7 @@ function wire(stream: MediaStream): Mic {
     for (const v of chunk) (m.ring[m.ringAt] = v), (m.ringAt = (m.ringAt + 1) % m.ring.length)
   }
   source.connect(node)
-  // A ScriptProcessor only runs while connected to the output; it writes silence there.
+  // Connected to the output so the audio graph keeps pulling it; it writes nothing there.
   node.connect(ctx.destination)
   // The device went away (unplugged, the PC slept): drop the mic so the next hold opens a fresh one.
   for (const t of stream.getAudioTracks()) t.addEventListener('ended', () => mic === m && !sink && dropMic())
@@ -94,6 +99,20 @@ function closeMicSoon() {
   closeTimer = setTimeout(() => {
     if (!sink) dropMic()
   }, WARM_MS)
+}
+
+/** Samples at the mic's rate, as the 16 kHz the speech model wants (a proper resample, not a pick of every nth sample). */
+async function to16k(x: Float32Array, rate: number): Promise<Float32Array<ArrayBuffer>> {
+  const copy = new Float32Array(x)
+  if (rate === SAMPLE_RATE || !copy.length) return copy
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil((copy.length * SAMPLE_RATE) / rate)), SAMPLE_RATE)
+  const buf = off.createBuffer(1, copy.length, rate)
+  buf.copyToChannel(copy, 0)
+  const src = off.createBufferSource()
+  src.buffer = buf
+  src.connect(off.destination)
+  src.start()
+  return new Float32Array((await off.startRendering()).getChannelData(0))
 }
 
 const preRoll = (m: Mic) => new Float32Array([...m.ring.subarray(m.ringAt), ...m.ring.subarray(0, m.ringAt)])
@@ -115,7 +134,7 @@ export function useVoice() {
   const [partial, setPartial] = useState('')
   const [model, setModel] = useState<ModelStatus>(null)
   const [error, setError] = useState<string | null>(null)
-  const take = useRef<{ parts: Float32Array[]; raf: number; live: ReturnType<typeof setInterval>; busy: boolean; heard: number } | null>(null)
+  const take = useRef<{ parts: Float32Array[]; length: number; rate: number; raf: number; live: ReturnType<typeof setInterval>; busy: boolean; heard: number } | null>(null)
   const cancelled = useRef(false)
   const startedAt = useRef<Promise<void> | null>(null)
 
@@ -146,7 +165,7 @@ export function useVoice() {
       const m = await openMic()
       if (cancelled.current) return closeMicSoon(), setState('idle')
       const first = preRoll(m)
-      const t = { parts: [first] as Float32Array[], length: first.length, raf: 0, live: 0 as unknown as ReturnType<typeof setInterval>, busy: false, heard: 0 }
+      const t = { parts: [first] as Float32Array[], length: first.length, rate: m.rate, raf: 0, live: 0 as unknown as ReturnType<typeof setInterval>, busy: false, heard: 0 }
       take.current = t
       sink = (chunk) => (t.parts.push(chunk), (t.length += chunk.length))
       const tick = () => {
@@ -157,18 +176,18 @@ export function useVoice() {
       // Live transcription: the words so far, every LIVE_EVERY_MS, one request at a time.
       t.live = setInterval(() => {
         if (t.busy || take.current !== t) return
-        if (t.length - t.heard < SAMPLE_RATE * 0.4) return
+        if (t.length - t.heard < t.rate * 0.4) return
         t.busy = true
         t.heard = t.length
         // Only the recent stretch is joined and sent, however long the take has run.
-        const want = SAMPLE_RATE * LIVE_WINDOW_S
+        const want = t.rate * LIVE_WINDOW_S
         const tail: Float32Array[] = []
         let got = 0
         for (let i = t.parts.length - 1; i >= 0 && got < want; i--) tail.unshift(t.parts[i]), (got += t.parts[i].length)
         const recent = join(tail)
         const trimmed = got < t.length
-        void window.glassbox.voice
-          .transcribe(recent)
+        void to16k(recent, t.rate)
+          .then((clip) => window.glassbox.voice.transcribe(clip, true))
           .then((text) => take.current === t && text && setPartial(trimmed ? `…${text}` : text))
           .catch(() => undefined)
           .finally(() => (t.busy = false))
@@ -188,15 +207,16 @@ export function useVoice() {
 
   const stop = useCallback(async (): Promise<string> => {
     if (startedAt.current) await startedAt.current
+    const rate = take.current?.rate ?? SAMPLE_RATE
     const audio = finishTake()
-    if (!audio || audio.length < SAMPLE_RATE * 0.3) {
+    if (!audio || audio.length < rate * 0.3) {
       setState('idle')
       setPartial('')
       return ''
     }
     setState('transcribing')
     try {
-      return await window.glassbox.voice.transcribe(audio)
+      return await window.glassbox.voice.transcribe(await to16k(audio, rate))
     } catch (e) {
       setError(tr('voice.couldNotTranscribe', { error: String(e) }))
       return ''
