@@ -36,12 +36,12 @@ const FOLDED_H = 44
  * Layers as bands top to bottom, modules as boxes across each band. The map is laid out at the
  * width it's given (as many columns as fit), so it never needs a sideways scroll.
  */
-function layout(arch: Architecture, W: number, compact?: Set<string> | null, folded?: Set<string>): Layout {
+function layout(arch: Architecture, W: number, compact?: Set<string> | null, folded?: Set<string>, order?: Map<string, number> | null): Layout {
   // Stable order (by path) so modules never jump around when the map refreshes; the modules the
   // conversation works in lead each band, the ones shown for context follow, smaller.
   const small = (id: string) => !!compact?.has(id)
   const byLayer = arch.layers
-    .map((l) => ({ layer: l, mods: arch.modules.filter((m) => m.layer === l).sort((a, b) => Number(small(a.id)) - Number(small(b.id)) || Number(!!a.external) - Number(!!b.external) || a.path.localeCompare(b.path) || a.name.localeCompare(b.name)) }))
+    .map((l) => ({ layer: l, mods: arch.modules.filter((m) => m.layer === l).sort((a, b) => (order ? (order.get(a.id) ?? 1e9) - (order.get(b.id) ?? 1e9) : 0) || Number(small(a.id)) - Number(small(b.id)) || Number(!!a.external) - Number(!!b.external) || a.path.localeCompare(b.path) || a.name.localeCompare(b.name)) }))
     .filter((b) => b.mods.length)
   const fit = Math.max(1, Math.floor((W - LABEL_W - GAP) / (BOX_MIN_W + GAP)))
   const cols = Math.min(MAX_COLS, fit, Math.max(1, ...byLayer.map((b) => b.mods.length)))
@@ -419,6 +419,18 @@ export function MapTab() {
       }
     return out
   }, [mode, feature, arch])
+  // A feature you asked about, in order: each module's place in the flow (1, 2, 3…), so the map
+  // reads as a route rather than a sprawl. A module named in two steps keeps its first.
+  const order = useMemo(() => {
+    if (mode !== 'ask' || !feature || !arch) return null
+    const out = new Map<string, number>()
+    let n = 0
+    for (const st of feature.steps) {
+      const ids = [...st.modules, ...st.files.map((f) => moduleOf(arch, `${arch.root}/${f.path}`)?.id).filter((x): x is string => !!x)]
+      for (const id of ids) if (!out.has(id)) out.set(id, ++n)
+    }
+    return out
+  }, [mode, feature, arch])
   // Search (whole project): modules whose name or folder matches.
   const found = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -453,7 +465,7 @@ export function MapTab() {
     if (!shown || !scope) return null
     return new Set(shown.modules.filter((m) => !scope.focus.has(m.id) && !plan?.modules.has(m.id)).map((m) => m.id))
   }, [whole, mode, shown, scope, plan])
-  const lay = useMemo(() => (shown && shown.modules.length && W ? layout(shown, W, compact, folded) : null), [shown, W, compact, folded])
+  const lay = useMemo(() => (shown && shown.modules.length && W ? layout(shown, W, compact, folded, order) : null), [shown, W, compact, folded, order])
   // Searching: bring the first match into view (it may be far down a long project).
   useEffect(() => {
     const first = found && lay ? [...found].map((id) => lay.boxes[id]).filter(Boolean).sort((a, b) => a.y - b.y)[0] : undefined
@@ -560,12 +572,12 @@ export function MapTab() {
       const f = s.requirements.files.find((x) => (x.mark === 'avoid' || x.mark === 'ask' || x.mark === 'api') && norm(x.path) === norm(`${arch.root}/${b.path}`))
       if (f && !isGhost(b.id)) bounds.set(b.id, f.mark as Bound)
     }
-    const steps = (taskOf(s)?.steps ?? []).map((st, i) => {
+    const steps = (mode === 'ask' ? [] : taskOf(s)?.steps ?? []).map((st, i) => {
       const m = st.files?.map((p) => moduleOf(arch, p.includes(':') || p.startsWith('/') ? p : `${arch.root}/${p}`)).find(Boolean)
       return { n: i + 1, status: st.status, label: st.label, mod: m?.id }
     })
     return { mods, crew, liveMod, waitMod, bounds, steps, tally, past, plan: past ? null : plan }
-  }, [arch, lay, s, peers, tab.cwd, at, plan])
+  }, [arch, lay, s, peers, tab.cwd, at, plan, mode])
 
   const body = (() => {
     if (!arch) return <div className="map-empty">{tr('mapTab.mapping')}</div>
@@ -594,6 +606,7 @@ export function MapTab() {
         hoverOther={hoverOther}
         context={mode === 'conv' ? scope?.context ?? null : null}
         notes={notes}
+        order={order}
         pointed={pointed}
         whole={whole}
         found={found}
@@ -891,7 +904,8 @@ function MapSvg({
   whole,
   found,
   onToggleFold,
-  notes
+  notes,
+  order
 }: {
   arch: Architecture
   lay: Layout
@@ -910,13 +924,16 @@ function MapSvg({
   onToggleFold: (layer: string) => void
   /** A feature you asked about: what each module's key files do for it, shown in the box. */
   notes?: Map<string, string[]> | null
+  /** …and each module's place in its flow (1, 2, 3…), drawn as numbered stops on a route. */
+  order?: Map<string, number> | null
 }) {
   const box = (id: string) => lay.boxes[id]
   // Whole project: connections show for the module you point at or pick, not all at once (a big
   // project's full set is a tangle). This conversation's few modules show theirs all the time.
   const [hover, setHover] = useState<string | null>(null)
   const focus = sel ?? hover
-  const showEdge = (from: string, to: string) => !whole || (!!focus && (from === focus || to === focus))
+  // A feature's map shows its numbered route; the code's own connections appear for the module you point at.
+  const showEdge = (from: string, to: string) => (!whole && !order) || (!!focus && (from === focus || to === focus))
   const linksBy = useMemo(() => {
     const m = new Map<string, ArchLink[]>()
     for (const l of arch.links ?? []) {
@@ -941,6 +958,9 @@ function MapSvg({
       <defs>
         <marker id="map-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0,0 L8,4 L0,8 z" className="map-arrow" />
+        </marker>
+        <marker id="map-flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0,0 L8,4 L0,8 z" className="map-flow-arrowhead" />
         </marker>
       </defs>
       {lay.bands.map((b) => (
@@ -1007,6 +1027,13 @@ function MapSvg({
         )
       })}
       {routePts.length > 1 && <polyline className="map-route" points={routePts.map((p) => `${p.x},${p.y}`).join(' ')} />}
+      {order &&
+        (() => {
+          const stops = [...order].sort((a, b) => a[1] - b[1]).map(([id]) => box(id)).filter((b): b is Box => !!b)
+          return stops.slice(1).map((b, i) => (
+            <path key={`flow:${b.id}`} className="map-flow-route" d={wire(stops[i], b)} markerEnd="url(#map-flow-arrow)" />
+          ))
+        })()}
       {Object.values(lay.boxes).map((b) => {
         const m = view.mods[b.id]
         const edge = view.waitMod === b.id ? 'wait' : view.liveMod === b.id ? 'live' : null
@@ -1051,6 +1078,12 @@ function MapSvg({
             {planOpen && <rect className="map-mod-plan" x={b.x} y={b.y} width={b.w} height={b.h} rx={8} />}
             {bound === 'avoid' && <rect className="map-mod-fence" x={b.x} y={b.y} width={b.w} height={b.h} rx={8} />}
             {bound === 'api' && <rect className="map-mod-api" x={b.x + 3} y={b.y + 3} width={b.w - 6} height={b.h - 6} rx={6} />}
+            {order?.has(b.id) && (
+              <g className="map-stop" aria-hidden>
+                <circle cx={b.x + 2} cy={b.y + 2} r={11} />
+                <text x={b.x + 2} y={b.y + 6} textAnchor="middle">{order.get(b.id)}</text>
+              </g>
+            )}
             <text className="map-mod-name" x={b.x + 12} y={b.y + 22}>{clip(b.name, b.w - 56, 7.2)}</text>
             <text className="map-mod-path" x={b.x + 12} y={b.y + 37}>{clip(b.path || tr('mapTab.root'), b.w, 6.4)}</text>
             {ghost && planned?.why && b.h > CONTEXT_H && (

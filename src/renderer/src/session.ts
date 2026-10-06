@@ -215,6 +215,8 @@ export interface SessionState {
   status: SessionStatus
   sessionId?: string
   model?: string
+  /** The models this account can use, for the model picker. */
+  models?: { value: string; resolvedModel?: string; displayName: string; description: string }[]
   mode: string
   /** Access mode you chose (plan mode returns to it). */
   access?: string
@@ -432,7 +434,9 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
     case 'permission-cancelled':
       return { ...state, permissions: state.permissions.filter((p) => p.id !== event.id) }
     case 'capabilities':
-      return { ...state, commands: event.commands }
+      return { ...state, commands: event.commands, models: event.models }
+    case 'model':
+      return { ...state, model: event.model }
     case 'mcp':
       return { ...state, mcp: event.servers }
     case 'context':

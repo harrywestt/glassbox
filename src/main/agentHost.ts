@@ -328,6 +328,8 @@ export class AgentHost {
       options: {
         cwd: this.cwd,
         resume,
+        // The model you picked carries over when the session restarts.
+        ...(this.chosenModel ? { model: this.chosenModel } : {}),
         permissionMode: access,
         // Lets you switch to Full access later; guardrails still run as hooks in every mode.
         allowDangerouslySkipPermissions: true,
@@ -739,6 +741,16 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       }
     // Approving a plan leaves plan mode for the access mode you chose.
     if (p.toolName === 'ExitPlanMode') void this.setMode(this.baseMode)
+  }
+
+  /** The model you picked for this session (undefined: the account's default). */
+  private chosenModel?: string
+
+  /** Switch the model this session uses, from your next message on. */
+  async setModel(model: string) {
+    this.chosenModel = model
+    await this.q?.setModel(model)
+    this.emit({ kind: 'model', model })
   }
 
   async setMode(mode: PermissionMode) {

@@ -209,3 +209,9 @@ button.map-conn-file:hover:not(:disabled) { background: none; text-decoration: u
 .map-mod-file.note { fill: color-mix(in srgb, var(--fg) 75%, var(--muted)); }
 .map-feature-toggle { align-self: flex-start; }
 .map-feature-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* A feature you asked about: numbered stops joined by a route, in the order the work flows. */
+.map-flow-route { fill: none; stroke: var(--accent); stroke-width: 1.6; opacity: .85; }
+.map-flow-arrowhead { fill: var(--accent); }
+.map-stop circle { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.map-stop text { fill: var(--bg); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }

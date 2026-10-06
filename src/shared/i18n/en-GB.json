@@ -1412,6 +1412,12 @@
     "actualSizeClickToFit": "Actual size. Click to fit.",
     "clickForActualSize": "Click for actual size."
   },
+  "modelPicker": {
+    "default": "Default model",
+    "title": "This session uses {model}. Click to switch.",
+    "heading": "Model for this session",
+    "foot": "Applies from your next message."
+  },
   "money": {
     "noRate": "{original} (no GBP exchange rate available yet)",
     "converted": "{original} converted at {rate} (ECB rate, {date})"

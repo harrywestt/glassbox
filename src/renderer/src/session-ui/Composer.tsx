@@ -8,6 +8,7 @@ import { useVoice } from '../voice'
 import { Loaders } from './Loaders'
 import { QuestionsCard } from './QuestionsCard'
 import { StopButton } from './StopButton'
+import { ModelPicker } from './ModelPicker'
 import { stoppableTasks } from '../tally'
 import { tr } from '../../../shared/i18n'
 
@@ -354,6 +355,7 @@ export function Composer({ compact }: { compact?: boolean } = {}) {
           >
             <Icon name="checklist" /> {tr('composer.planFirst')}
           </button>
+          <ModelPicker />
           {s.mode === 'plan' && (
             <span className="muted small">
               {tr('composer.planning')}{' '}

@@ -95,6 +95,8 @@ export type SessionEvent =
   | { kind: 'permission-cancelled'; id: string } // answered, aborted or session closed
   | { kind: 'glassbox'; signal: GlassboxSignal }
   | { kind: 'capabilities'; commands: SlashCommand[]; models: ModelInfo[]; account?: AccountInfo }
+  /** The model the session now uses (you picked another). */
+  | { kind: 'model'; model: string }
   | { kind: 'mcp'; servers: McpServerStatus[] }
   | { kind: 'context'; usage: ContextUsage }
   | { kind: 'git'; info: GitInfo }
