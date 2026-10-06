@@ -575,6 +575,21 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
     [tab, session, actions, showPanel, openWork, workPath, filter, updateRequirements, checkpoint, planFirst, peers, everyday]
   )
 
+  // The side panel slides open and shut: it stays mounted while it closes, and opens from no width.
+  const [sideMounted, setSideMounted] = useState(sideOpen)
+  const [sideShown, setSideShown] = useState(sideOpen)
+  useEffect(() => {
+    if (sideOpen) {
+      setSideMounted(true)
+      let inner = 0
+      const outer = requestAnimationFrame(() => (inner = requestAnimationFrame(() => setSideShown(true))))
+      return () => (cancelAnimationFrame(outer), cancelAnimationFrame(inner))
+    }
+    setSideShown(false)
+    const t = setTimeout(() => setSideMounted(false), 220)
+    return () => clearTimeout(t)
+  }, [sideOpen])
+
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault()
     document.body.classList.add('resizing')
@@ -729,10 +744,10 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
             </div>
             <Composer compact={current.kind !== 'conversation'} liveOwnsAsks={current.kind === 'live'} />
           </section>
-          {sideOpen && (
+          {sideMounted && (
             <>
-              <div className="splitter" onMouseDown={startResize} />
-              <aside className="side" style={{ width }}>
+              <div className={sideShown ? 'splitter' : 'splitter closed'} onMouseDown={startResize} />
+              <aside className={sideShown ? 'side' : 'side closed'} style={{ width: sideShown ? width : 0, ['--side-w' as string]: `${width}px` }} inert={!sideShown}>
                 <nav className="side-tabs" role="tablist" aria-label={tr('sessionView.sidePanel')}>
                   {SIDE_TABS.filter((x) => (!everyday || EVERYDAY_SIDE.has(x.id)) && sideApplies(x.id)).map((x) => (
                     <button key={x.id} role="tab" aria-selected={side === x.id} className={side === x.id ? 'side-tab active' : 'side-tab'} onClick={() => setSide(x.id)}>
@@ -784,7 +799,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               </aside>
             </>
           )}
-          {!sideOpen && (
+          {!sideMounted && (
             <button className="side-reveal" title={tr('sessionView.showSideTitle')} aria-label={tr('sessionView.showSide')} onClick={() => setSideOpen(true)}>
               <Icon name="layout-sidebar-right" />
               {Object.values(count).some((c) => c?.urgent) && <span className="side-reveal-dot" />}

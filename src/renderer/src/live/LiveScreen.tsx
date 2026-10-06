@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { blockedOnYou, type SessionState } from '../session'
 import type { Tab } from '../tabs'
 import { baseName, relPath } from '../lib'
@@ -46,8 +46,14 @@ type Props = { tab: Tab; s: SessionState; nav: LiveNav; active: boolean }
  * what needs you, the stage (who's doing what, and the edit being written), and the checks.
  */
 export function LiveScreen({ tab, s, nav, active }: Props) {
-  const now = useTick(active)
-  const rel = (p: string) => relPath(tab.cwd, p)
+  // Times ("20s ago", the lanes' right edge) move every two seconds; the wait timer ticks on its own.
+  const now = useTick(active, 2000)
+  const rel = useCallback((p: string) => relPath(tab.cwd, p), [tab.cwd])
+  // Each pane gets the session as it last changed for that pane, so text streaming in (which only
+  // the top bar shows) doesn't redraw the rest.
+  const forLanes = useMemo(() => s, [s.toolCalls, s.agents, s.thinking, s.backgroundTasks, s.status, s.permissions, s.userQuestions, s.checkins, s.held]) // eslint-disable-line react-hooks/exhaustive-deps
+  const forStage = useMemo(() => s, [s.writing, s.writingNow, s.held, s.toolCalls, s.agents, s.permissions, s.userQuestions, s.checkins]) // eslint-disable-line react-hooks/exhaustive-deps
+  const forLooked = useMemo(() => s, [s.toolCalls, s.files, s.instructions]) // eslint-disable-line react-hooks/exhaustive-deps
   const blocked = blockedOnYou(s)
   const looked = useLookedAt(tab.cwd, s)
   const flags = useFlags(s, looked, rel, now)
@@ -56,15 +62,15 @@ export function LiveScreen({ tab, s, nav, active }: Props) {
   // A check you asked Claude for clears once Claude's turn after it has finished.
   const lastResult = s.timeline.findLast((i) => i.kind === 'result')?.at ?? 0
   const open = flags.filter((f) => !dismissed.has(f.id) && !(asked[f.id] && lastResult > asked[f.id]))
-  const rows = useMemo(() => ledger(s, now), [s.files, s.toolCalls, now])
+  const rows = useMemo(() => ledger(s, now), [s.files, s.toolCalls, Math.floor(now / 10_000)]) // eslint-disable-line react-hooks/exhaustive-deps
   const failing = rows.filter((r) => r.state === 'failing').length
   // Mid width: the three lists share one column; this picks which shows.
   const [pick, setPick] = useState<Pick>('needs')
-  const switcher = <PaneSwitch pick={pick} onPick={setPick} needs={open.length} failing={failing} />
+  const switcher = useMemo(() => <PaneSwitch pick={pick} onPick={setPick} needs={open.length} failing={failing} />, [pick, open.length, failing])
 
   return (
     <div className="live">
-      {blocked ? <WaitBanner s={s} now={now} /> : <NowStrip s={s} />}
+      {blocked ? <WaitBanner s={s} /> : <NowStrip s={s} />}
       <div className="live-shell" data-pick={pick}>
         <section className="live-pane live-needs" aria-label={tr('live.needs.title')}>
           {switcher}
@@ -83,13 +89,13 @@ export function LiveScreen({ tab, s, nav, active }: Props) {
         </section>
 
         <div className="live-stage">
-          <Lanes s={s} now={now} />
-          {blocked && !Object.keys(s.held ?? {}).length ? <WaitCard tab={tab} s={s} /> : <EditStage tab={tab} s={s} st={buildStage(s)} nav={nav} now={now} />}
+          <Lanes s={forLanes} now={now} />
+          {blocked && !Object.keys(s.held ?? {}).length ? <WaitCard tab={tab} s={s} /> : <EditStage tab={tab} s={forStage} nav={nav} now={now} />}
         </div>
 
         <div className="live-trust">
           <Checked rows={rows} rel={rel} nav={nav} failing={failing} switcher={switcher} />
-          <LookedAt s={s} looked={looked} rel={rel} nav={nav} switcher={switcher} />
+          <LookedAt s={forLooked} looked={looked} rel={rel} nav={nav} switcher={switcher} />
         </div>
       </div>
     </div>
@@ -183,7 +189,8 @@ function currentThought(s: SessionState): { text: string; full: string; live: bo
   return { text: text.length > 220 ? `…${text.slice(-220)}` : text, full: plain.slice(-1200), live }
 }
 
-function WaitBanner({ s, now }: { s: SessionState; now: number }) {
+function WaitBanner({ s }: { s: SessionState }) {
+  const now = useTick(true, 1000)
   const why = Object.keys(s.held ?? {}).length
     ? tr('live.wait.held')
     : s.permissions.length
@@ -293,7 +300,7 @@ function FlagRow({ f, now, nav, asked, onAsk, onDismiss }: { f: Flag; now: numbe
 
 /* ── Who's doing what ── */
 
-function Lanes({ s, now }: { s: SessionState; now: number }) {
+const Lanes = memo(function Lanes({ s, now }: { s: SessionState; now: number }) {
   const list = useMemo(() => buildLanes(s, now), [s.toolCalls, s.agents, s.thinking, s.backgroundTasks, s.status, s.permissions, s.userQuestions, s.checkins, s.held, Math.floor(now / 2000)])
   const blocked = blockedOnYou(s)
   const working = list.filter((l) => l.id !== 'main' && l.state === 'running').length
@@ -328,7 +335,7 @@ function Lanes({ s, now }: { s: SessionState; now: number }) {
       </div>
     </section>
   )
-}
+})
 
 function LaneRow({ l }: { l: Lane }) {
   return (
@@ -355,7 +362,8 @@ function LaneRow({ l }: { l: Lane }) {
 
 /* ── The edit on stage ── */
 
-function EditStage({ tab, s, st, nav, now }: { tab: Tab; s: SessionState; st: Stage; nav: LiveNav; now: number }) {
+const EditStage = memo(function EditStage({ tab, s, nav, now }: { tab: Tab; s: SessionState; nav: LiveNav; now: number }) {
+  const st = useMemo(() => buildStage(s), [s])
   const [late, setLate] = useState<string | null>(null)
   const [holding, setHolding] = useState<string | null>(null)
   const [reason, setReason] = useState('')
@@ -418,7 +426,7 @@ function EditStage({ tab, s, st, nav, now }: { tab: Tab; s: SessionState; st: St
       )}
     </section>
   )
-}
+})
 
 /** The change with the code around it: before the edit lands its old text, after it the new. */
 function Diff({ text, before: rawBefore, after: rawAfter, landed, streaming }: { text: string | null; before: string; after: string; landed: boolean; streaming: boolean }) {
@@ -585,7 +593,7 @@ function WaitCard({ tab, s }: { tab: Tab; s: SessionState }) {
 
 /* ── Checked since the last edit? ── */
 
-function Checked({ rows, rel, nav, failing, switcher }: { rows: Ledger[]; rel: (p: string) => string; nav: LiveNav; failing: number; switcher: React.ReactNode }) {
+const Checked = memo(function Checked({ rows, rel, nav, failing, switcher }: { rows: Ledger[]; rel: (p: string) => string; nav: LiveNav; failing: number; switcher: React.ReactNode }) {
   return (
     <section className="live-pane live-checked" aria-label={tr('live.checked.title')}>
       {switcher}
@@ -607,7 +615,7 @@ function Checked({ rows, rel, nav, failing, switcher }: { rows: Ledger[]; rel: (
       </div>
     </section>
   )
-}
+})
 
 /* ── What Claude has looked at ── */
 
@@ -669,7 +677,7 @@ function useLookedAt(cwd: string, s: SessionState): LookedAtData {
   }, [reads, changed, texts, deps, cwd, s.toolCalls, s.files])
 }
 
-function LookedAt({ s, looked, rel, nav, switcher }: { s: SessionState; looked: LookedAtData; rel: (p: string) => string; nav: LiveNav; switcher: React.ReactNode }) {
+const LookedAt = memo(function LookedAt({ s, looked, rel, nav, switcher }: { s: SessionState; looked: LookedAtData; rel: (p: string) => string; nav: LiveNav; switcher: React.ReactNode }) {
   const callers = looked.blind.flatMap((b) => b.callers.map((c) => ({ path: c, of: b.path })))
   const uniqueCallers = [...new Map(callers.map((c) => [c.path, c])).values()]
   const skills = skillsUsed(s)
@@ -759,7 +767,7 @@ function LookedAt({ s, looked, rel, nav, switcher }: { s: SessionState; looked: 
       </div>
     </section>
   )
-}
+})
 
 function Cover({ total, read, changed }: { total: number; read: [number, number][]; changed: [number, number][] }) {
   if (!total) return <div className="live-cover" aria-hidden />
@@ -779,14 +787,14 @@ function Cover({ total, read, changed }: { total: number; read: [number, number]
 /* ── Hooks ── */
 
 /** Now, moving once a second while Live is on screen. */
-function useTick(active: boolean): number {
+function useTick(active: boolean, every: number): number {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     if (!active) return
     setNow(Date.now())
-    const t = setInterval(() => setNow(Date.now()), 1000)
+    const t = setInterval(() => setNow(Date.now()), every)
     return () => clearInterval(t)
-  }, [active])
+  }, [active, every])
   return now
 }
 
