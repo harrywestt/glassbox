@@ -14,21 +14,11 @@
   color: var(--fg);
   font-size: 13px;
 }
-.live-popout { height: 100vh; }
 .live .grow { flex: 1; min-width: 0; }
 .live h2 { margin: 0; font-size: 13px; font-weight: 600; }
 .live-note { font-size: 12px; color: var(--muted); }
 .live .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .live-empty { margin: 0; padding: var(--s-3) 0; color: var(--muted); }
-
-/* Popped out: the session's name, spend and Stop. */
-.live-top { display: flex; align-items: center; gap: var(--s-2) var(--s-4); flex-wrap: wrap; padding: var(--s-2) var(--s-4); background: var(--surface); border-bottom: 1px solid var(--border); }
-.live-top-title { font-weight: 600; }
-.live-top-name { font-weight: 600; font-stretch: var(--label); }
-.live-top-path { font: 12px var(--mono); color: var(--muted); }
-.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tally-ok); }
-.live-dot.on { background: var(--tally-live); animation: on-air 2.4s ease-in-out infinite; }
-.live-dot.wait { background: var(--warn); }
 
 /* Now: one line you can read from across the desk. */
 .live-now { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-6); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
@@ -206,17 +196,12 @@
 .live-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px var(--s-2); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font: 12px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-chip .live-note { font-family: var(--font); }
 
-/* Popped out: its own message box */
-.live-composer { display: flex; gap: var(--s-2); align-items: flex-end; padding: var(--s-2) var(--s-4) var(--s-3); border-top: 1px solid var(--border); background: var(--surface); }
-.live-composer textarea { flex: 1; min-height: 36px; max-height: 160px; resize: vertical; }
-
 @media (prefers-reduced-motion: reduce) {
-  .live-ping, .live-caret, .live-lane-dot, .live-edit-dot, .live-dot { animation: none; }
+  .live-ping, .live-caret, .live-lane-dot, .live-edit-dot { animation: none; }
 }
 
 /* Labels for screen readers only (the field's placeholder says the same on screen). */
 .live .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.live-loading { align-items: center; justify-content: center; color: var(--muted); }
 
 /* File names read as text (underlined on hover), not as accent links: the accent is kept for actions
    and for what's live (an edit being written, the current step). */

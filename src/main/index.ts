@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, powerMonitor, protocol, shell } from 'electron'
 import { Updater } from './updater'
 import { setAutomation } from './automation'
@@ -93,47 +92,7 @@ if (process.env.GLASSBOX_SNAPSHOTS) app.commandLine.appendSwitch('disable-featur
 const toRenderer = (channel: string, payload: unknown) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
-/** Live windows popped out onto another screen, by session tab. */
-const liveWindows = new Map<string, BrowserWindow>()
-const send = (payload: TabEvent) => {
-  toRenderer('glassbox:event', payload)
-  const live = liveWindows.get(payload.tabId)
-  if (live && !live.isDestroyed()) live.webContents.send('glassbox:event', payload)
-}
-const snapshotWaits = new Map<string, (state: unknown) => void>()
-/** The main window's current state for a session (it holds the only copy). */
-function snapshotOf(tabId: string): Promise<unknown> {
-  const reqId = randomUUID()
-  return new Promise((resolve) => {
-    const done = (state: unknown) => (snapshotWaits.delete(reqId), resolve(state))
-    snapshotWaits.set(reqId, done)
-    toRenderer('glassbox:liveSnapshotRequest', { reqId, tabId })
-    setTimeout(() => snapshotWaits.has(reqId) && done(null), 5000)
-  })
-}
-/** Live in its own window, for a second screen. One per session; asking again brings it forward. */
-function popOutLive(tabId: string, title: string) {
-  const open = liveWindows.get(tabId)
-  if (open && !open.isDestroyed()) return void (open.show(), open.focus())
-  const w = new BrowserWindow({
-    width: 1600,
-    height: 960,
-    minWidth: 720,
-    minHeight: 480,
-    title: `${title} - Live`,
-    icon: join(import.meta.dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
-    backgroundColor: '#16181d',
-    autoHideMenuBar: true,
-    webPreferences: { preload: join(import.meta.dirname, '../preload/index.mjs'), sandbox: false, contextIsolation: true }
-  })
-  liveWindows.set(tabId, w)
-  w.on('closed', () => liveWindows.delete(tabId))
-  w.on('page-title-updated', (e) => e.preventDefault())
-  w.webContents.setWindowOpenHandler(({ url }) => (void shell.openExternal(url), { action: 'deny' }))
-  const hash = `live=${encodeURIComponent(tabId)}`
-  if (process.env.ELECTRON_RENDERER_URL) void w.loadURL(`${process.env.ELECTRON_RENDERER_URL}#${hash}`)
-  else void w.loadFile(join(import.meta.dirname, '../renderer/index.html'), { hash })
-}
+const send = (payload: TabEvent) => toRenderer('glassbox:event', payload)
 const updates = new Updater((s) => toRenderer('glassbox:update', s))
 const services = new ServiceRegistry((e: ServicesEvent) => {
   toRenderer('glassbox:services', e)
@@ -299,8 +258,7 @@ function createWindow() {
  * in the renderer, waits `wait` ms, and saves a PNG to `out`. The app quits after the last step.
  */
 async function captureSnapshots(w: BrowserWindow, file: string) {
-  // `window: 'live'` captures the popped-out Live window instead of the main one.
-  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; window?: 'live' }[]
+  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string }[]
   await new Promise<void>((r) => w.webContents.once('did-finish-load', () => r()))
   for (const step of steps) {
     if (step.script) {
@@ -313,15 +271,14 @@ async function captureSnapshots(w: BrowserWindow, file: string) {
     if (process.env.GLASSBOX_SNAPSHOT_FRAMES)
       for (const f of w.webContents.mainFrame.framesInSubtree)
         if (f !== w.webContents.mainFrame) console.log('FRAME', f.url, JSON.stringify(await f.executeJavaScript('document.body ? document.body.innerText.slice(0, 200) : "(no body)"').catch((e) => String(e))))
-    const shot = (step.window === 'live' && [...liveWindows.values()].find((x) => !x.isDestroyed())) || w
     // Force a fresh frame: an unfocused window can otherwise hand back the previous one.
-    shot.webContents.setBackgroundThrottling(false)
-    shot.webContents.invalidate()
+    w.webContents.setBackgroundThrottling(false)
+    w.webContents.invalidate()
     await new Promise((r) => setTimeout(r, 250))
     // capturePage can fail transiently (GPU process restarts); retry rather than stall the run.
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        writeFileSync(step.out, (await shot.webContents.capturePage()).toPNG())
+        writeFileSync(step.out, (await w.webContents.capturePage()).toPNG())
         break
       } catch (e) {
         console.error('snapshot capture failed, retrying', e)
@@ -427,17 +384,6 @@ ipcMain.handle('session:continueAfterReset', (_e, tabId: string, on: boolean) =>
 ipcMain.handle('session:withdraw', (_e, tabId: string, uuid: string) => host(tabId).withdraw(uuid))
 ipcMain.handle('session:hold', (_e, tabId: string, toolUseId: string) => host(tabId).hold(toolUseId))
 ipcMain.handle('session:releaseHold', (_e, tabId: string, toolUseId: string, allow: boolean, reason?: string) => host(tabId).releaseHold(toolUseId, allow, reason))
-ipcMain.handle('live:popout', (_e, tabId: string, title: string) => popOutLive(tabId, title))
-// A popped-out Live window starts from the main window's copy of the session, then follows its events.
-ipcMain.handle('live:snapshot', (_e, tabId: string) => snapshotOf(tabId))
-ipcMain.handle('live:snapshotReply', (_e, reqId: string, state: unknown) => snapshotWaits.get(reqId)?.(state))
-// Something Live asked to show (a diff, a file, Ripple): in the main window, on that session.
-ipcMain.handle('live:show', (_e, tabId: string, target: unknown) => {
-  toRenderer('glassbox:liveShow', { tabId, target })
-  toRenderer('glassbox:focusTab', tabId)
-  win?.show()
-  win?.focus()
-})
 ipcMain.handle('session:setModel', (_e, tabId: string, model: string) => host(tabId).setModel(model))
 ipcMain.handle('session:stopTask', (_e, tabId: string, taskId: string) => host(tabId).stopTask(taskId))
 ipcMain.handle('session:close', (_e, tabId: string) => {

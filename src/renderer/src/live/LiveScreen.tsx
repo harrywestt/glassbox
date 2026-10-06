@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { blockedOnYou, type SessionState } from '../session'
 import type { Tab } from '../tabs'
 import { baseName, relPath } from '../lib'
-import { money, useFx } from '../money'
-import { Icon } from '../components/ui'
 import { setAppearance, useAppearance } from '../appearance'
 import type { HoldPolicy } from '../../../shared/events'
 import { tr } from '../../../shared/i18n'
@@ -37,13 +35,13 @@ export type LiveNav = {
   tell: (text: string) => void
 }
 
-type Props = { tab: Tab; s: SessionState; nav: LiveNav; active: boolean; popout?: boolean }
+type Props = { tab: Tab; s: SessionState; nav: LiveNav; active: boolean }
 
 /**
  * Live: what Claude is doing right now, and whether to trust it. Three panes when there's room:
  * what needs you, the stage (who's doing what, and the edit being written), and the checks.
  */
-export function LiveScreen({ tab, s, nav, active, popout }: Props) {
+export function LiveScreen({ tab, s, nav, active }: Props) {
   const now = useTick(active)
   const rel = (p: string) => relPath(tab.cwd, p)
   const blocked = blockedOnYou(s)
@@ -58,8 +56,7 @@ export function LiveScreen({ tab, s, nav, active, popout }: Props) {
   const switcher = <PaneSwitch pick={pick} onPick={setPick} needs={open.length} failing={failing} />
 
   return (
-    <div className={popout ? 'live live-popout' : 'live'}>
-      {popout && <PopoutHeader tab={tab} s={s} />}
+    <div className="live">
       {blocked ? <WaitBanner s={s} now={now} /> : <NowStrip s={s} />}
       <div className="live-shell" data-pick={pick}>
         <section className="live-pane live-needs" aria-label={tr('live.needs.title')}>
@@ -80,7 +77,7 @@ export function LiveScreen({ tab, s, nav, active, popout }: Props) {
 
         <div className="live-stage">
           <Lanes s={s} now={now} />
-          {blocked && !Object.keys(s.held ?? {}).length ? <WaitCard tab={tab} s={s} popout={!!popout} /> : <EditStage tab={tab} s={s} st={buildStage(s)} nav={nav} now={now} />}
+          {blocked && !Object.keys(s.held ?? {}).length ? <WaitCard tab={tab} s={s} /> : <EditStage tab={tab} s={s} st={buildStage(s)} nav={nav} now={now} />}
         </div>
 
         <div className="live-trust">
@@ -88,7 +85,6 @@ export function LiveScreen({ tab, s, nav, active, popout }: Props) {
           <LookedAt s={s} looked={looked} rel={rel} nav={nav} switcher={switcher} />
         </div>
       </div>
-      {popout && <PopoutComposer tab={tab} s={s} />}
     </div>
   )
 }
@@ -114,25 +110,6 @@ function PaneSwitch({ pick, onPick, needs, failing }: { pick: Pick; onPick: (p: 
 }
 
 /* ── Top ── */
-
-function PopoutHeader({ tab, s }: { tab: Tab; s: SessionState }) {
-  const fx = useFx()
-  const cost = money(s.usage.costUsd, 'USD', fx)
-  const running = s.status === 'running'
-  return (
-    <header className="live-top">
-      <span className={running ? 'live-dot on' : blockedOnYou(s) ? 'live-dot wait' : 'live-dot'} aria-hidden />
-      <span className="live-top-title">{tr('live.title')}</span>
-      <span className="live-top-name">{tab.title ?? baseName(tab.cwd)}</span>
-      <span className="live-top-path">{s.git?.branch ?? ''}</span>
-      <span className="grow" />
-      <span className="live-note" title={cost.title}>{tr('live.spent', { cost: cost.text })}</span>
-      {running && (
-        <button onClick={() => void window.glassbox.session.interrupt(tab.id)}>{tr('live.stop')}</button>
-      )}
-    </header>
-  )
-}
 
 function NowStrip({ s }: { s: SessionState }) {
   const steps = s.task?.steps ?? []
@@ -470,7 +447,7 @@ function HoldPolicyPicker() {
 
 /* ── Waiting on you ── */
 
-function WaitCard({ tab, s, popout }: { tab: Tab; s: SessionState; popout: boolean }) {
+function WaitCard({ tab, s }: { tab: Tab; s: SessionState }) {
   const q = s.userQuestions?.[0]
   const c = s.checkins.find((x) => x.answer === undefined)
   const p = s.permissions[0]
@@ -546,16 +523,7 @@ function WaitCard({ tab, s, popout }: { tab: Tab; s: SessionState; popout: boole
             <span className="live-badge question">{tr('live.wait.permissionBadge')}</span>
             <h2>{p.guard ? tr('live.wait.guard', { label: p.guard }) : tr('live.wait.wantsTool', { tool: p.toolName })}</h2>
             <pre className="live-ask-input">{String(p.input.command ?? p.input.file_path ?? JSON.stringify(p.input, null, 2)).slice(0, 2000)}</pre>
-            {popout ? (
-              <div className="live-ask-row">
-                <button className="primary" onClick={() => void window.glassbox.session.respondPermission(tab.id, p.id, 'allow')}>
-                  {tr('live.wait.allow')}
-                </button>
-                <button onClick={() => void window.glassbox.session.respondPermission(tab.id, p.id, 'deny')}>{tr('live.wait.deny')}</button>
-              </div>
-            ) : (
-              <p className="live-ask-detail">{tr('live.wait.permissionInApp')}</p>
-            )}
+            <p className="live-ask-detail">{tr('live.wait.permissionInApp')}</p>
           </div>
         </div>
       </section>
@@ -751,53 +719,6 @@ function Cover({ total, read, changed }: { total: number; read: [number, number]
       {changed.map((r, i) => (
         <span key={`c${i}`} className="seg-edit" style={pos(r)} />
       ))}
-    </div>
-  )
-}
-
-/* ── Popped out: a message box of its own ── */
-
-function PopoutComposer({ tab, s }: { tab: Tab; s: SessionState }) {
-  const [text, setText] = useState('')
-  const ref = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    // "Tell Claude" in the popped-out window fills this box.
-    const fill = (e: Event) => {
-      setText((e as CustomEvent<string>).detail)
-      ref.current?.focus()
-    }
-    window.addEventListener('glassbox:live-tell', fill)
-    return () => window.removeEventListener('glassbox:live-tell', fill)
-  }, [])
-  const send = () => {
-    const t = text.trim()
-    if (!t) return
-    void window.glassbox.session.send(tab.id, t, { uuid: crypto.randomUUID() })
-    setText('')
-  }
-  return (
-    <div className="live-composer">
-      <label className="sr-only" htmlFor={`live-msg-${tab.id}`}>
-        {tr('live.composer.label')}
-      </label>
-      <textarea
-        id={`live-msg-${tab.id}`}
-        ref={ref}
-        rows={1}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault()
-            send()
-          }
-        }}
-        placeholder={s.status === 'running' ? tr('live.composer.busy') : tr('live.composer.idle')}
-      />
-      <button className="primary" disabled={!text.trim()} onClick={send}>
-        <Icon name="send" />
-        {tr('live.composer.send')}
-      </button>
     </div>
   )
 }

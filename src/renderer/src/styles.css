@@ -1808,8 +1808,6 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 @keyframes your-turn-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 60%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
 /* On any other tab, Conversation carries it. */
 .your-turn-lamp { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); animation: your-turn-ping 1.6s ease-out 3; }
-.work-tabs .pop-out { flex: none; display: inline-flex; align-items: center; align-self: center; gap: var(--s-1); height: var(--h-ctl); line-height: 1; }
-.work-tabs .pop-out .codicon { font-size: 14px; }
 @media (prefers-reduced-motion: reduce) {
   .tab.monitor.your-turn .tally-lamp, .your-turn-lamp { animation: none; }
 }

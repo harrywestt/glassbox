@@ -252,25 +252,6 @@ const api = {
   setAutomation: (next: Partial<Automation>): Promise<void> => invoke('settings:automation', next),
   platform: process.platform,
   defaultCwd: process.cwd(),
-  /** Live in its own window, for a second screen. */
-  live: {
-    popout: (tabId: string, title: string): Promise<void> => invoke('live:popout', tabId, title),
-    snapshot: (tabId: string): Promise<unknown> => invoke('live:snapshot', tabId),
-    show: (tabId: string, target: unknown): Promise<void> => invoke('live:show', tabId, target),
-    /** Main window: a Live window wants this session's state. */
-    onSnapshotRequest(callback: (req: { reqId: string; tabId: string }) => void) {
-      const listener = (_e: IpcRendererEvent, req: { reqId: string; tabId: string }) => callback(req)
-      ipcRenderer.on('glassbox:liveSnapshotRequest', listener)
-      return () => void ipcRenderer.off('glassbox:liveSnapshotRequest', listener)
-    },
-    replySnapshot: (reqId: string, state: unknown): Promise<void> => invoke('live:snapshotReply', reqId, state),
-    /** Main window: Live asked to show something on a session. */
-    onShow(callback: (req: { tabId: string; target: unknown }) => void) {
-      const listener = (_e: IpcRendererEvent, req: { tabId: string; target: unknown }) => callback(req)
-      ipcRenderer.on('glassbox:liveShow', listener)
-      return () => void ipcRenderer.off('glassbox:liveShow', listener)
-    }
-  },
   onFocusTab(callback: (tabId: string) => void) {
     const listener = (_e: IpcRendererEvent, tabId: string) => callback(tabId)
     ipcRenderer.on('glassbox:focusTab', listener)
