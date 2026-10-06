@@ -97,6 +97,8 @@ export type SessionEvent =
   | { kind: 'capabilities'; commands: SlashCommand[]; models: ModelInfo[]; account?: AccountInfo }
   /** A usage limit refused Claude's request; `continueAt`: Glassbox will carry on then (you asked it to). */
   | { kind: 'limit'; hit: boolean; resetsAt?: number; type?: string; continueAt?: number }
+  /** You took back a message before Claude read it (to edit it). */
+  | { kind: 'withdrawn'; uuid: string }
   /** The model the session now uses (you picked another). */
   | { kind: 'model'; model: string }
   | { kind: 'mcp'; servers: McpServerStatus[] }

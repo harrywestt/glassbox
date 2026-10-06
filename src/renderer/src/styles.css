@@ -1793,3 +1793,10 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 /* Stop Claude's current step and send now. */
 .stop-send { gap: var(--s-2); }
 .stop-square.small { width: 8px; height: 8px; }
+
+/* Under a message you sent: whether Claude has read it. */
+.read-receipt { display: inline-flex; align-items: center; gap: var(--s-1); font-size: 11px; color: var(--muted); }
+.read-receipt .codicon { font-size: 13px; }
+.read-receipt.read .codicon { color: var(--accent); }
+.read-receipt.dropped { color: var(--warn); }
+.read-receipt .link { margin-left: var(--s-1); }

@@ -483,6 +483,18 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     }
   }
 
+  /**
+   * Take back a message you sent while Claude was mid-step, before it reads it (to edit it).
+   * False if Claude has already started on it.
+   */
+  async withdraw(uuid: string): Promise<boolean> {
+    // Not in the SDK's published types, but on its Query (the cancel_async_message control request).
+    const q = this.q as unknown as { cancelAsyncMessage?: (uuid: string) => Promise<boolean> } | undefined
+    const cancelled = !!(await q?.cancelAsyncMessage?.(uuid).catch(() => false))
+    if (cancelled) this.emit({ kind: 'withdrawn', uuid })
+    return cancelled
+  }
+
   async interrupt() {
     await this.q?.interrupt()
   }
