@@ -300,7 +300,8 @@ export function stage(s: SessionState): Stage {
   if (held) return { kind: 'held', w: held, ...fields(held.name, held.json) }
   const now = writing.filter((w) => Object.values(s.writingNow ?? {}).includes(w.id) || (!s.toolCalls[w.id] && Date.now() - w.at < 60_000)).at(-1)
   if (now) return { kind: 'writing', w: now, ...fields(now.name, now.json) }
-  const last = Object.values(s.toolCalls).filter((c) => CHANGE_TOOLS.has(c.name) && c.status !== 'running').sort((a, b) => (b.endedAt ?? b.at) - (a.endedAt ?? a.at))[0]
+  // Only edits that reached the file: one you turned down (or that failed) never landed.
+  const last = Object.values(s.toolCalls).filter((c) => CHANGE_TOOLS.has(c.name) && c.status === 'done').sort((a, b) => (b.endedAt ?? b.at) - (a.endedAt ?? a.at))[0]
   if (last) return { kind: 'landed', call: last, at: last.endedAt ?? last.at, ...fields(last.name, last.input) }
   return { kind: 'none' }
 }
