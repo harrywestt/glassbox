@@ -36,6 +36,9 @@ import type { BrowserBridge } from './browserTools'
 import { tr } from '../shared/i18n'
 import { automation } from './automation'
 
+/** Commands that usually run for minutes: watching deploys and CI, builds, full test runs, installs, migrations. */
+const LONG_COMMAND = /\b(gh run watch|gh pr checks --watch|kubectl rollout|helm (upgrade|install)|terraform (plan|apply)|docker (build|compose up)|az (deployment|webapp)|aws (cloudformation|deploy)|vercel( deploy)?|netlify deploy|fly deploy|deploy|npm run (build|test|deploy)|pnpm (build|test)|yarn (build|test)|dotnet (build|test|publish)|mvn|gradle|cargo (build|test)|go test|pytest|npm (ci|install)|pip install|migrat\w*|backfill)\b/i
+
 /** A message asking how something works (it gets a diagram as well as words). */
 const EXPLAIN = /\b(how does|how do (?:the|these|they)|explain|walk me through|architecture|data ?flow|what happens when|diagram|flow of)\b/i
 const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification', 'InstructionsLoaded']
@@ -329,7 +332,8 @@ export class AgentHost {
       PreToolUse: [{ hooks: [this.onPreToolUse] }],
       PostToolUse: [
         { matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell', hooks: [this.onFileChange] },
-        { matcher: 'TodoWrite|TaskCreate|mcp__glassbox__set_current_task', hooks: [this.onTaskList] }
+        { matcher: 'TodoWrite|TaskCreate|mcp__glassbox__set_current_task', hooks: [this.onTaskList] },
+        { matcher: 'Bash|PowerShell', hooks: [this.onLongCommand] }
       ],
       Stop: [{ hooks: [this.onStop] }]
     }
@@ -1091,6 +1095,24 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     const explain = EXPLAIN.test(prompt) ? 'Glassbox: this asks how something works. Answer with a show_diagram (or show_flow for a request path) alongside your text, and open_tab it.' : ''
     const additionalContext = [requirementsContext(this.requirements), explain].filter(Boolean).join('\n\n')
     return additionalContext ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext } } : {}
+  }
+
+  /**
+   * Claude started something that runs a while (a deploy or CI watch, a build, a full test run, an
+   * install, a migration, anything in the background): once a turn, a reminder to show its progress.
+   */
+  private onLongCommand: HookCallback = async (input) => {
+    if (input.hook_event_name !== 'PostToolUse' || this.turnShown.has('show_progress') || this.turnNudged.has('progress')) return {}
+    const i = (input.tool_input ?? {}) as { command?: string; run_in_background?: boolean }
+    const command = String(i.command ?? '')
+    if (!i.run_in_background && !LONG_COMMAND.test(command)) return {}
+    this.turnNudged.add('progress')
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PostToolUse',
+        additionalContext: `Glassbox: that command can run for a while. Show its progress with show_progress now (unless it already finished): steps for its stages, or watch its log file (redirect output to a file if needed) or the url it brings up, so the user can see it moving without asking.`
+      }
+    }
   }
 
   /** Claude laid out several steps: a reminder (once a turn) to show them as a loader. */
