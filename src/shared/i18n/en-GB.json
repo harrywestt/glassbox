@@ -978,7 +978,7 @@
       },
       "qa": {
         "title": "QA a feature",
-        "blurb": "Claude tests it in the Browser and reports back."
+        "blurb": "Claude tests it in the Browser."
       }
     },
     "codingTitle": "Coding",
