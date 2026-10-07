@@ -238,3 +238,6 @@
 .live-flag, .live-ask, .live-edit.held { animation: pop-in .2s var(--ease); }
 .live-wait, .live-now { animation: fade .2s var(--ease); }
 @media (prefers-reduced-motion: reduce) { .live-flag, .live-ask, .live-edit.held, .live-wait, .live-now { animation: none; } }
+
+/* More rows of a long list. */
+.live-more { display: block; width: calc(100% - 2 * var(--s-4)); margin: var(--s-2) var(--s-4); }

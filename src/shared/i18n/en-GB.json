@@ -2659,7 +2659,9 @@
       "seconds": "{n}s ago",
       "minutes": "{n}m ago",
       "hours": "{n}h ago"
-    }
+    },
+    "more_one": "Show {count} more",
+    "more_other": "Show {count} more"
   },
   "colourWheel": {
     "label": "Colour wheel: left and right change the colour, up and down its strength",

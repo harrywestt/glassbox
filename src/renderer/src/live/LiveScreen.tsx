@@ -594,6 +594,7 @@ function WaitCard({ tab, s }: { tab: Tab; s: SessionState }) {
 /* ── Checked since the last edit? ── */
 
 const Checked = memo(function Checked({ rows, rel, nav, failing, switcher }: { rows: Ledger[]; rel: (p: string) => string; nav: LiveNav; failing: number; switcher: React.ReactNode }) {
+  const [limit, setLimit] = useState(ROWS)
   return (
     <section className="live-pane live-checked" aria-label={tr('live.checked.title')}>
       {switcher}
@@ -603,7 +604,7 @@ const Checked = memo(function Checked({ rows, rel, nav, failing, switcher }: { r
       </header>
       <div className="live-scroll">
         {rows.length === 0 && <p className="live-empty">{tr('live.checked.empty')}</p>}
-        {rows.map((r) => (
+        {rows.slice(0, limit).map((r) => (
           <div key={r.path} className="live-check">
             <button className="live-file" onClick={() => nav.show({ view: 'diff', path: r.path })} title={rel(r.path)}>
               {baseName(r.path)}
@@ -612,10 +613,22 @@ const Checked = memo(function Checked({ rows, rel, nav, failing, switcher }: { r
             <span className="live-check-detail">{r.detail}</span>
           </div>
         ))}
+        {rows.length > limit && <MoreRows hidden={rows.length - limit} onMore={() => setLimit((n) => n + ROWS * 3)} />}
       </div>
     </section>
   )
 })
+
+/** Long lists show this many rows first; the rest are a click away. */
+const ROWS = 30
+
+function MoreRows({ hidden, onMore }: { hidden: number; onMore: () => void }) {
+  return (
+    <button className="quiet live-more" onClick={onMore}>
+      {tr('live.more', { count: hidden })}
+    </button>
+  )
+}
 
 /* ── What Claude has looked at ── */
 
@@ -700,6 +713,7 @@ function useLookedAt(cwd: string, s: SessionState): LookedAtData {
 }
 
 const LookedAt = memo(function LookedAt({ s, looked, rel, nav, switcher }: { s: SessionState; looked: LookedAtData; rel: (p: string) => string; nav: LiveNav; switcher: React.ReactNode }) {
+  const [limit, setLimit] = useState(ROWS)
   const callers = looked.blind.flatMap((b) => b.callers.map((c) => ({ path: c, of: b.path })))
   const uniqueCallers = [...new Map(callers.map((c) => [c.path, c])).values()]
   const skills = skillsUsed(s)
@@ -741,7 +755,7 @@ const LookedAt = memo(function LookedAt({ s, looked, rel, nav, switcher }: { s: 
             <div className="live-cover" aria-hidden />
           </div>
         ))}
-        {looked.files.map((f) => {
+        {looked.files.slice(0, limit).map((f) => {
           const p = pct(f.read, f.total)
           return (
             <div key={f.path} className="live-looked-row">
@@ -757,6 +771,7 @@ const LookedAt = memo(function LookedAt({ s, looked, rel, nav, switcher }: { s: 
             </div>
           )
         })}
+        {looked.files.length > limit && <MoreRows hidden={looked.files.length - limit} onMore={() => setLimit((n) => n + ROWS * 3)} />}
         {looked.readOnly.slice(0, 12).map((f) => (
           <div key={f.path} className="live-looked-row quiet">
             <div className="live-looked-name">

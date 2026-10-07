@@ -146,8 +146,18 @@ export function readRanges(s: SessionState): Map<string, [number, number][]> {
 const rangeCache = new WeakMap<ToolCall, [number, number] | null>()
 function rangeOf(c: ToolCall): [number, number] | null {
   if (rangeCache.has(c)) return rangeCache.get(c)!
-  const nums = [...String(c.result ?? '').matchAll(/^\s*(\d+)[→\t]/gm)].map((m) => Number(m[1]))
-  const range: [number, number] | null = nums.length ? [nums[0], nums.at(-1)!] : null
+  const text = String(c.result ?? '')
+  const lineNo = (line: string) => /^\s*(\d+)[→\t]/.exec(line)?.[1]
+  const first = lineNo(text.slice(0, 200))
+  // The last numbered line: look back from the end a line at a time (results end with notes, not code).
+  let last: string | undefined
+  for (let end = text.length; end > 0 && last === undefined; ) {
+    const start = text.lastIndexOf('\n', end - 1) + 1
+    last = lineNo(text.slice(start, end))
+    end = start - 1
+    if (text.length - end > 4000) break
+  }
+  const range: [number, number] | null = first && last ? [Number(first), Number(last)] : null
   rangeCache.set(c, range)
   return range
 }
