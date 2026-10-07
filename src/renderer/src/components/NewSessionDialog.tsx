@@ -8,6 +8,28 @@ type Pr = { number: number; title: string; author: string; branch: string; isDra
 
 export type LaunchRequest = { cwd: string; kind: SessionKind; title: string; start?: PendingStart }
 
+/** Addresses you've QA'd against, per project, newest first (and whether you last tested locally). */
+const QA_KEY = (cwd: string) => `glassbox.qa.where.${cwd.replace(/\\/g, '/').toLowerCase()}`
+type QaWhere = { env: 'local' | 'url'; urls: string[] }
+function loadQaWhere(cwd: string): QaWhere {
+  try {
+    const saved = JSON.parse(localStorage.getItem(QA_KEY(cwd)) ?? 'null') as QaWhere | null
+    if (saved && Array.isArray(saved.urls)) return saved
+  } catch {
+    /* nothing saved */
+  }
+  return { env: 'local', urls: [] }
+}
+function saveQaWhere(cwd: string, env: 'local' | 'url', url?: string) {
+  const prev = loadQaWhere(cwd)
+  const urls = url ? [url, ...prev.urls.filter((u) => u !== url)].slice(0, 6) : prev.urls
+  try {
+    localStorage.setItem(QA_KEY(cwd), JSON.stringify({ env, urls }))
+  } catch {
+    /* it's only a convenience */
+  }
+}
+
 export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd?: string; onLaunch: (r: LaunchRequest) => void; onClose: () => void }) {
   const [cwd, setCwd] = useState(initialCwd ?? '')
   const [recent, setRecent] = useState<string[]>([])
@@ -29,6 +51,11 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
     }
   }, [cwd])
   const changesFiles = kind === 'coding' || kind === 'blank'
+  const qaWhere = useMemo(() => (cwd ? loadQaWhere(cwd) : { env: 'local' as const, urls: [] }), [cwd])
+  useEffect(() => {
+    if (kind !== 'qa') return
+    setF((x) => ({ ...x, env: qaWhere.env, url: x.url?.trim() ? x.url : qaWhere.urls[0] ?? '' }))
+  }, [kind, qaWhere])
 
   useEffect(() => {
     void window.glassbox.history.list().then((h) => {
@@ -82,6 +109,7 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
         fields = { ...f, branch }
       }
       const { title, start, requirements } = buildLaunch(kind, fields)
+      if (kind === 'qa') saveQaWhere(cwd, f.env ?? 'local', f.env === 'url' ? f.url?.trim() : undefined)
       onLaunch({ cwd: dir, kind, title, start: start ? { ...start, requirements } : undefined })
     } catch (err) {
       setError(String(err).replace(/^Error: /, ''))
@@ -204,6 +232,16 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
                   <span>{tr('newSessionDialog.qaUrlLabel')}</span>
                   <input placeholder={tr('newSessionDialog.qaUrlPlaceholder')} value={f.url ?? ''} onChange={(e) => set({ url: e.target.value })} />
                 </label>
+              )}
+              {/* Addresses you've tested this project against before, one click away. */}
+              {f.env === 'url' && qaWhere.urls.length > 0 && (
+                <div className="chips-row flush">
+                  {qaWhere.urls.map((u) => (
+                    <button key={u} className={u === f.url?.trim() ? 'chip-btn on' : 'chip-btn'} onClick={() => set({ url: u })} title={u}>
+                      {u.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                    </button>
+                  ))}
+                </div>
               )}
               <label className="field">
                 <span>{tr('newSessionDialog.qaNotes')}</span>
