@@ -146,7 +146,7 @@ function StatusPill() {
   const busy = s.busySince ? Math.round((now - s.busySince) / 1000) : 0
   if (s.status === 'stopped')
     return (
-      <button className="status-btn" title={tr('sessionHeader.restartTitle')} onClick={() => void window.glassbox.session.open(tab.id, tab.cwd, s.sessionId ?? tab.resumeId, loadAccess())}>
+      <button className="status-btn" title={tr('sessionHeader.restartTitle')} onClick={() => void window.glassbox.session.open(tab.id, tab.cwd, s.sessionId ?? tab.resumeId, loadAccess(), tab.kind)}>
         <span className="tally-lamp tally-err" aria-hidden /> {tr('sessionHeader.stoppedRestart')}
       </button>
     )

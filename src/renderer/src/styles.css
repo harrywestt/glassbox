@@ -1862,3 +1862,4 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 body.resizing .session-body > .side, body.resizing .splitter { transition: none; }
 .side-reveal { animation: fade .2s var(--ease); }
 @media (prefers-reduced-motion: reduce) { .session-body > .side, .splitter, .side-reveal { transition: none; animation: none; } }
+.work-tab-add[hidden] { display: none; }

@@ -37,7 +37,8 @@ const invoke = ipcRenderer.invoke.bind(ipcRenderer)
 
 const api = {
   session: {
-    open: (tabId: string, cwd: string, resume?: string, access?: AccessMode): Promise<void> => invoke('session:open', tabId, cwd, resume, access),
+    /** `kind`: the session's type (a QA session can't edit the project). */
+    open: (tabId: string, cwd: string, resume?: string, access?: AccessMode, kind?: string): Promise<void> => invoke('session:open', tabId, cwd, resume, access, kind),
     send: (tabId: string, text: string, opts: SendOptions): Promise<void> => invoke('session:send', tabId, text, opts),
     /** Run a shell command yourself ("! command"); output arrives as 'bang' events for that session. */
     runShell: (tabId: string, id: string, cwd: string, command: string): Promise<void> => invoke('bang:run', tabId, id, cwd, command),

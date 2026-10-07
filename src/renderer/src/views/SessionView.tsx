@@ -203,8 +203,13 @@ const MAP: WorkTab = { id: 'map', kind: 'map' }
 const PLAN: WorkTab = { id: 'plan', kind: 'plan' }
 const LIVE: WorkTab = { id: 'live', kind: 'live' }
 /** The conversation and Live are always there, side by side; every other view is a tab you open (or Claude does) and can close. */
-const FIXED: WorkTab[] = [CONVERSATION, LIVE]
-const isFixed = (t: WorkTab) => t.kind === 'conversation' || t.kind === 'live'
+const BROWSER: WorkTab = { id: 'preview', kind: 'preview' }
+/**
+ * The two tabs a session always has. A QA session tests in the Browser, so the Browser takes Live's
+ * place beside the conversation.
+ */
+const fixedTabs = (qa: boolean): WorkTab[] => [CONVERSATION, qa ? BROWSER : LIVE]
+const isFixed = (t: WorkTab, qa: boolean) => t.kind === 'conversation' || t.kind === (qa ? 'preview' : 'live')
 
 /** The views the + in the tab strip opens, with what each is for. */
 type ViewKind = 'plan' | 'terminal' | 'map' | 'erd' | 'ripple' | 'flows' | 'live' | 'diagrams' | 'replay' | 'attachments' | 'preview' | 'showcase'
@@ -269,11 +274,13 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
     setSideState(t)
     saveSide(tab.cwd, t)
   }, [tab.cwd])
-  const [sideOpen, setSideOpen] = useState(true)
+  // A QA session is the conversation and the Browser; the side panel starts closed, a click away.
+  const qa = tab.kind === 'qa'
+  const [sideOpen, setSideOpen] = useState(!qa)
   const [moreOpen, setMoreOpen] = useState(false)
   // The conversation, plus any views you keep open for this project.
   const [kept, setKeptState] = useState<ViewKind[]>(() => keptViews(tab.cwd))
-  const [work, setWork] = useState<WorkTab[]>(() => [...FIXED, ...keptViews(tab.cwd).filter((k) => k !== 'live').map(viewTab)])
+  const [work, setWork] = useState<WorkTab[]>(() => (qa ? fixedTabs(true) : [...fixedTabs(false), ...keptViews(tab.cwd).filter((k) => k !== 'live').map(viewTab)]))
   const [activeWork, setActiveWork] = useState('conversation')
   const [unseen, setUnseen] = useState<Set<string>>(new Set())
   // The main conversation by default; an agent's own work is one pick away (the switcher above it).
@@ -332,7 +339,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   )
 
   const closeWork = (id: string) => {
-    if (FIXED.some((t) => t.id === id)) return
+    if (fixedTabs(tab.kind === 'qa').some((t) => t.id === id)) return
     for (const [key, v] of Object.entries(autoSeen.current)) if (v.tabId === id) closedAt.current[key] = v.count
     setWork((w) => {
       const i = w.findIndex((x) => x.id === id)
@@ -680,6 +687,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
         <div className="session-body">
           <section className="work">
             <WorkTabs
+              qa={qa}
               tabs={everyday ? work.filter((t) => !ENGINEERING_WORK.has(t.kind) || t.id === activeWork) : work}
               active={activeWork}
               unseen={unseen}
@@ -734,11 +742,13 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
                   outside the boundary above, which starts afresh for each view: inside it, every tab switch reloaded the pages. */}
               {/* Live stays mounted once the session is open: hidden it's paused (React prepares it in the
                   background at low priority), so opening it shows it at once rather than rebuilding it. */}
-              <ErrorBoundary where="view:live">
-                <Activity mode={active && current.kind === 'live' ? 'visible' : 'hidden'}>
-                  <LiveScreen tab={tab} s={session} nav={liveNav} active={active && current.kind === 'live'} />
-                </Activity>
-              </ErrorBoundary>
+              {!qa && (
+                <ErrorBoundary where="view:live">
+                  <Activity mode={active && current.kind === 'live' ? 'visible' : 'hidden'}>
+                    <LiveScreen tab={tab} s={session} nav={liveNav} active={active && current.kind === 'live'} />
+                  </Activity>
+                </ErrorBoundary>
+              )}
               {work.some((w) => w.kind === 'preview') && (
                 <ErrorBoundary where="view:preview">
                   <div className={current.kind === 'preview' ? 'browser-host' : 'browser-host inactive'} inert={current.kind !== 'preview'}>
@@ -923,7 +933,8 @@ function WorkTabs({
   views,
   onOpenView,
   onFullScreen,
-  yourTurn
+  yourTurn,
+  qa
 }: {
   tabs: WorkTab[]
   active: string
@@ -938,6 +949,8 @@ function WorkTabs({
   views: { kind: ViewKind; label: string; note: string; has: boolean }[]
   onOpenView: (kind: ViewKind) => void
   onFullScreen: () => void
+  /** A QA session: Conversation and Browser are the fixed tabs, and there's no view picker. */
+  qa: boolean
   /** Claude is stopped on you: the Conversation tab says so while you're on another. */
   yourTurn: boolean
 }) {
@@ -950,12 +963,12 @@ function WorkTabs({
         {tabs.map((t, i) => (
           <div
             key={t.id}
-            data-first-opened={i === FIXED.length ? '' : undefined}
+            data-first-opened={i === 2 ? '' : undefined}
             role="tab"
             aria-selected={t.id === active}
             className={t.id === active ? 'work-tab active' : 'work-tab'}
             onClick={() => onActivate(t.id)}
-            onAuxClick={(e) => e.button === 1 && !isFixed(t) && onClose(t.id)}
+            onAuxClick={(e) => e.button === 1 && !isFixed(t, qa) && onClose(t.id)}
             title={t.kind === 'file' || t.kind === 'diff' ? t.path : t.kind === 'map' ? tr('sessionView.mapLegend') : undefined}
           >
             <Icon name={WORK_ICON[t.kind]} />
@@ -978,7 +991,7 @@ function WorkTabs({
                 <Icon name={kept.includes(t.kind) ? 'pinned' : 'pin'} />
               </button>
             )}
-            {!isFixed(t) && !(isView(t) && kept.includes(t.kind)) && (
+            {!isFixed(t, qa) && !(isView(t) && kept.includes(t.kind)) && (
               <button className="work-tab-close" title={tr('sessionView.close')} onClick={(e) => (e.stopPropagation(), onClose(t.id))}>
                 <Icon name="close" />
               </button>
@@ -989,7 +1002,7 @@ function WorkTabs({
       <span className="spacer" />
       <IconButton icon="screen-full" title={tr('sessionView.fullScreenTitle')} onClick={onFullScreen} />
       {/* Outside the scrolling list, so its menu isn't clipped. */}
-      <div className="work-tab-add">
+      <div className="work-tab-add" hidden={qa}>
           <IconButton icon="add" title={tr('sessionView.openView')} onClick={() => setPicking((p) => !p)} active={picking} />
           {picking && (
             <>

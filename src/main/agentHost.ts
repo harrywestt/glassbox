@@ -510,6 +510,9 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
   /** Edits you asked to hold, before Claude finished writing them; and the ones waiting on you now. */
   private holdWanted = new Set<string>()
   private holdWaiting = new Map<string, (d: { allow: boolean; reason?: string }) => void>()
+  /** A QA session: it tests the app and doesn't change the project (only its report, in .glassbox/qa). */
+  testOnly = false
+
   /** Files the plan's steps say they'll change (set_current_task), for holding edits off the plan. */
   private planFiles: string[] = []
 
@@ -1273,6 +1276,21 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       this.shellSnaps.set(input.tool_use_id, treeSnapshot(this.cwd))
       this.shellStarts.set(input.tool_use_id, Date.now())
       this.shellRuns = [...this.shellRuns.filter((r) => !r.end || Date.now() - r.end < 10 * 60_000), { start: Date.now() }]
+    }
+    // QA tests, it doesn't fix: no edits inside the project except its own report.
+    if (this.testOnly && EDIT_TOOLS.has(input.tool_name)) {
+      const i = (input.tool_input ?? {}) as Record<string, unknown>
+      const target = String(i.file_path ?? i.notebook_path ?? '')
+      const full = (isAbsolute(target) ? target : resolve(this.cwd, target)).replace(/\\/g, '/').toLowerCase()
+      const root = this.cwd.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '') + '/'
+      if (full.startsWith(root) && !full.startsWith(root + '.glassbox/qa/'))
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: 'This is a QA session: test the app, don’t change the project. Report what you find with report_finding; write your report under .glassbox/qa/. If a fix is wanted, say so and the user can start a coding session for it.'
+          }
+        }
     }
     const hit = this.evaluateGuardrails(input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>, toolUseId ?? input.tool_use_id)
     if (!hit) return {}
