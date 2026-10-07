@@ -4,7 +4,7 @@ import { CHANGE_TOOLS, isClaudeOwnFile, type ToolCall } from '../session'
 import { baseName, relPath } from '../lib'
 import { DiffView } from '../components/Code'
 import type { editor } from 'monaco-editor'
-import { Empty, Icon, IconButton, Segmented, useFolded } from '../components/ui'
+import { Empty, Icon, IconButton, Section, Segmented, useFolded } from '../components/ui'
 import type { ArchDiff, ArchDiffEdge, DiffMode, DiffResult } from '../../../shared/events'
 import { Select } from '../components/Select'
 import { useArchitecture } from '../architecture'
@@ -43,6 +43,16 @@ export function ChangesPanel() {
   const [onlyClaude, setOnlyClaude] = useState(false)
   const [filter, setFilter] = useState('')
   const [showUntracked, setShowUntracked] = useState(false)
+  // Architecture changes are there when you want them, not every time.
+  const [showArch, setShowArchState] = useState(() => localStorage.getItem('glassbox.changes.architecture') === 'on')
+  const setShowArch = (on: boolean) => {
+    setShowArchState(on)
+    try {
+      localStorage.setItem('glassbox.changes.architecture', on ? 'on' : 'off')
+    } catch {
+      /* not remembered */
+    }
+  }
   const repo = !!s.git?.isRepo
   const root = s.git?.root ?? tab.cwd
 
@@ -136,67 +146,83 @@ export function ChangesPanel() {
   const open = useCallback((r: Row) => latest.current.openDiff({ path: r.abs, base: latest.current.base, diffMode: latest.current.diffMode, source: r.claudeEdits ? 'session' : 'branch' }), [])
 
   return (
-    <div className="panel">
-      {/* One row: what changed, against what (base branch and how, in one control), and refresh. */}
-      <div className="changes-summary">
-        <span className="small changes-count">
-          <strong>{tr('changesPanel.files', { count: counted.length })}</strong>
-          {diff && <> <span className="ok">+{adds}</span> <span className="err">−{dels}</span></>}
-        </span>
-        {loading && diff && <span className="changes-refreshing" title={tr('changesPanel.refreshing')} aria-label={tr('changesPanel.refreshing')} />}
-        <span className="spacer" />
-        {repo && (
-          <Select
-            value={`${diffMode}|${base ?? ''}`}
-            onChange={(v) => {
-              const [mode, ...rest] = v.split('|')
-              setDiffMode(mode as DiffMode)
-              setBase(rest.join('|'))
-            }}
-            aria-label={tr('changesPanel.compareAgainst')}
-            options={branches.flatMap((b) => [
-              { value: `merge-base|${b}`, label: tr('changesPanel.vsSinceBranching', { branch: b }) },
-              { value: `direct|${b}`, label: tr('changesPanel.vsDirect', { branch: b }) }
-            ])}
+    <div className="panel changes-panel">
+      {/* The changes as one section you can fold away: the count and size in its heading, the
+          controls as quiet icons at its right. */}
+      <Section
+        id="changes"
+        title={tr('changesPanel.title')}
+        meta={
+          <span className="small changes-count">
+            {tr('changesPanel.files', { count: counted.length })}
+            {diff && <> <span className="ok">+{adds}</span> <span className="err">−{dels}</span></>}
+            {loading && diff && <span className="changes-refreshing" title={tr('changesPanel.refreshing')} aria-label={tr('changesPanel.refreshing')} />}
+          </span>
+        }
+        actions={
+          <>
+            {repo && diff && (
+              <IconButton icon="type-hierarchy" title={showArch ? tr('changesPanel.hideArchitecture') : tr('changesPanel.showArchitecture')} active={showArch} onClick={() => setShowArch(!showArch)} />
+            )}
+            {counted.length > 0 && <IconButton icon="radio-tower" title={tr('changesPanel.rippleTitle')} onClick={() => openRipple()} />}
+            {repo && <IconButton icon="refresh" title={tr('changesPanel.refresh')} onClick={load} />}
+          </>
+        }
+      >
+        {/* Which changes, and against what, on one row. */}
+        <div className="changes-filters">
+          <Segmented<'all' | 'claude'>
+            value={onlyClaude ? 'claude' : 'all'}
+            onChange={(v) => setOnlyClaude(v === 'claude')}
+            options={[
+              { value: 'all', label: tr('changesPanel.allChanges') },
+              { value: 'claude', label: claude.size ? tr('changesPanel.claudesChangesCount', { n: claude.size }) : tr('changesPanel.claudesChanges') }
+            ]}
           />
-        )}
-        {counted.length > 0 && <IconButton icon="radio-tower" title={tr('changesPanel.rippleTitle')} onClick={() => openRipple()} />}
-        {repo && <IconButton icon="refresh" title={tr('changesPanel.refresh')} onClick={load} />}
-      </div>
-      <div className="changes-filters">
-        <Segmented<'all' | 'claude'>
-          value={onlyClaude ? 'claude' : 'all'}
-          onChange={(v) => setOnlyClaude(v === 'claude')}
-          options={[
-            { value: 'all', label: tr('changesPanel.allChanges') },
-            { value: 'claude', label: claude.size ? tr('changesPanel.claudesChangesCount', { n: claude.size }) : tr('changesPanel.claudesChanges') }
-          ]}
-        />
+          <span className="spacer" />
+          {repo && (
+            <Select
+              value={`${diffMode}|${base ?? ''}`}
+              onChange={(v) => {
+                const [mode, ...rest] = v.split('|')
+                setDiffMode(mode as DiffMode)
+                setBase(rest.join('|'))
+              }}
+              aria-label={tr('changesPanel.compareAgainst')}
+              options={branches.flatMap((b) => [
+                { value: `merge-base|${b}`, label: tr('changesPanel.vsSinceBranching', { branch: b }) },
+                { value: `direct|${b}`, label: tr('changesPanel.vsDirect', { branch: b }) }
+              ])}
+            />
+          )}
+        </div>
         {/* Filtering only earns its space in a long list. */}
         {(counted.length > 10 || filter) && (
-          <div className="search grow">
-            <Icon name="search" />
-            <input placeholder={tr('changesPanel.filterFiles')} aria-label={tr('changesPanel.filterFiles')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <div className="changes-search">
+            <div className="search">
+              <Icon name="search" />
+              <input placeholder={tr('changesPanel.filterFiles')} aria-label={tr('changesPanel.filterFiles')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+            </div>
           </div>
         )}
-      </div>
-      {error && <div className="note note-error">{error}</div>}
-      {strays > 0 && (
-        <div className="changes-untracked small muted">
-          {showUntracked ? tr('changesPanel.showingUntracked', { count: strays }) : tr('changesPanel.untrackedHidden', { count: strays })}{' '}
-          <button className="link small" onClick={() => setShowUntracked(!showUntracked)}>
-            {showUntracked ? tr('changesPanel.hideThem') : tr('changesPanel.showThem')}
-          </button>
-        </div>
-      )}
-      {repo && base && diff && <ArchitectureChanges base={base} diffMode={diffMode} diff={diff} />}
-      {repo && !diff && !error && <div className="muted pad">{tr('changesPanel.comparing')}</div>}
-      {(diff || !repo) && rows.length === 0 && (
-        <Empty icon={onlyClaude ? 'edit' : 'check'} title={onlyClaude ? tr('changesPanel.claudeNoChanges') : base ? tr('changesPanel.noDifferencesFrom', { base }) : tr('changesPanel.noChanges')}>
-          {tr('changesPanel.emptyBody')}
-        </Empty>
-      )}
-      {rows.length > 0 && <FileList groups={groups} total={rows.length} selected={workPath} onOpen={open} root={tab.cwd} />}
+        {error && <div className="note note-error">{error}</div>}
+        {strays > 0 && (
+          <div className="changes-untracked small muted">
+            {showUntracked ? tr('changesPanel.showingUntracked', { count: strays }) : tr('changesPanel.untrackedHidden', { count: strays })}{' '}
+            <button className="link small" onClick={() => setShowUntracked(!showUntracked)}>
+              {showUntracked ? tr('changesPanel.hideThem') : tr('changesPanel.showThem')}
+            </button>
+          </div>
+        )}
+        {repo && base && diff && <ArchitectureChanges base={base} diffMode={diffMode} diff={diff} shown={showArch} />}
+        {repo && !diff && !error && <div className="muted pad">{tr('changesPanel.comparing')}</div>}
+        {(diff || !repo) && rows.length === 0 && (
+          <Empty icon={onlyClaude ? 'edit' : 'check'} title={onlyClaude ? tr('changesPanel.claudeNoChanges') : base ? tr('changesPanel.noDifferencesFrom', { base }) : tr('changesPanel.noChanges')}>
+            {tr('changesPanel.emptyBody')}
+          </Empty>
+        )}
+        {rows.length > 0 && <FileList groups={groups} total={rows.length} selected={workPath} onOpen={open} root={tab.cwd} />}
+      </Section>
     </div>
   )
 }
@@ -334,7 +360,8 @@ function saveFoldedDirs(root: string, dirs: Set<string>) {
  * adds (+) and removes (−), and any new import that reaches past a module you allowed its public
  * API only. Each opens the map on the two modules.
  */
-function ArchitectureChanges({ base, diffMode, diff }: { base: string; diffMode: DiffMode; diff: DiffResult }) {
+/** `shown`: you asked to see it. A change that breaks a rule you set on a module shows it anyway. */
+function ArchitectureChanges({ base, diffMode, diff, shown }: { base: string; diffMode: DiffMode; diff: DiffResult; shown: boolean }) {
   const { tab, s, actions } = useSession()
   const arch = useArchitecture(tab.cwd, s.files.filter((f) => f.tool === 'Write').length)
   const [result, setResult] = useState<ArchDiff | null>(null)
@@ -352,6 +379,7 @@ function ArchitectureChanges({ base, diffMode, diff }: { base: string; diffMode:
     }
   }, [tab.cwd, base, diffMode, sig, apiOnly])
   if (!result || !arch || (!diff.files.length && !result.error)) return null
+  if (!shown && !result.breaches.length) return null
   const name = (id: string) => arch.modules.find((m) => m.id === id)?.name ?? id
   const pathOf = (id: string) => arch.modules.find((m) => m.id === id && !m.external)?.path
   const show = (ids: string[], why: string) => {

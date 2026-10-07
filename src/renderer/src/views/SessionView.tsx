@@ -43,7 +43,7 @@ import { CommitTab } from '../work/CommitTab'
 import { useServices } from '../services'
 import { BrowserTab } from '../work/BrowserTab'
 import { activeBrowserTab, browserTabs, openInBrowser, waitForPage } from '../browser'
-import { GitPanel } from '../panels/GitPanel'
+import { GitPanel, PrCard } from '../panels/GitPanel'
 import { loadAutoCommit } from '../panels/GitPanel'
 import { LiveScreen, type LiveNav } from '../live/LiveScreen'
 import { useGuardrails } from '../review'
@@ -836,13 +836,14 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
       return <DecisionsPanel />
     case 'changes':
     case 'git':
-      // The files, then what the review found in them, then the branch's commits.
+      // The pull request, then the files, then what the review found in them, then the branch's commits.
       return (
         <PanelActionsContext.Provider value="stacked">
           <div className="panel stack">
+            {s.git?.isRepo && <PrCard />}
             <ChangesPanel />
             <ReviewPanel compact />
-            {s.git?.isRepo !== false && <GitPanel />}
+            {s.git?.isRepo !== false && <GitPanel withPr={false} />}
           </div>
         </PanelActionsContext.Provider>
       )
