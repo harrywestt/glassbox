@@ -22,7 +22,8 @@ export function loadAutoCommit(): boolean {
  * Git side panel: this branch's commits (Glassbox's own ones tagged), what's uncommitted, and the
  * switch for committing Claude's changes automatically.
  */
-export function GitPanel() {
+/** `withPr`: show the pull request card here (the Changes tab shows it at its top instead). */
+export function GitPanel({ withPr = true }: { withPr?: boolean } = {}) {
   const { tab, s, openCommit } = useSession()
   const [log, setLog] = useState<{ commits: CommitEntry[]; uncommitted: number } | null>(null)
   const [mine, setMine] = useState<Record<string, { at: number }>>({})
@@ -78,7 +79,7 @@ export function GitPanel() {
     <div className="panel">
       <PanelHeader title={tr('gitPanel.title')} />
       <div className="panel-scroll">
-        <PrCard />
+        {withPr && <PrCard />}
         <section className="card">
           <label className="setting-inline">
             <span className="grow" title={tr('gitPanel.autoCommitTitle')}>
@@ -139,9 +140,9 @@ export function GitPanel() {
 const REVIEW: Record<string, string> = { APPROVED: tr('gitPanel.reviewApproved'), CHANGES_REQUESTED: tr('gitPanel.reviewChangesRequested'), REVIEW_REQUIRED: tr('gitPanel.reviewNeeded') }
 
 /** The branch's pull request: what state it's in, reviews and checks, and a link to open it on GitHub. */
-function PrCard() {
+export function PrCard() {
   const { tab, s, composerRef } = useSession()
-  const [res, setRes] = useState<{ pr?: BranchPr; none?: boolean; error?: string } | null>(null)
+  const [res, setRes] = useState<{ pr?: BranchPr; none?: boolean; error?: string; notGitHub?: boolean } | null>(null)
   const [loading, setLoading] = useState(false)
   const load = useCallback(() => {
     setLoading(true)
@@ -157,6 +158,8 @@ function PrCard() {
   const stateKey = pr ? (pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : pr.isDraft ? 'draft' : 'open') : ''
   const state = stateKey ? tr(`gitPanel.prState.${stateKey}`) : ''
   const checks = pr?.checks
+  // Not on GitHub: there's no pull request to show, so the section stays out of the way.
+  if (res?.notGitHub) return null
   return (
     <Section id="git-pr" className="pr-card" title={tr('gitPanel.pullRequest')} actions={<IconButton icon={loading ? 'loading' : 'refresh'} title={tr('gitPanel.checkAgain')} onClick={load} />}>
       {!res ? (

@@ -111,7 +111,7 @@ export type BranchPr = {
 type GhCheck = { conclusion?: string; state?: string; status?: string }
 
 /** The pull request for the folder's current branch, if there is one (open, draft, merged or closed). */
-export async function getBranchPr(cwd: string): Promise<{ pr?: BranchPr; none?: boolean; error?: string }> {
+export async function getBranchPr(cwd: string): Promise<{ pr?: BranchPr; none?: boolean; error?: string; notGitHub?: boolean }> {
   try {
     const fields = 'number,title,url,state,isDraft,baseRefName,author,updatedAt,reviewDecision,additions,deletions,changedFiles,statusCheckRollup'
     const raw = JSON.parse(await run('gh', ['pr', 'view', '--json', fields], cwd)) as {
@@ -131,6 +131,7 @@ export async function getBranchPr(cwd: string): Promise<{ pr?: BranchPr; none?: 
   } catch (err) {
     const msg = String((err as { stderr?: string }).stderr || err)
     if (/no pull requests found|no open pull requests/i.test(msg)) return { none: true }
-    return { error: /not a git repository|no git remotes|could not determine/i.test(msg) ? tr('mainLauncher.notGitHubRepo') : /auth|login/i.test(msg) ? tr('mainLauncher.signInGitHub') : /ENOENT|not recognized/i.test(msg) ? tr('mainLauncher.ghMissing') : msg.split('\n')[0] }
+    const notGitHub = /not a git repository|no git remotes|could not determine/i.test(msg)
+    return { notGitHub, error: notGitHub ? tr('mainLauncher.notGitHubRepo') : /auth|login/i.test(msg) ? tr('mainLauncher.signInGitHub') : /ENOENT|not recognized/i.test(msg) ? tr('mainLauncher.ghMissing') : msg.split('\n')[0] }
   }
 }

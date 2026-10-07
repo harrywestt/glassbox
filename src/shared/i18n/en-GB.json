@@ -366,7 +366,10 @@
     "claudeEdited_one": "Claude edited this {count} time this session",
     "claudeEdited_other": "Claude edited this {count} times this session",
     "showMore_one": "Show {count} more file",
-    "showMore_other": "Show {count} more files"
+    "showMore_other": "Show {count} more files",
+    "title": "Changes",
+    "showArchitecture": "Show how the change affects the architecture",
+    "hideArchitecture": "Hide the architecture changes"
   },
   "code": {
     "commentOnSelectionTip": "Select lines in the file, then comment on them",

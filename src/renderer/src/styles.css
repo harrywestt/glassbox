@@ -1866,3 +1866,8 @@ body.resizing .session-body > .side, body.resizing .splitter { transition: none;
 
 /* A switch in a form field sizes to its options rather than stretching across the field. */
 .field > .segmented { align-self: flex-start; }
+
+/* Changes tab: the list's search sits on its own row under the filters when the list is long. */
+.changes-search { padding: 0 var(--s-3) var(--s-2) var(--s-4); }
+.changes-panel .changes-filters { padding: var(--s-1) var(--s-3) var(--s-2) var(--s-4); }
+.changes-panel .changes-count { display: inline-flex; align-items: center; gap: var(--s-1); margin-left: var(--s-2); font-weight: 400; color: var(--muted); }

@@ -100,7 +100,7 @@ const api = {
   git: {
     branches: (cwd: string): Promise<{ branches: string[]; defaultBase: string | null }> => invoke('git:branches', cwd),
     /** The pull request for the current branch (via the GitHub CLI). */
-    branchPr: (cwd: string): Promise<{ pr?: BranchPr; none?: boolean; error?: string }> => invoke('git:branchPr', cwd),
+    branchPr: (cwd: string): Promise<{ pr?: BranchPr; none?: boolean; error?: string; notGitHub?: boolean }> => invoke('git:branchPr', cwd),
     branchList: (cwd: string): Promise<BranchList> => invoke('git:branchList', cwd),
     log: (cwd: string, base: string | null): Promise<{ commits: CommitEntry[]; uncommitted: number }> => invoke('git:log', cwd, base),
     commitFiles: (cwd: string, sha: string): Promise<{ status: string; path: string }[]> => invoke('git:commitFiles', cwd, sha),
