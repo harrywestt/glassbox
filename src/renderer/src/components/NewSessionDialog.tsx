@@ -46,7 +46,7 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
 
   const valid =
     !!cwd &&
-    (kind === 'coding' ? !!(f.ticket?.trim() || f.describe?.trim()) : kind === 'review' ? !!f.pr : kind === 'planning' || kind === 'prd' ? !!f.topic?.trim() : true)
+    (kind === 'coding' ? !!(f.ticket?.trim() || f.describe?.trim()) : kind === 'review' ? !!f.pr : kind === 'planning' ? !!f.topic?.trim() : kind === 'qa' ? !!f.what?.trim() && (f.env !== 'url' || !!f.url?.trim()) : true)
 
   // What Start is waiting for, said next to it rather than left as a greyed-out button.
   const missing = !cwd
@@ -55,9 +55,13 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
       ? tr('newSessionDialog.missing.ticket')
       : kind === 'review' && !f.pr
         ? tr('newSessionDialog.missing.pr')
-        : (kind === 'planning' || kind === 'prd') && !f.topic?.trim()
+        : kind === 'planning' && !f.topic?.trim()
           ? tr('newSessionDialog.missing.topic')
-          : null
+          : kind === 'qa' && !f.what?.trim()
+            ? tr('newSessionDialog.missing.qaWhat')
+            : kind === 'qa' && f.env === 'url' && !f.url?.trim()
+              ? tr('newSessionDialog.missing.qaUrl')
+              : null
 
   const launch = async () => {
     if (!valid) return
@@ -165,21 +169,47 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
             </>
           )}
           {kind === 'review' && <PrPicker cwd={cwd} selected={f.pr?.url} onSelect={(pr) => set({ pr })} worktree={!!f.worktree} onWorktree={(w) => set({ worktree: w })} />}
-          {(kind === 'planning' || kind === 'prd') && (
+          {kind === 'planning' && (
             <>
               <label className="field">
-                <span>{kind === 'prd' ? tr('newSessionDialog.featureOrProduct') : tr('newSessionDialog.thinkThrough')}</span>
-                <input autoFocus placeholder={kind === 'prd' ? tr('newSessionDialog.prdPlaceholder') : tr('newSessionDialog.planningPlaceholder')} value={f.topic ?? ''} onChange={(e) => set({ topic: e.target.value })} />
+                <span>{tr('newSessionDialog.thinkThrough')}</span>
+                <input autoFocus placeholder={tr('newSessionDialog.planningPlaceholder')} value={f.topic ?? ''} onChange={(e) => set({ topic: e.target.value })} />
               </label>
               <label className="field">
                 <span>{tr('newSessionDialog.contextOptional')}</span>
                 <textarea rows={3} placeholder={tr('newSessionDialog.contextPlaceholder')} value={f.context ?? ''} onChange={(e) => set({ context: e.target.value })} />
               </label>
-              {kind === 'prd' && (
-                <label className="check">
+              <label className="check">
+                <input type="checkbox" checked={!!f.prd} onChange={(e) => set({ prd: e.target.checked })} /> {tr('newSessionDialog.endWithPrd')}
+              </label>
+              {f.prd && (
+                <label className="check sub">
                   <input type="checkbox" checked={!!f.confluence} onChange={(e) => set({ confluence: e.target.checked })} /> {tr('newSessionDialog.publishConfluence')}
                 </label>
               )}
+            </>
+          )}
+          {kind === 'qa' && (
+            <>
+              <label className="field">
+                <span>{tr('newSessionDialog.qaWhat')}</span>
+                <textarea autoFocus rows={3} placeholder={tr('newSessionDialog.qaWhatPlaceholder')} value={f.what ?? ''} onChange={(e) => set({ what: e.target.value })} />
+              </label>
+              <div className="field">
+                <span>{tr('newSessionDialog.qaWhere')}</span>
+                <Segmented<'local' | 'url'> value={f.env ?? 'local'} onChange={(env) => set({ env })} options={[{ value: 'local', label: tr('newSessionDialog.qaLocal') }, { value: 'url', label: tr('newSessionDialog.qaUrl') }]} />
+              </div>
+              {f.env === 'url' && (
+                <label className="field">
+                  <span>{tr('newSessionDialog.qaUrlLabel')}</span>
+                  <input placeholder={tr('newSessionDialog.qaUrlPlaceholder')} value={f.url ?? ''} onChange={(e) => set({ url: e.target.value })} />
+                </label>
+              )}
+              <label className="field">
+                <span>{tr('newSessionDialog.qaNotes')}</span>
+                <textarea rows={2} placeholder={tr('newSessionDialog.qaNotesPlaceholder')} value={f.notes ?? ''} onChange={(e) => set({ notes: e.target.value })} />
+              </label>
+              <p className="muted small">{tr('newSessionDialog.qaHint')}</p>
             </>
           )}
           {kind === 'blank' && <p className="muted small">{tr('newSessionDialog.blankHint', { folder: cwd ? baseName(cwd) : tr('newSessionDialog.folderYouPick') })}</p>}

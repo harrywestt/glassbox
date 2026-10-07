@@ -1,17 +1,18 @@
 import type { Requirements } from '../../shared/events'
 import { tr } from '../../shared/i18n'
 
-export type SessionKind = 'coding' | 'review' | 'planning' | 'prd' | 'blank'
+/** `planning` is "Shape an idea" (it took in "Write a PRD"); `prd` stays only so older sessions keep their icon. */
+export type SessionKind = 'coding' | 'review' | 'qa' | 'planning' | 'prd' | 'blank'
 
 export const KINDS: { kind: SessionKind; icon: string; title: string; blurb: string }[] = [
   { kind: 'coding', icon: 'code', title: tr('launch.kinds.coding.title'), blurb: tr('launch.kinds.coding.blurb') },
   { kind: 'review', icon: 'git-pull-request', title: tr('launch.kinds.review.title'), blurb: tr('launch.kinds.review.blurb') },
+  { kind: 'qa', icon: 'beaker', title: tr('launch.kinds.qa.title'), blurb: tr('launch.kinds.qa.blurb') },
   { kind: 'planning', icon: 'lightbulb', title: tr('launch.kinds.planning.title'), blurb: tr('launch.kinds.planning.blurb') },
-  { kind: 'prd', icon: 'book', title: tr('launch.kinds.prd.title'), blurb: tr('launch.kinds.prd.blurb') },
   { kind: 'blank', icon: 'comment-discussion', title: tr('launch.kinds.blank.title'), blurb: tr('launch.kinds.blank.blurb') }
 ]
 
-export const KIND_ICON: Record<SessionKind, string> = Object.fromEntries(KINDS.map((k) => [k.kind, k.icon])) as Record<SessionKind, string>
+export const KIND_ICON: Record<SessionKind, string> = { ...Object.fromEntries(KINDS.map((k) => [k.kind, k.icon])), prd: 'book' } as Record<SessionKind, string>
 
 export type LaunchFields = {
   ticket?: string
@@ -23,6 +24,13 @@ export type LaunchFields = {
   topic?: string
   context?: string
   confluence?: boolean
+  /** Shape an idea: end with a PRD. */
+  prd?: boolean
+  /** QA: what to test (tickets, a PR link, or a feature), where, and anything else it needs. */
+  what?: string
+  env?: 'local' | 'url'
+  url?: string
+  notes?: string
 }
 
 export type PendingStart = { prompt: string; display: string; plan?: boolean; requirements?: Partial<Requirements> }
@@ -101,32 +109,59 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
       ].join('\n\n')
       return { title: pr.repo ? tr('launch.reviewTitleRepo', { repo: pr.repo.split('/')[1], number: pr.number }) : tr('launch.reviewTitle', { number: pr.number }), start: { prompt, display: tr('launch.reviewDisplay', { number: pr.number, title: pr.title }) } }
     }
+    // An older "Write a PRD" start is Shape an idea with the PRD switched on.
+    case 'prd':
+      return buildLaunch('planning', { ...f, prd: true })
     case 'planning': {
+      const topic = f.topic?.trim() ?? tr('launch.newFeature')
       const prompt = [
-        `Let’s think this through together: ${f.topic?.trim()}`,
-        f.context?.trim() ? `Context: ${f.context.trim()}` : '',
-        'This is a planning session, so don’t change any files. Work like a thoughtful tech lead: explore the codebase where it helps, ask me the questions that matter with log_decision (kind question), sketch options with show_diagram, and log decisions and assumptions as you go.',
-        'Finish with two or three options, their trade-offs, and your recommendation.'
-      ]
-        .filter(Boolean)
-        .join('\n\n')
-      return { title: (f.topic ?? tr('launch.planningTitle')).slice(0, 40), start: { prompt, display: tr('launch.planDisplay', { topic: f.topic?.trim() }), plan: true } }
-    }
-    case 'prd': {
-      const title = f.topic?.trim() ?? tr('launch.newFeature')
-      const prompt = [
-        `We’re writing a product requirements doc for: ${title}`,
+        `Let’s shape this idea together: ${topic}`,
         f.context?.trim() ? `Context and links: ${f.context.trim()}` : '',
-        'Don’t change any code. Interview me first: ask the questions that matter most with log_decision (kind question), a few at a time, and look at the codebase and existing docs for context.',
-        `Then draft the PRD with: the problem and evidence for it; users and what they’re trying to do; goals and non-goals; requirements, each with acceptance criteria; UX flows (use show_diagram); data and API impact; risks and open questions; rollout and how we’ll measure success. Write it to docs/prd/${slug(title) || 'prd'}.md, and ask before overwriting an existing file.`,
-        f.confluence ? 'When I approve the draft, publish it to Confluence with the Atlassian connector and give me the link.' : ''
+        'This is a thinking session, so don’t change any project files. Work like a thoughtful tech lead: explore the codebase and any docs where it helps, ask me the questions that matter with log_decision (kind question), a few at a time, sketch the options with show_diagram, and log decisions and assumptions as you go.',
+        f.prd
+          ? `When we’ve settled on a direction, write it up as a PRD: the problem and evidence for it; users and what they’re trying to do; goals and non-goals; requirements, each with acceptance criteria; UX flows (show_diagram); data and API impact; risks and open questions; rollout and how we’ll measure success. Write it to docs/prd/${slug(topic) || 'prd'}.md (ask before overwriting an existing file) and present_file it.${f.confluence ? ' When I approve it, publish it to Confluence with the Atlassian connector and give me the link.' : ''}`
+          : 'Finish with two or three options, their trade-offs, and your recommendation. Then offer to write it up as a PRD.'
       ]
         .filter(Boolean)
         .join('\n\n')
       return {
-        title: tr('launch.prdTitle', { title }).slice(0, 40),
-        start: { prompt, display: tr('launch.prdDisplay', { title }) },
-        requirements: f.confluence ? { connectors: ['claude.ai Atlassian'] } : undefined
+        title: (f.prd ? tr('launch.prdTitle', { title: topic }) : topic).slice(0, 40),
+        start: { prompt, display: tr('launch.planDisplay', { topic }), plan: !f.prd },
+        requirements: f.prd && f.confluence ? { connectors: ['claude.ai Atlassian'] } : undefined
+      }
+    }
+    case 'qa': {
+      const what = f.what?.trim() ?? ''
+      const keys = [...new Set(what.split(/[\s,]+/).map((t) => jiraKey(t)).filter((k): k is string => !!k))]
+      const pr = what.match(/github\.com\/[^\s/]+\/[^\s/]+\/pull\/\d+/)?.[0]
+      const where = f.env === 'url' && f.url?.trim() ? f.url.trim() : null
+      const name = keys.length ? keys.join(', ') : pr ? `PR ${pr.split('/').pop()}` : what.slice(0, 40)
+      const prompt = [
+        `QA this for me: ${what}`,
+        where ? `Test it on ${where}.` : 'Test it locally: start the app with start_app (it runs the project’s services, as my Run all button does) and use what it opens.',
+        f.notes?.trim() ? `Notes (accounts, test data, anything else): ${f.notes.trim()}` : '',
+        'You’re testing, not fixing: don’t change the project’s code. Glassbox only lets you write your report, under .glassbox/qa/.',
+        [
+          '1. Understand what to test. ' +
+            (keys.length ? `Read ${keys.join(', ')} with the Atlassian connector: description, acceptance criteria, comments, designs and linked issues. ` : '') +
+            (pr ? `Read the PR with \`gh pr view ${pr}\` and \`gh pr diff ${pr}\`. ` : '') +
+            'Look at the code for the screens, endpoints and rules involved (read only), so you know where to go and what should happen.',
+          '2. Write the test plan: call set_acceptance_criteria with one criterion per test case. Cover the happy paths, edge cases, validation and error messages, empty and loading states, permissions or roles where they matter, and anything nearby the change could break. Then call check_in with the plan in a few lines, asking me to approve or adjust it, and don’t run anything before I answer.',
+          where
+            ? `3. Open ${where} in the Glassbox Browser (browser_open). If it needs signing in, call check_in asking me to sign in in the Browser tab and to answer when I’m in. Never ask for a password and never type credentials yourself.`
+            : '3. Start the app with start_app and wait until it’s up. If it needs signing in, call check_in asking me to sign in in the Browser tab and to answer when I’m in. Never ask for a password and never type credentials yourself.',
+          '4. Run each case in the Glassbox Browser: browser_snapshot to read the page, browser_click and browser_type to use it, browser_eval to check details, and browser_screenshot as evidence for anything that matters. Show progress with show_progress (step N of M, one step per case). As each case finishes, update its criterion: tested with the evidence (what you did and saw), or failing.',
+          '5. For each bug, call report_finding the moment you find it: severity, steps to reproduce, what should happen and what did, and the screenshot path.',
+          '6. Be careful with shared environments: call check_in before anything destructive or irreversible (deleting records, sending emails or notifications, payments, inviting people, changing settings others rely on). On production only look, never change anything. Prefix any test data you create with "QA " and today’s date, so it’s easy to find and clean up.',
+          `7. Finish with a QA report: a table of the cases with pass or fail and the evidence, the bugs found with their severity, anything you couldn’t test and why, and what you’d test next. Write it to .glassbox/qa/${slug(name) || 'report'}.md and present_file it. Then offer to file the bugs${keys.length ? ' in Jira' : ''} (ask before creating anything) or to fix them in a coding session.`
+        ].join('\n\n')
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+      return {
+        title: tr('launch.qaTitle', { name }).slice(0, 40),
+        start: { prompt, display: tr('launch.qaDisplay', { what: what.slice(0, 120), where: where ?? tr('launch.qaLocal') }) },
+        requirements: keys.length ? { connectors: ['claude.ai Atlassian'] } : undefined
       }
     }
     case 'blank':

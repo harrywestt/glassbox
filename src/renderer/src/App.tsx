@@ -107,7 +107,7 @@ export function App() {
     const tab = state.tabs.find((t) => t.id === state.active)
     if (!tab || opened.current.has(tab.id)) return
     opened.current.add(tab.id)
-    void window.glassbox.session.open(tab.id, tab.cwd, tab.resumeId, loadAccess())
+    void window.glassbox.session.open(tab.id, tab.cwd, tab.resumeId, loadAccess(), tab.kind)
   }, [state.active, state.tabs])
 
   const actions = useMemo<AppActions>(
@@ -163,7 +163,7 @@ export function App() {
         if (!tab) return
         tab.cwd = cwd
         opened.current.add(tabId)
-        void window.glassbox.session.open(tabId, cwd, undefined, loadAccess())
+        void window.glassbox.session.open(tabId, cwd, undefined, loadAccess(), tab.kind)
         dispatch({ type: 'activate', id: tabId })
       }
     }),

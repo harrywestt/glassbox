@@ -965,8 +965,8 @@
         "blurb": "Findings by severity and a draft review."
       },
       "planning": {
-        "title": "Plan or explore an idea",
-        "blurb": "Think it through; nothing is changed."
+        "title": "Shape an idea",
+        "blurb": "Think it through; a PRD if you want one."
       },
       "prd": {
         "title": "Write a PRD",
@@ -975,6 +975,10 @@
       "blank": {
         "title": "Blank session",
         "blurb": "Just a session in the folder."
+      },
+      "qa": {
+        "title": "QA a feature",
+        "blurb": "Claude tests it in the Browser and reports back."
       }
     },
     "codingTitle": "Coding",
@@ -988,7 +992,10 @@
     "newFeature": "New feature",
     "prdTitle": "PRD: {title}",
     "prdDisplay": "Write a PRD: {title}",
-    "newSession": "New session"
+    "newSession": "New session",
+    "qaTitle": "QA: {name}",
+    "qaDisplay": "QA {what} ({where})",
+    "qaLocal": "running locally"
   },
   "lib": {
     "now": "now",
@@ -1500,7 +1507,9 @@
       "folder": "Pick a project folder",
       "ticket": "Add a ticket or describe the change",
       "pr": "Pick a pull request",
-      "topic": "Say what it’s about"
+      "topic": "Say what it’s about",
+      "qaWhat": "Say what to test",
+      "qaUrl": "Add the environment’s address"
     },
     "busy": {
       "checkoutPr": "Checking out #{number} into a worktree…",
@@ -1555,7 +1564,18 @@
       "otherRepoTip": "Only pull requests from this folder’s repo can be checked out here",
       "worktree": "Check it out in a separate worktree so Claude can run its tests",
       "otherRepoNote": "This pull request is in another repo, so Claude reviews it from its link."
-    }
+    },
+    "endWithPrd": "Write it up as a PRD at the end",
+    "qaWhat": "What to test",
+    "qaWhatPlaceholder": "Jira tickets (NSD-1234, NSD-1240), a PR link, or the feature in your own words",
+    "qaWhere": "Where",
+    "qaLocal": "Run it locally",
+    "qaUrl": "An environment",
+    "qaUrlLabel": "Its address",
+    "qaUrlPlaceholder": "https://qa.example.com",
+    "qaNotes": "Notes (optional)",
+    "qaNotesPlaceholder": "Test accounts to use, data that already exists, things to leave alone",
+    "qaHint": "Claude writes a test plan for you to approve first, asks you to sign in in the Browser if it needs to, and asks before anything it can’t undo. It can’t change the project’s code."
   },
   "panZoom": {
     "zoomOut": "Zoom out (-)",

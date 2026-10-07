@@ -318,7 +318,7 @@ const browserFor = (tabId: string): { bridge: BrowserBridge; shotsDir: string } 
 })
 
 // Sessions
-ipcMain.handle('session:open', (_e, tabId: string, cwd: string, resume?: string, access?: AccessMode) => {
+ipcMain.handle('session:open', (_e, tabId: string, cwd: string, resume?: string, access?: AccessMode, kind?: string) => {
   hosts.get(tabId)?.close()
   // A pinned session Claude Code has since cleared comes back from its backup first.
   if (resume) {
@@ -350,6 +350,8 @@ ipcMain.handle('session:open', (_e, tabId: string, cwd: string, resume?: string,
     () => [...hosts].filter(([id, x]) => id !== tabId && !!x.root() && x.root()!.toLowerCase() === h.root()?.toLowerCase()).map(([, x]) => x)
   )
   hosts.set(tabId, h)
+  // A QA session tests; it doesn't change the project.
+  h.testOnly = kind === 'qa'
   void h.open(resume, access)
   // A new session redraws its project's map in the background; resuming keeps the cached one.
   if (!resume) void refreshArchitecture(cwd)
