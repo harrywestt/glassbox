@@ -38,9 +38,13 @@ export const GLASSBOX_TOOLS = [
 export const GLASSBOX_INSTRUCTIONS = `You are running inside Glassbox, a desktop UI that shows the user everything you do.
 Show, don't only tell. The user is watching Glassbox, and its views are what make it better than a terminal, so put things in them:
 - Explaining how something works (architecture, data, a sequence of calls, a state machine), or planning a change across modules: show_diagram alongside your answer, then open_tab diagrams.
+  For example: "how does auth work here?" (a diagram of the services and where the token goes); "what happens to an order after checkout?" (a flowchart of its states); planning a refactor of three modules (a diagram of the modules and the connections you'll add or remove); a database question (show_database, or an ER diagram).
 - Finished a change that spans more than one module or alters how a request moves through the system: show_flow (before and after) or show_diagram before your summary.
-- Work in 3 or more steps that will take minutes (a QA sweep across pages, a test or build run, a change across many files, build then deploy): show_progress with step and steps when you start, moved on as each step finishes, done at the end.
+  For example: a new API endpoint the front end now calls (a flow from Browser to API to Database, new hops marked new); moving validation from the controller into a service (the flow before and after, the moved hop marked changed); adding a cache in front of a lookup (the flow with the cache hit and miss).
+- Anything you start that runs for more than a minute: show_progress, so the user sees it moving without asking. Do it unprompted.
+  For example: watching a deploy or a CI run (gh run watch, a pipeline, kubectl rollout status): one loader with steps for the stages (build, test, deploy), or watch on the log; a full test suite, build, docker build or install: watch its log file for a percent or a done line; a dev server or service coming up: watch its url; a migration or data backfill: step and steps as each batch finishes; a QA sweep across 6 pages or a change across 12 files: step 1 of 6 and so on, moved on as each finishes.
 - A showcase, demo or deck of the work: build_showcase, never a skill or a hand-written page.
+  For example: "make a showcase of this PR", "something I can show the team", "a demo of the feature for stand-up", or at the end of a ticket when the user asks for something to share.
 Use the glassbox MCP tools to keep the user oriented:
 - Call set_current_task when you start a distinct piece of work, and update it as steps complete. For multi-step work, list every step up front and give each step the files you expect it to change, so the map can show where each step lands.
 - Before you present a plan (ExitPlanMode) or start work that spans more than one module, call show_plan_on_map with the modules it changes or adds and the connections between modules it adds or removes (an import, or a call over HTTP). The user approves the design on the map, before any code exists; call it again if the plan changes.
@@ -114,7 +118,7 @@ export function createGlassboxServer(
         : []),
       tool(
         'show_diagram',
-        'Display a Mermaid diagram in the Glassbox Diagrams panel. Reusing an id replaces that diagram.',
+        'Display a Mermaid diagram in the Glassbox Diagrams panel. Reusing an id replaces that diagram. Use it whenever a picture explains faster than words: how services or modules connect (flowchart LR), the order of calls in a request (sequenceDiagram), the states something moves through (stateDiagram-v2), tables and their relations (erDiagram), or the plan for a change across modules.',
         {
           id: z.string().describe('Stable slug, e.g. "auth-flow"'),
           title: z.string(),
@@ -128,7 +132,7 @@ export function createGlassboxServer(
       ),
       tool(
         'show_flow',
-        'Show how a request or user action moves through the system, before and after your change, as an animated sequence in Glassbox. Reusing an id replaces that flow.',
+        'Show how a request or user action moves through the system, before and after your change, as an animated sequence in Glassbox. Reusing an id replaces that flow. Use it after any change that adds, removes or alters a call, payload or response on a path the user cares about: e.g. "Place an order" across Browser, API, Orders service and Database, with the hops you added marked new and the ones you changed marked changed.',
         {
           id: z.string().describe('Stable slug, e.g. "place-order"'),
           title: z.string().describe('The user action or request, e.g. "Place an order"'),
@@ -338,7 +342,7 @@ export function createGlassboxServer(
       ),
       tool(
         'show_progress',
-        "Show (or update) a named loader just above the user's message box, ONLY for long work (over a minute) with real progress to show. Starting one needs step and steps (e.g. step 1 of 4), a known percent, or watch; without one of those it's refused. Move it along with step (or percent) and detail as each part finishes, or pass watch and Glassbox moves it: done when a url answers or a file appears, or percent and done read from a log file. Not for ordinary commands or quick checks.",
+        "Show (or update) a named loader just above the user's message box, for anything you start that runs over a minute, without being asked: watching a deploy or CI run (steps for its stages, or watch its log), a full test suite or build (watch its log for a percent or done line), a service starting (watch its url), a migration or a multi-file change (step N of M). Use it ONLY where there's real progress to show. Starting one needs step and steps (e.g. step 1 of 4), a known percent, or watch; without one of those it's refused. Move it along with step (or percent) and detail as each part finishes, or pass watch and Glassbox moves it: done when a url answers or a file appears, or percent and done read from a log file. Not for ordinary commands or quick checks.",
         {
           id: z.string().describe('Stable id for this task, e.g. "build" or "deploy-staging"; reuse it to update'),
           label: z.string().describe('What is loading, e.g. "Building the API"'),
@@ -351,7 +355,7 @@ export function createGlassboxServer(
             .object({
               url: z.string().optional().describe('Done once this URL answers (e.g. a dev server coming up)'),
               file: z.string().optional().describe('Done once this file exists'),
-              log: z.string().optional().describe('A log file to read for progress'),
+              log: z.string().optional().describe('A log file to read for progress: lines with a percent ("45%") or a count ("stage 3 of 5", "[3/5]") move the bar; its latest line shows under it. Send a command\'s output there to watch it (e.g. > deploy.log 2>&1).'),
               percent_pattern: z.string().optional().describe('Regex whose first group is the percent in a log line (default: a number followed by %)'),
               done_pattern: z.string().optional().describe('Regex for a log line that means it finished'),
               fail_pattern: z.string().optional().describe('Regex for a log line that means it failed')
@@ -404,7 +408,7 @@ export function createGlassboxServer(
       ...(browser ? browserTools(browser.bridge, browser.shotsDir) : []),
       tool(
         'build_showcase',
-        'Get the instructions for building a showcase deck of this work (a shareable page for teammates, published as a Claude Artifact). Call it when the user asks for a showcase or demo of the work; then follow the instructions it returns.',
+        'Get the instructions for building a showcase deck of this work (a shareable page for teammates, published as a Claude Artifact). Call it when the user asks for a showcase, demo, deck or "something to show the team" about the work (a PR, a ticket, a feature); then follow the instructions it returns.',
         {
           name: z.string().describe('Short kebab-case name for the deck, e.g. the ticket key and a slug'),
           notes: z.string().optional().describe("Anything the user asked to emphasise"),

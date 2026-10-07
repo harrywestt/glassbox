@@ -10,6 +10,9 @@ import { tr } from '../shared/i18n'
  * runs anything.
  */
 
+/** "3 of 5", "3/5", "[3/5]": a count of a total, as printed by deploys, CI stages, migrations and test runners. */
+const FRACTION = /\b(\d{1,5})\s*(?:of|\/)\s*(\d{1,5})\b/i
+
 export type Watch = { url?: string; file?: string; log?: string; percent_pattern?: string; done_pattern?: string; fail_pattern?: string }
 
 const POLL_MS = 3000
@@ -85,6 +88,12 @@ export class Loaders {
             const m = percentRx.exec(lines[i])
             if (m) pct = Math.min(100, Number(m[1] ?? m[0]))
           }
+          // No percent printed: "stage 3 of 5", "step 3/5" or "[3/5]" is progress too (from the latest such line).
+          if (pct === undefined && !w.percent_pattern)
+            for (let i = lines.length - 1; i >= 0 && pct === undefined; i--) {
+              const m = FRACTION.exec(lines[i])
+              if (m && Number(m[2]) > 0 && Number(m[1]) <= Number(m[2])) pct = Math.round((Number(m[1]) / Number(m[2])) * 100)
+            }
           this.patch(id, { ...(pct !== undefined && !Number.isNaN(pct) ? { percent: pct } : {}), ...(last ? { detail: last } : {}) })
         }
       } catch {
