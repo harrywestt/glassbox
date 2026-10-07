@@ -78,18 +78,95 @@ export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgr
   }
 }
 
-async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void, live: boolean): Promise<string> {
+/**
+ * Whisper hears 30 seconds at a time. Its own chunking of a longer recording garbled or dropped
+ * whole stretches when the windows held long pauses or room noise (a third of a 90-second take
+ * lost). So a recording is cut at natural pauses into pieces of up to 28 seconds; pieces with no
+ * speech are skipped (Whisper invents sentences for silence); each piece is transcribed on its own.
+ *
+ * While you talk, finished pieces are transcribed once and kept: each live pass only redoes the
+ * piece you're still speaking, so the live words stay quick however long you go on.
+ */
+const live = { length: 0, done: new Map<string, string>() }
+
+async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void, isLive: boolean): Promise<string> {
   // Too short to be speech, or effectively silent: Whisper hallucinates on these, so skip them.
   if (audio.length < 16_000 * 0.8 || !hasSpeech(audio)) return ''
   // The final transcript uses the larger model once it's ready (until its first download finishes, the small one).
-  const asr = !live && automation().voiceAccurate && ready.has(FINAL_MODEL) ? await loadModel(FINAL_MODEL) : await prepareVoice(onProgress)
-  const out = await asr(audio, { chunk_length_s: 30, stride_length_s: 5 })
-  const text = (Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text).trim()
-  // Whisper emits these for silence or noise.
+  const asr = !isLive && automation().voiceAccurate && ready.has(FINAL_MODEL) ? await loadModel(FINAL_MODEL) : await prepareVoice(onProgress)
+  // A new recording starts the live pieces afresh.
+  if (!isLive || audio.length < live.length) live.done.clear()
+  live.length = isLive ? audio.length : 0
+  const pieces = segments(audio)
+  const texts: string[] = []
+  for (let i = 0; i < pieces.length; i++) {
+    const { from, to } = pieces[i]
+    const key = `${from}:${to}`
+    const last = i === pieces.length - 1
+    // Live: a finished piece is transcribed once; the one still being spoken every pass.
+    if (isLive && !last && live.done.has(key)) {
+      texts.push(live.done.get(key)!)
+      continue
+    }
+    const out = await asr(audio.subarray(from, to))
+    const text = clean((Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text).trim())
+    if (isLive && !last) live.done.set(key, text)
+    texts.push(text)
+  }
+  return texts.filter(Boolean).join(' ')
+}
+
+/** A piece's text, without what Whisper says for silence or noise, and without runaway repetition. */
+function clean(text: string): string {
   if (/^[[(](blank_audio|silence|music|inaudible|no speech)[\])]$/i.test(text)) return ''
   // Runaway repetition ("AHHHH…", "the the the …") is a hallucination, not what was said.
   if (/(.)\1{11,}/.test(text) || /\b(\w+)(?:\W+\1\b){5,}/i.test(text)) return ''
   return text
+}
+
+/**
+ * Where to cut a recording: at pauses, into pieces of at most `max` seconds, leaving out pieces
+ * with no speech in them. Sample offsets into the 16 kHz audio.
+ */
+export function segments(audio: Float32Array, max = 28): { from: number; to: number }[] {
+  const frame = 480 // 30 ms
+  const rms: number[] = []
+  for (let i = 0; i + frame <= audio.length; i += frame) {
+    let sum = 0
+    for (let j = i; j < i + frame; j++) sum += audio[j] * audio[j]
+    rms.push(Math.sqrt(sum / frame))
+  }
+  // Quiet is relative to this recording's own background (a fan, a hum), with a floor.
+  const sorted = [...rms].sort((a, b) => a - b)
+  const quiet = Math.max(0.008, (sorted[Math.floor(sorted.length * 0.1)] ?? 0) * 3)
+  const maxFrames = Math.floor((max * 16_000) / frame)
+  const cuts: [number, number][] = []
+  let start = 0
+  while (start < rms.length) {
+    if (rms.length - start <= maxFrames) {
+      cuts.push([start, rms.length])
+      break
+    }
+    // The middle of the longest pause in the second half of the window; failing that, its quietest moment.
+    let cut = -1
+    let best = 0
+    let run = 0
+    for (let f = start + Math.floor(maxFrames / 2); f < start + maxFrames; f++) {
+      if (rms[f] < quiet) {
+        run++
+        if (run > best) (best = run), (cut = f - Math.floor(run / 2))
+      } else run = 0
+    }
+    if (cut < 0) {
+      let lowest = Infinity
+      for (let f = start + Math.floor(maxFrames * 0.6); f < start + maxFrames; f++) if (rms[f] < lowest) (lowest = rms[f]), (cut = f)
+    }
+    cuts.push([start, cut])
+    start = cut
+  }
+  return cuts
+    .filter(([a, b]) => b - a > 15 && rms.slice(a, b).some((v) => v > 0.02))
+    .map(([a, b]) => ({ from: a * frame, to: Math.min(audio.length, b * frame) }))
 }
 
 /** True if any 50 ms window is loud enough to be speech rather than room noise. */
