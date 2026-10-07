@@ -1606,7 +1606,8 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .view-picker .menu-item.quiet .view-picker-label { color: var(--muted); }
 
 /* The Plan view: the plan to approve (or read again), in the work area like any other view. */
-.plan-tab { height: 100%; overflow-y: auto; padding: var(--s-5) var(--s-6); display: flex; flex-direction: column; gap: var(--s-3); max-width: 960px; }
+/* The plan reads as a document in the middle of the work area, at a comfortable width, whatever the screen. */
+.plan-tab { flex: 1; min-height: 0; height: 100%; overflow-y: auto; padding: var(--s-5) max(var(--s-6), calc((100% - 880px) / 2)); display: flex; flex-direction: column; gap: var(--s-3); }
 .plan-tab-head { display: flex; align-items: center; gap: var(--s-2); font-size: 15px; }
 .plan-tab-head strong { font-weight: 600; }
 .plan-tab-body { padding: var(--s-4) var(--s-5); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); }
