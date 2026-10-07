@@ -69,7 +69,7 @@ export function LiveScreen({ tab, s, nav, active }: Props) {
   const switcher = useMemo(() => <PaneSwitch pick={pick} onPick={setPick} needs={open.length} failing={failing} />, [pick, open.length, failing])
 
   return (
-    <div className="live">
+    <div className="live-screen">
       {blocked ? <WaitBanner s={s} /> : <NowStrip s={s} />}
       <div className="live-shell" data-pick={pick}>
         <section className="live-pane live-needs" aria-label={tr('live.needs.title')}>
