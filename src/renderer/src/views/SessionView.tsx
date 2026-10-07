@@ -720,7 +720,6 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
                   <Timeline />
                 </Activity>
               </div>
-              {current.kind === 'live' && <LiveScreen tab={tab} s={session} nav={liveNav} active={active} />}
               {current.kind === 'diagrams' && <DiagramsPanel />}
               {current.kind === 'replay' && <ReplayPanel />}
               {current.kind === 'showcase' && <ShowcasePanel />}
@@ -733,6 +732,13 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               </ErrorBoundary>
               {/* The Browser stays loaded while hidden, so its pages (and Claude's use of them) carry on. It sits
                   outside the boundary above, which starts afresh for each view: inside it, every tab switch reloaded the pages. */}
+              {/* Live stays mounted once the session is open: hidden it's paused (React prepares it in the
+                  background at low priority), so opening it shows it at once rather than rebuilding it. */}
+              <ErrorBoundary where="view:live">
+                <Activity mode={active && current.kind === 'live' ? 'visible' : 'hidden'}>
+                  <LiveScreen tab={tab} s={session} nav={liveNav} active={active && current.kind === 'live'} />
+                </Activity>
+              </ErrorBoundary>
               {work.some((w) => w.kind === 'preview') && (
                 <ErrorBoundary where="view:preview">
                   <div className={current.kind === 'preview' ? 'browser-host' : 'browser-host inactive'} inert={current.kind !== 'preview'}>
