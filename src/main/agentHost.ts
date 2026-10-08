@@ -1055,6 +1055,13 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     try {
       for await (const msg of q) {
         this.touch()
+        // Claude carrying on by itself (a background agent or command it was waiting on finished,
+        // so it starts a new turn without a message from you): that's work too, not "Done".
+        // It starts with the news it's reacting to (a task notification, as a user message), then thinking.
+        if (!this.busy && (msg.type === 'assistant' || msg.type === 'stream_event' || msg.type === 'user') && !(msg as { parent_tool_use_id?: string | null }).parent_tool_use_id) {
+          this.busy = true
+          this.emit({ kind: 'status', status: 'running' })
+        }
         this.trackTools(msg)
         this.watchLimits(msg as never)
         this.emit({ kind: 'sdk', msg })
