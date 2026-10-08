@@ -138,6 +138,8 @@ function StatusPill() {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     if (!s.busySince) return
+    // From now, not from whenever the clock last ticked (a stale start showed a negative time).
+    setNow(Date.now())
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [s.busySince])
