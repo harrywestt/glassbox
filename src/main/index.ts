@@ -194,7 +194,7 @@ function createWindow() {
     minHeight: 600,
     title: app.isPackaged ? 'Glassbox' : 'Glassbox (dev)',
     // Windows takes the taskbar and window icon from an .ico; other platforms use the PNG.
-    icon: join(import.meta.dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    icon: iconFile(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     backgroundColor: '#16181d',
     titleBarStyle: 'hidden',
     // Windows: our own title bar with the native buttons drawn over it, in the header colour (the
@@ -225,10 +225,15 @@ function createWindow() {
   })
   // The taskbar button's icon, set explicitly (from the versioned copy) rather than left to
   // Windows' icon cache, which keeps showing an old icon after an update.
+  // It's only an icon: if it can't be set the window still opens (a throw here once left it blank).
   if (process.platform === 'win32' && app.isPackaged) {
     const icon = taskbarIcon()
-    win.setIcon(icon)
-    win.setAppDetails({ appId: APP_ID, appIconPath: icon, appIconIndex: 0, relaunchCommand: `"${process.execPath}"`, relaunchDisplayName: 'Glassbox' })
+    try {
+      if (icon) win.setIcon(icon)
+      win.setAppDetails({ appId: APP_ID, appIconPath: icon ?? process.execPath, appIconIndex: 0, relaunchCommand: `"${process.execPath}"`, relaunchDisplayName: 'Glassbox' })
+    } catch (e) {
+      console.error('Could not set the taskbar icon', e)
+    }
   }
   attachContextMenu(win)
   // Keep the window title (and its "(dev)" marker) rather than the page's <title>.
@@ -564,10 +569,17 @@ ipcMain.handle('window:titleBar', (_e, color: string, symbolColor: string) => {
   if (!isMac) win?.setTitleBarOverlay({ color, symbolColor, height: TITLEBAR_OVERLAY_H })
 })
 
+/**
+ * The app's icon files. An installed copy has them beside the app (extraResources); a source build in
+ * the repo's resources folder. Undefined if neither is there: nothing may fail for want of an icon.
+ */
+function iconFile(name: 'icon.ico' | 'icon.png'): string | undefined {
+  return [join(process.resourcesPath ?? '', 'icons', name), join(import.meta.dirname, '../../resources', name)].find((p) => existsSync(p))
+}
+
 // A separate ID for source builds, so Windows doesn't group them with the installed app (or borrow its shortcut).
 const APP_ID = app.isPackaged ? 'com.harrywest.glassbox.desktop' : 'com.harrywest.glassbox.dev'
-const ICON_PATH = join(import.meta.dirname, '../../resources/icon.png')
-const APP_ICON = () => nativeImage.createFromPath(ICON_PATH)
+const APP_ICON = () => nativeImage.createFromPath(iconFile('icon.png') ?? '')
 
 // Groups the taskbar button and ties notifications to Glassbox.
 app.setAppUserModelId(APP_ID)
@@ -601,8 +613,9 @@ function registerShortcut() {
  * keeps showing the old one. The icon is copied to a path named after its contents: a changed icon
  * gets a new path, which Windows has to read fresh.
  */
-function taskbarIcon(): string {
-  const src = join(import.meta.dirname, '../../resources/icon.ico')
+function taskbarIcon(): string | undefined {
+  const src = iconFile('icon.ico')
+  if (!src) return undefined
   try {
     const data = readFileSync(src)
     const dir = join(app.getPath('userData'), 'icons')
@@ -613,7 +626,7 @@ function taskbarIcon(): string {
     }
     return dest
   } catch {
-    return process.execPath
+    return src
   }
 }
 

@@ -119,7 +119,17 @@
     },
     "dmg": {
       "title": "Glassbox ${version}"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "icons",
+        "filter": [
+          "icon.ico",
+          "icon.png"
+        ]
+      }
+    ]
   },
   "repository": {
     "type": "git",
