@@ -124,7 +124,9 @@ const KEYS: Record<string, string> = { enter: 'Enter', escape: 'Escape', esc: 'E
 function press(wc: WC, key: string) {
   const code = KEYS[key.toLowerCase()] ?? key
   wc.sendInputEvent({ type: 'keyDown', keyCode: code })
-  if (code.length === 1) wc.sendInputEvent({ type: 'char', keyCode: code })
+  // The character too: without it Enter doesn't submit a form, nor Space press a button, in a page that isn't focused.
+  const char = code.length === 1 ? code : code === 'Enter' ? '\r' : code === 'Space' ? ' ' : null
+  if (char) wc.sendInputEvent({ type: 'char', keyCode: char })
   wc.sendInputEvent({ type: 'keyUp', keyCode: code })
 }
 
@@ -251,10 +253,14 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
         if (typeof c === 'string') return fail(c)
         await settle(c.wc, 4000)
         let img: Electron.NativeImage
+        // A page that sets no background is see-through, which a JPEG turns black: give it the white a browser would.
+        const white = await c.wc.insertCSS('html { background-color: #fff }', { cssOrigin: 'user' }).catch(() => null)
         try {
           img = await inTime(c.wc.capturePage(), PAGE_MS)
         } catch (e) {
           return e instanceof TimedOut ? slow('The screenshot', PAGE_MS) : fail(`Couldn't take the screenshot: ${e instanceof Error ? e.message : String(e)}`)
+        } finally {
+          if (white) void c.wc.removeInsertedCSS(white).catch(() => {})
         }
         const small = img.getSize().width > 1400 ? img.resize({ width: 1400 }) : img
         const jpeg = small.toJPEG(72)
