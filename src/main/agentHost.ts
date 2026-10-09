@@ -34,6 +34,7 @@ import { isPublicEntry } from '../shared/architecture'
 import { isReadOnlyShell } from '../shared/readonlyShell'
 import type { BrowserBridge } from './browserTools'
 import { tr } from '../shared/i18n'
+import { Loaders } from './loaders'
 import { automation } from './automation'
 
 /** Commands that usually run for minutes: watching deploys and CI, builds, full test runs, installs, migrations. */
@@ -250,6 +251,8 @@ export class AgentHost {
   /** Files Claude edited this turn, and this session (for Commit now). */
   private turnEdits = new Set<string>()
   /** Glassbox views Claude used this turn (show_diagram, show_progress…), and reminders already given. */
+  /** Loaders above the message box (show_progress), kept across the session's restarts. */
+  private loaders: Loaders
   private turnShown = new Set<string>()
   private turnNudged = new Set<string>()
   /** Tasks Claude has added this turn (TaskCreate, one call each). */
@@ -287,6 +290,7 @@ export class AgentHost {
     /** The other live sessions working in this same folder (the same git working tree). */
     private peers: () => AgentHost[] = () => []
   ) {
+    this.loaders = new Loaders(cwd, (loader) => this.emit({ kind: 'glassbox', signal: { type: 'loader', loader } }))
     this.reviewer = new Reviewer(
       cwd,
       () => this.currentTask,
@@ -369,7 +373,8 @@ export class AgentHost {
             this.app,
             undefined,
             this.cwd,
-            this.browser
+            this.browser,
+            this.loaders
           )
         },
         allowedTools: GLASSBOX_TOOLS,
@@ -558,6 +563,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   async interrupt() {
     await this.q?.interrupt()
+    // Claude can't move its loaders now; the ones Glassbox watches carry on.
+    this.loaders.stopUnwatched(tr('mainLoaders.interrupted'))
   }
 
   /** Stop one agent or background task; Claude's reply and the other agents carry on. */
@@ -592,6 +599,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     // Anything you held is let go (turned down), so nothing waits on a closed session.
     for (const id of [...this.holdWaiting.keys()]) this.releaseHold(id, false)
     this.reviewer.dispose()
+    this.loaders.stopAll(tr('mainLoaders.sessionStopped'))
+    this.loaders.dispose()
     for (const t of this.sideTasks.values()) t.abort.abort()
     this.q = undefined
     this.input = undefined
@@ -1088,6 +1097,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
         clearInterval(this.idleTimer)
         this.q = undefined
         this.input = undefined
+        this.loaders.stopAll(tr('mainLoaders.sessionStopped'))
         this.emit({ kind: 'status', status: 'stopped' })
       }
     }
@@ -1146,8 +1156,18 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
    * of it: one nudge to draw it before the summary (it can decline when a picture adds nothing).
    */
   private onStop: HookCallback = async (input) => {
-    if (input.hook_event_name !== 'Stop' || input.stop_hook_active || this.turnNudged.has('picture')) return {}
-    if (['show_diagram', 'show_flow', 'show_on_map', 'show_plan_on_map'].some((t) => this.turnShown.has(t))) return {}
+    if (input.hook_event_name !== 'Stop' || input.stop_hook_active) return {}
+    // A loader only Claude can move, left running as the turn ends, would sit there for ever.
+    const left = this.loaders.unwatched()
+    if (left.length && !this.turnNudged.has('loaders')) {
+      this.turnNudged.add('loaders')
+      return {
+        decision: 'block',
+        reason: `Glassbox: ${left.map((l) => `"${l.label}" (id ${l.id})`).join(', ')} ${left.length > 1 ? 'are' : 'is'} still showing as running above the message box, and nothing will move ${left.length > 1 ? 'them' : 'it'} once you stop. Call show_progress for each now: status done or failed if it has finished, or, if it is still going in the background, pass watch (its log file, url or a file it writes) so Glassbox can follow it. Then end your turn without writing anything more.`
+      }
+    }
+    if (this.turnNudged.has('picture')) return {}
+    if (['show_diagram', 'show_flow', 'show_sketch', 'show_on_map', 'show_plan_on_map'].some((t) => this.turnShown.has(t))) return {}
     // Code only: notes, docs and lockfiles don't need drawing.
     const code = [...this.turnEdits].filter((p) => !/\.(md|mdx|txt|lock)$/i.test(p))
     const areas = new Set(code.map((p) => relative(this.cwd, isAbsolute(p) ? p : resolve(this.cwd, p)).replace(/\\/g, '/').split('/').slice(0, 2).join('/')))

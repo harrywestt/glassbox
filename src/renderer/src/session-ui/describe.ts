@@ -68,6 +68,8 @@ export function describeTool(c: ToolCall): string {
     }
     case 'mcp__glassbox__show_diagram':
       return tr('describe.drewDiagram', { title: clip(str(i.title), 60) })
+    case 'mcp__glassbox__show_sketch':
+      return tr('describe.sketched', { title: clip(str(i.title), 60) })
     case 'mcp__glassbox__show_flow':
       return tr('describe.showedFlow', { title: clip(str(i.title), 60) })
     case 'mcp__glassbox__showcase_ready':

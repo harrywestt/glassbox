@@ -128,14 +128,17 @@ function NowStrip({ s }: { s: SessionState }) {
   const steps = s.task?.steps ?? []
   const current = steps.findIndex((x) => x.status === 'active')
   const doneCount = steps.filter((x) => x.status === 'done').length
-  const thought = useMemo(() => currentThought(s), [s.drafts, s.timeline, s.status])
+  // Re-checked every couple of seconds, so a finished thought clears once it's stale.
+  const tick = useTick(s.status === 'running', 2000)
+  const thought = useMemo(() => currentThought(s, Date.now()), [s.drafts, s.timeline, s.status, tick]) // eslint-disable-line react-hooks/exhaustive-deps
   const headline = s.task?.summary || (s.status === 'running' ? tr('live.now.working') : s.status === 'ready' && s.timeline.some((i) => i.kind === 'result') ? tr('live.now.finished') : s.status === 'ready' ? tr('live.now.ready') : tr('live.now.idle'))
   const used = (s.context?.categories ?? []).filter((c) => c.kind === 'used' && c.tokens > 0).sort((a, b) => b.tokens - a.tokens)
   const total = s.context?.maxTokens ?? 0
   const k = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
   return (
     <section className="live-now" aria-label={tr('live.now.label')}>
-      {/* One line: the step, what's happening, and what Claude is thinking. */}
+      {/* One line: the step and what's happening; what Claude is thinking gets its own lines below. */}
+      <div className="live-now-row">
       <div className="live-now-main">
         {steps.length > 0 && (
           <span className="live-steps" title={current >= 0 ? steps[current].label : undefined}>
@@ -148,12 +151,6 @@ function NowStrip({ s }: { s: SessionState }) {
           </span>
         )}
         <span className={s.status === 'running' ? 'live-headline' : 'live-headline quiet'}>{headline}</span>
-        {thought && (
-          <span className="live-thinking" title={thought.full}>
-            <span className="live-thinking-label">{thought.live ? tr('live.now.thinkingNow') : tr('live.now.thoughtLast')}</span>
-            <span className="live-thinking-text">{thought.text}</span>
-          </span>
-        )}
       </div>
       {s.context && total > 0 && (
         <div className="live-context" title={used.map((c) => `${c.name}: ${k(c.tokens)}`).join('\n')}>
@@ -166,27 +163,58 @@ function NowStrip({ s }: { s: SessionState }) {
           <span className="live-context-num">{tr('live.now.contextOf', { used: k(s.context.totalTokens), total: k(total) })}</span>
         </div>
       )}
+      </div>
+      {thought && (
+        <div className={thought.live ? 'live-thinking live' : 'live-thinking'} title={thought.full}>
+          <span className="live-thinking-label">{thought.live ? tr('live.now.thinkingNow') : tr('live.now.thoughtLast')}</span>
+          <span key={thought.text.slice(0, 40)} className="live-thinking-text">
+            {thought.text}
+          </span>
+        </div>
+      )}
     </section>
   )
 }
 
+/** A thought stays up this long after Claude moved on to doing something, then clears. */
+const THOUGHT_KEEP_MS = 8000
+
 /**
- * What Claude is thinking about: its summarised thinking as it streams, or its last thought this
- * turn. The newest heading if the summary has them, otherwise its last sentence.
+ * What Claude is thinking about: its summarised thinking as it streams, or, for a few seconds after,
+ * the thought it just finished. Once it has moved on (a tool, a reply) the old thought goes, so
+ * this only ever shows what's current. The newest heading if the summary has them, with the
+ * sentence after it; otherwise its last sentence or two.
  */
-function currentThought(s: SessionState): { text: string; full: string; live: boolean } | null {
+function currentThought(s: SessionState, now: number): { text: string; full: string; live: boolean } | null {
   if (s.status !== 'running') return null
   const draft = s.drafts.main
   const live = draft?.kind === 'thinking'
-  const lastUser = s.timeline.findLastIndex((i) => i.kind === 'user')
-  const last = s.timeline.findLast((i, n) => n > lastUser && i.kind === 'thinking' && i.agentId === null) as { text: string } | undefined
-  const full = (live ? draft.text : last?.text ?? '').trim()
+  let full = ''
+  if (live) full = draft.text
+  else {
+    // The finished thought only while nothing has happened since, and only for a moment.
+    const lastIndex = s.timeline.findLastIndex((i) => i.kind !== 'note' && (!('agentId' in i) || i.agentId === null))
+    const last = s.timeline[lastIndex]
+    if (!last || last.kind !== 'thinking' || now - last.at > THOUGHT_KEEP_MS) return null
+    full = last.text
+  }
+  full = full.trim()
   if (!full) return null
-  const headings = [...full.matchAll(/\*\*([^*\n]{3,120})\*\*/g)].map((m) => m[1].trim())
-  const plain = full.replace(/\*\*/g, '').replace(/\s+/g, ' ')
-  const sentences = plain.split(/(?<=[.!?])\s+/).filter((x) => x.trim().length > 3)
-  const text = headings.at(-1) ?? sentences.at(-1) ?? plain
-  return { text: text.length > 220 ? `…${text.slice(-220)}` : text, full: plain.slice(-1200), live }
+  const plain = full.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim()
+  const headings = [...full.matchAll(/\*\*([^*\n]{3,120})\*\*/g)]
+  let text: string
+  if (headings.length) {
+    // The newest heading, and the start of what follows it.
+    const h = headings.at(-1)!
+    const after = full.slice((h.index ?? 0) + h[0].length).replace(/\*\*/g, '').replace(/\s+/g, ' ').trim()
+    text = after ? `${h[1].trim()}: ${after}` : h[1].trim()
+  } else {
+    const sentences = plain.split(/(?<=[.!?])\s+/).filter((x) => x.trim().length > 3)
+    text = sentences.slice(-2).join(' ') || plain
+  }
+  // Two lines' worth, cut at a word.
+  if (text.length > 260) text = text.slice(0, 260).replace(/\s+\S*$/, '') + '…'
+  return { text, full: plain.slice(-1200), live }
 }
 
 function WaitBanner({ s }: { s: SessionState }) {

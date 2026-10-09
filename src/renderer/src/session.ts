@@ -205,6 +205,23 @@ function rememberDismissed(ids: string[]) {
 }
 export type FileTouch = { path: string; tool: string; toolId: string; agentId: string | null; at: number; turn: number }
 export type Diagram = { id: string; title: string; mermaid: string; at: number }
+export type SketchVersion = { html: string; width: number; note?: string; scheme?: 'dark' | 'light'; accent?: string; at: number }
+/** A rough page Claude drew (show_sketch); each call with the same id adds a version. */
+export type Sketch = { id: string; title: string; versions: SketchVersion[]; at: number }
+
+/** Adds a version to a sketch (the same page again only renames it). */
+function addSketch(all: Record<string, Sketch>, s: { id: string; title?: unknown; html?: unknown; width?: unknown; note?: unknown; scheme?: unknown; accent?: unknown }, at: number): Record<string, Sketch> {
+  const html = String(s.html ?? '')
+  const prev = all[s.id]
+  const title = String(s.title ?? prev?.title ?? s.id)
+  const last = prev?.versions[prev.versions.length - 1]
+  const width = typeof s.width === 'number' && s.width >= 320 ? Math.min(2400, s.width) : 1200
+  const scheme: SketchVersion['scheme'] = s.scheme === 'dark' || s.scheme === 'light' ? s.scheme : undefined
+  const accent = typeof s.accent === 'string' && s.accent !== 'match' ? s.accent : undefined
+  const same = last && last.html === html && last.width === width && last.scheme === scheme && last.accent === accent
+  const versions = same ? prev.versions : [...(prev?.versions ?? []), { html, width, note: typeof s.note === 'string' ? s.note : undefined, scheme, accent, at }]
+  return { ...all, [s.id]: { id: s.id, title, versions, at } }
+}
 export type { FlowHop }
 export type Flow = { id: string; title: string; lanes: string[]; before?: FlowHop[]; after: FlowHop[]; at: number }
 export type PermissionRequest = Extract<SessionEvent, { kind: 'permission' }>
@@ -234,6 +251,7 @@ export interface SessionState {
   files: FileTouch[]
   pins: { path: string; reason?: string }[]
   diagrams: Record<string, Diagram>
+  sketches: Record<string, Sketch>
   flows: Record<string, Flow>
   decisions: DecisionEntry[]
   guardHits: GuardHit[]
@@ -339,6 +357,7 @@ export const newSession = (): SessionState => ({
   files: [],
   pins: [],
   diagrams: {},
+  sketches: {},
   flows: {},
   decisions: [],
   guardHits: [],
@@ -366,6 +385,12 @@ export const CHANGE_TOOLS = new Set([...EDIT_TOOLS, 'ShellEdit'])
 const FILE_TOOLS = new Set(['Read', ...EDIT_TOOLS])
 /** Glassbox's own tools are shown through their panels, not as tool rows. */
 /** Bookkeeping steps that show elsewhere (Tasks, decisions…) or say nothing to you: kept out of the conversation and activity. */
+/** Loaders left running when the session stops: nothing can move them now. */
+function stopLoaders(loaders: SessionState['loaders'], at: number): SessionState['loaders'] {
+  if (!loaders || !Object.values(loaders).some((l) => l.status === 'running')) return loaders
+  return Object.fromEntries(Object.entries(loaders).map(([k, l]) => [k, l.status === 'running' ? { ...l, status: 'failed' as const, detail: tr('loaders.stoppedWithSession'), updated: at, watching: false } : l]))
+}
+
 export const HIDDEN_TOOLS = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'ToolSearch', 'mcp__glassbox__show_progress', 'mcp__glassbox__present_file', 'mcp__glassbox__set_current_task', 'mcp__glassbox__log_decision', 'mcp__glassbox__set_acceptance_criteria', 'mcp__glassbox__report_finding', 'mcp__glassbox__check_in', 'mcp__glassbox__pin_file'])
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
@@ -448,7 +473,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
   const at = Date.now()
   switch (event.kind) {
     case 'status':
-      if (event.status === 'stopped') state = settleRunning({ ...state, backgroundTasks: [], backgroundAgents: 0 }, at, () => false)
+      if (event.status === 'stopped') state = settleRunning({ ...state, backgroundTasks: [], backgroundAgents: 0, loaders: stopLoaders(state.loaders, at) }, at, () => false)
       return { ...state, status: event.status, busySince: event.status === 'running' ? (state.busySince ?? at) : undefined, drafts: event.status === 'running' ? state.drafts : {} }
     case 'error':
       return note(state, event.message, 'error')
@@ -569,6 +594,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
     case 'glassbox': {
       const s = event.signal
       if (s.type === 'diagram') return { ...state, diagrams: { ...state.diagrams, [s.id]: { ...s, at } } }
+      if (s.type === 'sketch') return { ...state, sketches: addSketch(state.sketches ?? {}, s, at) }
       if (s.type === 'flow') return { ...state, flows: { ...state.flows, [s.id]: { ...s, at } } }
       if (s.type === 'task') return { ...state, task: { summary: s.summary, steps: s.steps, at } }
       if (s.type === 'showcase') return { ...state, showcase: { ...s, artifactUrl: s.artifactUrl ?? (state.showcase?.path === s.path ? state.showcase.artifactUrl : undefined), at } }
@@ -774,6 +800,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
           if (block.name === 'mcp__glassbox__show_diagram' && typeof input.id === 'string') {
             next.diagrams = { ...next.diagrams, [input.id]: { id: input.id, title: String(input.title ?? input.id), mermaid: String(input.mermaid ?? ''), at } }
           }
+          if (block.name === 'mcp__glassbox__show_sketch' && typeof input.id === 'string') next.sketches = addSketch(next.sketches ?? {}, { ...input, id: input.id }, at)
           if (block.name === 'mcp__glassbox__show_flow') {
             const flow = parseFlow(input, at)
             if (flow) next.flows = { ...next.flows, [flow.id]: flow }

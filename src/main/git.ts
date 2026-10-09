@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type { DiffFile, DiffMode, DiffResult, GitInfo } from '../shared/events'
@@ -10,6 +10,24 @@ const exec = promisify(execFile)
 async function git(cwd: string, args: string[], timeout?: number): Promise<string> {
   const { stdout } = await exec('git', args, { cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout })
   return stdout
+}
+
+/**
+ * The project folder each path belongs to: a worktree (inside the repo or beside it) maps to its
+ * main checkout; a folder that's gone maps to null; anything not in git stays as it is.
+ */
+export async function mainFolders(paths: string[]): Promise<(string | null)[]> {
+  return Promise.all(
+    paths.map(async (p) => {
+      if (!existsSync(p)) return null
+      const common = await tryGit(p, ['rev-parse', '--path-format=absolute', '--git-common-dir'], 5000)
+      // The shared .git folder sits in the main checkout; a bare or unusual layout keeps the path.
+      // Not in git: kept, unless it's only the hidden leftovers of a removed worktree (.claude, .glassbox).
+      if (!common) return readdirSync(p).some((n) => !n.startsWith('.')) ? p : null
+      if (!/[\\/]\.git$/i.test(common)) return p
+      return resolve(common, '..')
+    })
+  )
 }
 
 async function tryGit(cwd: string, args: string[], timeout?: number): Promise<string | null> {

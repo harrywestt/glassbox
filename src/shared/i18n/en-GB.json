@@ -605,7 +605,8 @@
       "agents_other": "{count} agents started",
       "usedConnectors": "used connectors {n} times",
       "otherSteps": "{n} other steps"
-    }
+    },
+    "sketched": "Sketched “{title}”"
   },
   "diagramsPanel": {
     "title": "Diagrams",
@@ -1060,7 +1061,10 @@
     "percent": "{percent}%, ",
     "doneIn": "done in {time}",
     "failed": "failed",
-    "clear": "Clear"
+    "clear": "Clear",
+    "stoppedWithSession": "Stopped when the session stopped",
+    "watching": "watching",
+    "watchingTip": "Glassbox is following this itself (a log, a file or an address), so it moves and finishes on its own"
   },
   "mainAccounts": {
     "notSignedIn": "Not signed in",
@@ -1184,8 +1188,11 @@
     "ghMissing": "The GitHub CLI (gh) isn’t installed."
   },
   "mainLoaders": {
-    "gaveUp": "Stopped watching after an hour",
-    "answering": "{url} is answering"
+    "gaveUp": "Stopped watching after two hours",
+    "answering": "{url} is answering",
+    "waitingFor": "Waiting for {file} to appear",
+    "interrupted": "Stopped when Claude was interrupted",
+    "sessionStopped": "Stopped when the session closed"
   },
   "mainMapAsk": {
     "noAnswer": "Claude didn’t return an answer. Try asking a different way."
@@ -1610,7 +1617,7 @@
       "changesRequested": "Changes requested"
     },
     "empty": "No plan yet. Use Plan first in the message box and Claude proposes a plan before changing anything.",
-    "title": "Claude’s plan",
+    "title": "Plan",
     "nothingChangedYet": "Nothing has been changed yet",
     "shape": {
       "touchesModules_one": "Touches {count} module",
@@ -1626,7 +1633,10 @@
     "back": "Back",
     "sendFeedback": "Send feedback",
     "requestChanges": "Request changes",
-    "approvePlan": "Approve plan"
+    "approvePlan": "Approve plan",
+    "copy": "Copy the plan",
+    "outline": "Sections",
+    "feedbackHint": "Ctrl+Enter sends"
   },
   "previewTab": {
     "service": "Service",
@@ -1984,6 +1994,10 @@
       "replay": {
         "label": "Replay",
         "note": "Step back through the session"
+      },
+      "sketches": {
+        "label": "Sketches",
+        "note": "Rough pages Claude draws to show an idea or a problem: pick an option or comment on a part"
       }
     },
     "work": {
@@ -2000,7 +2014,8 @@
       "showcase": "Showcase",
       "diffChanges": "{name} changes",
       "browser": "Browser",
-      "plan": "Plan"
+      "plan": "Plan",
+      "sketches": "Sketches"
     },
     "dropToAttach": "Drop to attach",
     "dropNote": "They go with your next message to Claude",
@@ -2022,15 +2037,21 @@
     "openView": "Open a view",
     "viewOpen": "open",
     "viewNothingYet": "nothing yet",
-    "sharesFolder": "Shares this folder with {names}.",
     "quotedName": "“{name}”",
-    "sharedNote": "You see each other's changes, and switching branch here switches it there too. Glassbox won't credit or auto-commit the other session's files here.",
+    "sharedNote": "Another session is working in this same folder. You see each other's changes, and switching branch here switches it there too. Glassbox won't credit or auto-commit the other session's files here. Give this session its own copy (a git worktree on its own branch) to keep them apart.",
     "branchForCopy": "Branch for its own copy",
     "makingCopy": "Making a copy…",
-    "giveOwnCopy": "Give this session its own copy",
+    "giveOwnCopy": "Give it its own copy",
     "hide": "Hide",
     "claudeBrowsing": "Claude is using the Browser",
-    "yourTurn": "Your turn"
+    "yourTurn": "Your turn",
+    "sharedWord": "Shared folder",
+    "sharedWith": "Also open in {names}.",
+    "sharedShort": "Changes mix, and switching branch here switches both.",
+    "giveOwnCopyTip": "Move this session to its own copy of the repo (a git worktree on a new branch), so the two stop mixing",
+    "makeCopy": "Make copy",
+    "cancelCopy": "Cancel",
+    "sharedWithMore": "Also open in {names} and {n} more."
   },
   "sessionsOverview": {
     "columnPlan": "Plan",
@@ -2689,5 +2710,33 @@
   "colourWheel": {
     "label": "Colour wheel: left and right change the colour, up and down its strength",
     "hex": "Hex"
+  },
+  "sketchTab": {
+    "emptyTitle": "No sketches yet",
+    "emptyBody": "When an idea or a problem is easier to see than to read, Claude sketches it here: layouts to choose between, or a screen as it is and as it should be. Ask for one in the conversation, like “sketch two layouts for the settings page”.",
+    "sketch": "Sketch",
+    "older": "Older version",
+    "newer": "Newer version",
+    "version": "Version {n} of {total}",
+    "where": "the sketch “{title}” (version {n})",
+    "subjectKind": "the {kind} “{text}”",
+    "subjectPart": "this part",
+    "subjectInOption": "{what} in “{option}”",
+    "subjectInSection": "{what} under “{section}”",
+    "pickMessage": "I pick “{option}” from {where}.",
+    "commentMessage": "On {where}, about {subject}: {note}",
+    "hintHand": "Drag to pan, scroll to zoom, click to press or pick",
+    "hintComment": "Click any part to comment on it",
+    "hintUse": "Using the page: click and type as normal",
+    "modeHand": "Hand: drag to pan, click to press or pick (H)",
+    "modeComment": "Comment on a part (C)",
+    "modeUse": "Use the page (U)",
+    "copyHtml": "Copy the HTML",
+    "picked": "You picked “{option}”",
+    "commentOn": "About {subject}",
+    "pickNote": "Add a note (optional)",
+    "commentNote": "What about it?",
+    "send": "Send to Claude",
+    "cancel": "Cancel (Esc)"
   }
 }

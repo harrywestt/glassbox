@@ -17,7 +17,7 @@ import { runBang, stopBang, stopAllBangs } from './bang'
 import { pinSession, pinnedSessions, refreshPinned, restorePinned, unpinSession } from './pinned'
 import { AgentHost } from './agentHost'
 import { listProjectFiles, readProjectFile } from './files'
-import { gitBranches, gitDiff, gitFileAt, gitBranchList, gitSwitch, gitLog, gitCommitFiles, gitShowFile, gitWorktree, gitFetchDefault, gitInfo } from './git'
+import { gitBranches, gitDiff, gitFileAt, gitBranchList, gitSwitch, gitLog, gitCommitFiles, gitShowFile, gitWorktree, gitFetchDefault, gitInfo, mainFolders } from './git'
 import { glassboxCommits, undoGlassboxCommit } from './autocommit'
 import { showcaseDir, showcasePrompt, skillDeckDir, type ShowcaseRequest } from './showcase'
 import { UsageService } from './usage'
@@ -43,6 +43,7 @@ import { handoffMessage } from './handoff'
 import { commentOnTicket, getTicket, getTransitions, transitionTicket } from './jira'
 import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
+import { sketchPage, sketchUrl } from './sketch'
 import { adminState, dismissAdminPrompt, elevateAtStartupIfWanted, setRunAsAdmin } from './admin'
 import type { AccessMode, DiffMode, GuardRule, SideTaskSpec, PermissionDecision, Requirements, ReviewModel, SendOptions, ServicesEvent, SessionEvent, TabEvent } from '../shared/events'
 import { tr } from '../shared/i18n'
@@ -57,6 +58,8 @@ adoptLoginShellPath()
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'showcase', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  // sketch://page/<hash>.html: Claude's sketches, each locked to its own content (see sketch.ts).
+  { scheme: 'sketch', privileges: { standard: true, secure: true } },
   // media://file/<encoded absolute path>: images, video and audio from disk, shown in file tabs
   // and inline in the conversation (streamed, so video can seek).
   { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
@@ -263,12 +266,21 @@ function createWindow() {
  * in the renderer, waits `wait` ms, and saves a PNG to `out`. The app quits after the last step.
  */
 async function captureSnapshots(w: BrowserWindow, file: string) {
-  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; tool?: { tabId: string; name: string; args: Record<string, unknown> }; win?: 'minimize' | 'restore' | 'blur' }[]
+  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; tool?: { tabId: string; name: string; args: Record<string, unknown> }; win?: 'minimize' | 'restore' | 'blur'; click?: string }[]
   await new Promise<void>((r) => w.webContents.once('did-finish-load', () => r()))
   for (const step of steps) {
     if (step.win === 'minimize') w.minimize()
     if (step.win === 'restore') w.restore()
     if (step.win === 'blur') w.blur()
+    // A real mouse click where a renderer expression says ({ x, y } in window coordinates).
+    if (step.click) {
+      const at = (await w.webContents.executeJavaScript(step.click).catch(() => null)) as { x: number; y: number } | null
+      if (at) {
+        w.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(at.x), y: Math.round(at.y) })
+        w.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 })
+        w.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 })
+      } else console.error('click target not found', step.click)
+    }
     // Run one of Claude's browser tools directly, as a session would, and log what it returned.
     if (step.tool) {
       const { tabId, name, args } = step.tool
@@ -426,6 +438,7 @@ ipcMain.handle('architecture:group', (_e, root: string, mods: HeatModule[], forc
 ipcMain.handle('architecture:get', (_e, cwd: string, force?: boolean) => getArchitecture(cwd, force))
 ipcMain.handle('architecture:diff', (_e, cwd: string, ref: string, mode: DiffMode, apiOnly?: string[]) => architectureDiff(cwd, ref, mode, apiOnly))
 ipcMain.handle('decisions:list', (_e, cwd: string) => listDecisions(cwd))
+ipcMain.handle('sketch:url', (_e, html: string) => sketchUrl(String(html)))
 ipcMain.handle('erd:get', (_e, cwd: string) => getErd(cwd))
 ipcMain.handle('terminal:open', (_e, scope: string, cwd: string, cols: number, rows: number) => openTerminal(scope, cwd, cols, rows, toRenderer))
 ipcMain.on('terminal:write', (_e, id: string, data: string) => writeTerminal(id, data))
@@ -508,6 +521,7 @@ ipcMain.handle('session:peers', async (_e, cwd: string, except?: string) => {
   return [...hosts].filter(([id, x]) => id !== except && x.root()?.toLowerCase() === root).length
 })
 ipcMain.handle('git:worktree', (_e, cwd: string, branch: string) => gitWorktree(cwd, branch))
+ipcMain.handle('git:mainFolders', (_e, paths: string[]) => mainFolders(paths))
 ipcMain.handle('git:fetchDefault', (_e, cwd: string) => gitFetchDefault(cwd))
 ipcMain.handle('git:diff', (_e, cwd: string, ref: string, mode: DiffMode) => gitDiff(cwd, ref, mode))
 ipcMain.handle('git:fileAt', (_e, cwd: string, ref: string, mode: DiffMode, path: string) => gitFileAt(cwd, ref, mode, path))
@@ -680,6 +694,7 @@ app.whenReady().then(async () => {
     if (!allowed.some((d) => full.toLowerCase().startsWith(d))) return new Response('Not found', { status: 404 })
     return net.fetch(pathToFileURL(full).toString())
   })
+  protocol.handle('sketch', (req) => sketchPage(req.url))
   // Only media files, by extension; everything else is refused. Byte ranges are honoured, which
   // video needs to play and seek.
   protocol.handle('media', async (req) => {
