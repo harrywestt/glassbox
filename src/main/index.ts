@@ -30,7 +30,7 @@ import { getStandup } from './standup'
 import { architectureDiff } from './archDiff'
 import { focusErd, getErd } from './erd'
 import { closeTerminal, closeTerminals, openTerminal, resizeTerminal, writeTerminal } from './terminal'
-import type { BrowserBridge } from './browserTools'
+import { browserTools, type BrowserBridge } from './browserTools'
 import { forgetDecision, listDecisions } from './projectDecisions'
 import { explainModule } from './mapExplain'
 import { attachContextMenu, setMacMenu } from './contextMenu'
@@ -88,7 +88,7 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 
 // Dev aid: snapshot runs keep painting while other windows cover this one (Windows otherwise pauses
 // a covered window, and capturePage hands back an old frame).
-if (process.env.GLASSBOX_SNAPSHOTS) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+if (process.env.GLASSBOX_SNAPSHOTS && !process.env.GLASSBOX_REAL_OCCLUSION) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const toRenderer = (channel: string, payload: unknown) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
@@ -263,9 +263,20 @@ function createWindow() {
  * in the renderer, waits `wait` ms, and saves a PNG to `out`. The app quits after the last step.
  */
 async function captureSnapshots(w: BrowserWindow, file: string) {
-  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string }[]
+  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; tool?: { tabId: string; name: string; args: Record<string, unknown> }; win?: 'minimize' | 'restore' | 'blur' }[]
   await new Promise<void>((r) => w.webContents.once('did-finish-load', () => r()))
   for (const step of steps) {
+    if (step.win === 'minimize') w.minimize()
+    if (step.win === 'restore') w.restore()
+    if (step.win === 'blur') w.blur()
+    // Run one of Claude's browser tools directly, as a session would, and log what it returned.
+    if (step.tool) {
+      const { tabId, name, args } = step.tool
+      const t = browserTools(browserFor(tabId).bridge, browserFor(tabId).shotsDir).find((x) => x.name === name)
+      const started = Date.now()
+      const r = t ? await (t.handler as (a: unknown, e: unknown) => Promise<{ content: { type: string; text?: string }[]; isError?: boolean }>)(args, {}).catch((e) => ({ content: [{ type: 'text', text: 'THREW ' + String(e) }], isError: true })) : { content: [{ type: 'text', text: 'no tool' }], isError: true }
+      console.log('TOOL', name, JSON.stringify(args), `${Date.now() - started}ms`, r.isError ? 'ERROR' : 'ok', JSON.stringify(r.content.map((c) => c.text ?? `[${c.type}]`).join(' | ')).slice(0, 900))
+    }
     if (step.script) {
       const r = await w.webContents.executeJavaScript(`(() => { try { ${step.script}
 ; return 'ok' } catch (e) { return 'ERR ' + (e && e.stack || e) } })()`).catch((e) => String(e))
@@ -276,6 +287,8 @@ async function captureSnapshots(w: BrowserWindow, file: string) {
     if (process.env.GLASSBOX_SNAPSHOT_FRAMES)
       for (const f of w.webContents.mainFrame.framesInSubtree)
         if (f !== w.webContents.mainFrame) console.log('FRAME', f.url, JSON.stringify(await f.executeJavaScript('document.body ? document.body.innerText.slice(0, 200) : "(no body)"').catch((e) => String(e))))
+    // A minimised window has nothing to capture (capturePage would wait for ever).
+    if (w.isMinimized()) continue
     // Force a fresh frame: an unfocused window can otherwise hand back the previous one.
     w.webContents.setBackgroundThrottling(false)
     w.webContents.invalidate()

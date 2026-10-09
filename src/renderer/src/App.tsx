@@ -218,7 +218,7 @@ export function App() {
               <Dashboard tabs={state.tabs} sessions={state.sessions} visible={state.active === DASHBOARD} active={state.active} />
             </div>
             {state.tabs.map((tab) => (
-              <div key={tab.id} className="view" hidden={tab !== activeTab}>
+              <div key={tab.id} className="view" hidden={tab !== activeTab} inert={tab !== activeTab}>
                 {opened.current.has(tab.id) && <ErrorBoundary where="session"><SessionView tab={tab} session={state.sessions[tab.id]} active={tab === activeTab} peers={state.tabs.filter((t) => t.id !== tab.id && state.sessions[t.id]).map((t) => ({ tab: t, s: state.sessions[t.id] }))} /></ErrorBoundary>}
               </div>
             ))}
