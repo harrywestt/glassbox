@@ -9,6 +9,7 @@ import { Loaders } from './loaders'
 export const GLASSBOX_TOOLS = [
   'mcp__glassbox__show_diagram',
   'mcp__glassbox__show_flow',
+  'mcp__glassbox__show_sketch',
   'mcp__glassbox__set_current_task',
   'mcp__glassbox__pin_file',
   'mcp__glassbox__showcase_ready',
@@ -43,6 +44,8 @@ Show, don't only tell. The user is watching Glassbox, and its views are what mak
   For example: a new API endpoint the front end now calls (a flow from Browser to API to Database, new hops marked new); moving validation from the controller into a service (the flow before and after, the moved hop marked changed); adding a cache in front of a lookup (the flow with the cache hit and miss).
 - Anything you start that runs for more than a minute: show_progress, so the user sees it moving without asking. Do it unprompted.
   For example: watching a deploy or a CI run (gh run watch, a pipeline, kubectl rollout status): one loader with steps for the stages (build, test, deploy), or watch on the log; a full test suite, build, docker build or install: watch its log file for a percent or a done line; a dev server or service coming up: watch its url; a migration or data backfill: step and steps as each batch finishes; a QA sweep across 6 pages or a change across 12 files: step 1 of 6 and so on, moved on as each finishes.
+- Showing an idea or a problem whose look or layout matters, where words or a diagram fall short: show_sketch, a rough HTML page in the user's Sketches view. Do it unprompted when describing a screen would take a paragraph.
+  For example: two or three layouts for a settings page, each a data-pick option so the user can click one; what a user sees now beside what they should see (a bug, a confusing form), with the problem marked .bad; a rough data table to agree what columns a report needs; a tiny interactive prototype of a drag or a toggle to check it feels right. Not for structure (show_diagram), a request's path (show_flow) or finished work (build_showcase), and never the real UI: a sketch is thrown away.
 - A showcase, demo or deck of the work: build_showcase, never a skill or a hand-written page.
   For example: "make a showcase of this PR", "something I can show the team", "a demo of the feature for stand-up", or at the end of a ticket when the user asks for something to share.
 Use the glassbox MCP tools to keep the user oriented:
@@ -60,7 +63,7 @@ Use the glassbox MCP tools to keep the user oriented:
 - Files the user attaches arrive at the end of their message in an <attachments> block, one path per line. Open each one before you answer (Read shows images and PDFs; use a suitable tool or library for other formats) and treat them as part of the request.
 - show_progress is only for long work (expect it to take more than a minute) where you can show real progress: a task with distinct steps (pass step and steps, e.g. step 2 of 5, and move it on as each finishes), a percent you actually know, or something Glassbox can watch. Don't use it for ordinary commands, quick checks, reading or searching, or just to say you're busy: the user already sees what's running. Update it as you go and set status done or failed at the end. If there's something that shows how it's going, pass watch instead of updating it yourself: a url that answers once it's up, a file that appears when it's finished, or a log file whose lines give the percent (and done or failure lines). Use one id per task; several can run at once.
 - When the user asks for a showcase, demo deck or PR showcase of the work, call build_showcase first and follow the instructions it returns (even if a showcase or pr-showcase skill is available), and finish with showcase_ready so it appears in their Showcase view. Don't hand-write a deck without it.
-- Glassbox has a view for each kind of thing you might show; use the tool for it rather than describing it or writing your own page: a plan (ExitPlanMode, show_plan_on_map), where code lives (show_on_map), the database (show_database), a diagram (show_diagram), a request's path (show_flow), what a change could affect (show_impact), a web page (open_preview), a file or diff (open_file, open_diff), something you made (present_file), a deck (build_showcase). open_tab brings any view to the front, including the terminal for a command the user should run themselves.
+- Glassbox has a view for each kind of thing you might show; use the tool for it rather than describing it or writing your own page: a plan (ExitPlanMode, show_plan_on_map), where code lives (show_on_map), the database (show_database), a diagram (show_diagram), a request's path (show_flow), an idea or problem to look at (show_sketch), what a change could affect (show_impact), a web page (open_preview), a file or diff (open_file, open_diff), something you made (present_file), a deck (build_showcase). open_tab brings any view to the front, including the terminal for a command the user should run themselves.
 - Keep one task list and keep it current: your to-do list (TodoWrite, or TaskCreate and TaskUpdate). Mark each item in progress when you start it and completed the moment it's done, and add or delete items when the plan changes; the user watches it as Tasks and an out-of-date list misleads them. Use set_current_task for the one-line summary and the files each step will change (for the map), with the same step names, and update it whenever the list changes.
 - To run, try or test the app, call start_app: it starts the project's services the same way the user's Run all button does and opens the app in the Glassbox Browser. Never open a browser window and never start dev servers yourself in the shell (no "npm run dev &", "start http://…"). Use app_status to see what's running, app_logs to read a service's output, and stop_app to stop. If the project has no services file yet, create it first (see below). Test runners and curl against an API are fine.
 - To look at, click through or check any web page (your app, docs, a dashboard), use the Glassbox Browser tools, not Playwright, Puppeteer, headless Chrome or an external browser: browser_open, then browser_snapshot (a short text outline with numbered controls), browser_click / browser_type / browser_press on those numbers, browser_eval to pull out exactly what you need in one call, browser_wait, browser_tabs. The user watches it happen. Read pages with browser_snapshot (narrow it with find) or browser_eval; take a browser_screenshot only when how it looks matters. The Browser keeps the user's sign-ins: if a page needs a login, ask the user to sign in in the Browser tab, then carry on; never ask for their password.
@@ -96,9 +99,11 @@ export function createGlassboxServer(
   /** The session's folder, for paths Claude gives relative to it. */
   cwd?: string,
   /** The session's Browser tabs, for Claude's browser tools. */
-  browser?: { bridge: BrowserBridge; shotsDir: string }
+  browser?: { bridge: BrowserBridge; shotsDir: string },
+  /** The session's loaders, kept across its restarts (a background task gets its own). */
+  sessionLoaders?: Loaders
 ) {
-  const loaders = new Loaders(cwd ?? process.cwd(), (loader) => emit({ type: 'loader', loader }))
+  const loaders = sessionLoaders ?? new Loaders(cwd ?? process.cwd(), (loader) => emit({ type: 'loader', loader }))
   return createSdkMcpServer({
     name: 'glassbox',
     version: '0.2.0',
@@ -127,6 +132,26 @@ export function createGlassboxServer(
         async ({ id, title, mermaid }) => {
           emit({ type: 'diagram', id, title, mermaid })
           return ok(`Diagram "${title}" is now visible in Glassbox.`)
+        },
+        ALWAYS_LOAD
+      ),
+      tool(
+        'show_sketch',
+        'Show a rough HTML sketch in the Glassbox Sketches view, to put an idea or a problem in front of the user: layouts to choose between, a screen as it is against as it should be, a rough table, a small interactive prototype. The user pans and zooms it, clicks options, and comments on parts of it; their pick or comment comes back to you as a message. Reusing an id adds a new version (they can step back through versions), so revise rather than making near-duplicates.\n\n' +
+          'Write a self-contained fragment (no doctype needed): inline <style> and <script> are fine; nothing loads from the network, so no external fonts, images or libraries (draw with HTML, CSS or inline SVG). Glassbox\'s colours are set as CSS variables (--bg, --surface, --surface2, --elevated, --border, --fg, --muted, --subtle, --accent, --accent-fg, --ok, --warn, --err, --info) and match the user\'s light or dark theme; plain elements are already styled. Use colour whenever it helps, and prefer Glassbox\'s own: by default a sketch is drawn in the user\'s scheme and accent, and its colours should come from the app: the theme variables, its status colours, and its chart palette --cat-1 to --cat-8 (for categories, in order). Every app colour (accent, ok, warn, err, info, cat-1 to cat-8) has classes .text-<colour> (coloured text), .fill-<colour> (a soft tint with a matching border, e.g. a card or row) and .solid-<colour> (a strong fill, e.g. a button or tag). Only when the user asks for it (a light version, another accent, their brand\'s or product\'s colours) set scheme or accent to another of the app\'s, or use your own CSS colours. Keep it rough and quick: it is a sketch, not the product. Classes ready to use: .row (side by side, wrapping) and .col (stacked), .grow, .card (a panel), .box (a dashed placeholder for "image here", "chart here"), .note (an annotation), .bad and .good (mark a problem or the fix), .label (a small tag), .muted, .small, button.primary.\n\n' +
+          'To let the user choose, put data-pick="Option A" (a short name) on each option\'s container: clicking one sends you "I pick Option A". Lay options side by side in a .row at the given width, each with a heading saying what is different.',
+        {
+          id: z.string().describe('Stable slug, e.g. "settings-layout"; the same id again is a new version'),
+          title: z.string().describe('What it shows, e.g. "Settings: three layouts"'),
+          html: z.string().describe('The sketch: an HTML fragment with any inline <style> and <script>'),
+          width: z.number().int().min(320).max(2400).optional().describe('Page width in px it is drawn at (default 1200; 390 for a phone)'),
+          note: z.string().optional().describe('One line on what changed in this version'),
+          scheme: z.enum(['match', 'dark', 'light']).optional().describe("Leave out (the user's scheme) unless the user asks for dark or light"),
+          accent: z.enum(['match', 'teal', 'blue', 'violet', 'green', 'amber', 'rose']).optional().describe("Leave out (the user's accent) unless the user asks for another")
+        },
+        async ({ id, title, html, width, note, scheme, accent }) => {
+          emit({ type: 'sketch', id, title, html, width, note, scheme, accent })
+          return ok(`Sketch "${title}" is in the Sketches view. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message.`)
         },
         ALWAYS_LOAD
       ),
@@ -366,9 +391,8 @@ export function createGlassboxServer(
           // A loader is for progress you can show, not for "busy": a new one needs steps, a percent or something to watch.
           if (!loaders.has(id) && (status ?? 'running') === 'running' && !(step && steps) && percent === undefined && !watch)
             return ok('Not shown: a loader needs real progress. Pass step and steps (e.g. step 1 of 4) for work with distinct parts, a percent you know, or watch. For ordinary commands and short work, skip it: the user already sees what is running.')
-          const pct = step && steps ? Math.round(((step - 1) / steps) * 100) : percent
-          // An update only changes what it gives (leaving out step keeps the one already shown).
-          const given = Object.fromEntries(Object.entries({ percent: pct, step, steps, detail, watch }).filter(([, v]) => v !== undefined))
+          // An update only changes what it gives (leaving out step keeps the one already shown; a step moves the bar).
+          const given = Object.fromEntries(Object.entries({ percent, step, steps, detail, watch }).filter(([, v]) => v !== undefined))
           loaders.set({ id, label, status: status ?? 'running', ...given })
           return ok(watch && (status ?? 'running') === 'running' ? `Showing "${label}". Glassbox is watching it and will mark it done.` : `"${label}" is ${status ?? 'running'}.`)
         },
@@ -396,8 +420,8 @@ export function createGlassboxServer(
       ),
       tool(
         'open_tab',
-        'Bring one of the Glassbox views to the front: conversation; plan (your plan, to approve or reread); map (the parts of the project this work touches); database (tables and how they connect; use show_database to focus an area); diagrams (after show_diagram); flows (after show_flow); live (each file as you edit it); ripple (what a change could affect; use show_impact for a file); terminal (the user\'s own shell in this folder, for a command they should run themselves); browser (web pages; use open_preview for a URL); attachments (files they attached and files you made); showcase (the shareable deck; use build_showcase to make one); replay (step back through the session).',
-        { tab: z.enum(['conversation', 'plan', 'map', 'database', 'diagrams', 'flows', 'live', 'ripple', 'terminal', 'browser', 'attachments', 'showcase', 'replay']), why: z.string().optional() },
+        'Bring one of the Glassbox views to the front: conversation; plan (your plan, to approve or reread); map (the parts of the project this work touches); database (tables and how they connect; use show_database to focus an area); diagrams (after show_diagram); sketches (after show_sketch); flows (after show_flow); live (each file as you edit it); ripple (what a change could affect; use show_impact for a file); terminal (the user\'s own shell in this folder, for a command they should run themselves); browser (web pages; use open_preview for a URL); attachments (files they attached and files you made); showcase (the shareable deck; use build_showcase to make one); replay (step back through the session).',
+        { tab: z.enum(['conversation', 'plan', 'map', 'database', 'diagrams', 'sketches', 'flows', 'live', 'ripple', 'terminal', 'browser', 'attachments', 'showcase', 'replay']), why: z.string().optional() },
         async ({ tab, why }) => {
           emit({ type: 'open', target: { view: 'tab', tab }, why })
           return ok(`Showing ${tab}.`)

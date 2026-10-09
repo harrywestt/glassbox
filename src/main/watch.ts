@@ -100,6 +100,7 @@ export function toolSummary(name: string, rawInput: unknown, cwd: string): strin
     case 'Skill':
       return oneLine(str(input.skill) ?? '')
     case 'mcp__glassbox__show_diagram':
+    case 'mcp__glassbox__show_sketch':
       return oneLine(str(input.title) ?? '')
     case 'mcp__glassbox__pin_file':
       return path ? oneLine(rel(path)) : ''

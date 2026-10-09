@@ -65,13 +65,26 @@ function LoaderRow({ l, now, onClose }: { l: LoaderState; now: number; onClose: 
           <span className="loader-meta">
             {l.status === 'running' && l.step && l.steps ? tr('loaders.stepOf', { step: Math.min(l.step, l.steps), steps: l.steps }) : l.percent !== undefined && l.status === 'running' ? tr('loaders.percent', { percent: Math.round(l.percent) }) : ''}
             {l.status === 'running' ? clock(now - l.started) : l.status === 'done' ? tr('loaders.doneIn', { time: clock(l.updated - l.started) }) : tr('loaders.failed')}
+            {l.status === 'running' && l.watching && <span className="loader-watching" title={tr('loaders.watchingTip')}>{tr('loaders.watching')}</span>}
           </span>
         </div>
-        {l.status === 'running' && <Bar percent={l.percent} status={l.status} />}
+        {l.status === 'running' && (l.step && l.steps && l.steps <= 12 ? <Steps step={l.step} steps={l.steps} /> : <Bar percent={l.percent} status={l.status} />)}
         {l.detail && <div className="loader-detail" title={l.detail}>{l.detail}</div>}
       </div>
       {l.status !== 'running' && <IconButton icon="close" title={tr('loaders.clear')} onClick={onClose} />}
     </div>
+  )
+}
+
+/** Work in distinct parts: one segment each, the finished ones full and the one under way pulsing. */
+function Steps({ step, steps }: { step: number; steps: number }) {
+  const at = Math.min(step, steps)
+  return (
+    <span className="loader-steps" aria-hidden>
+      {Array.from({ length: steps }, (_, i) => (
+        <span key={i} className={i + 1 < at ? 'done' : i + 1 === at ? 'now' : ''} />
+      ))}
+    </span>
   )
 }
 

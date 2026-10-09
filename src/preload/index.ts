@@ -114,6 +114,8 @@ const api = {
     worktree: (cwd: string, branch: string): Promise<string> => invoke('git:worktree', cwd, branch),
     /** Update the default branch (only it) before a copy branches from it; never throws. */
     fetchDefault: (cwd: string): Promise<void> => invoke('git:fetchDefault', cwd),
+    /** Each path's project folder (worktrees map to their main checkout; gone folders to null). */
+    mainFolders: (paths: string[]): Promise<(string | null)[]> => invoke('git:mainFolders', paths),
     /** How many other live sessions work in this same repo folder. */
     peers: (cwd: string, except?: string): Promise<number> => invoke('session:peers', cwd, except)
   },
@@ -191,6 +193,10 @@ const api = {
   },
   standup: (force?: boolean): Promise<Standup> => invoke('standup:get', force),
   /** The database schema, read from the code, and Claude's pick of the tables an area uses. */
+  /** Where a sketch's HTML is served (sketch://, sandboxed). */
+  sketch: {
+    url: (html: string): Promise<string> => invoke('sketch:url', html)
+  },
   erd: {
     get: (cwd: string): Promise<Erd> => invoke('erd:get', cwd),
     focus: (cwd: string, question: string): Promise<ErdFocus> => invoke('erd:focus', cwd, question)

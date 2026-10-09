@@ -21,6 +21,8 @@ export type FlowHop = { from: string; to: string; label: string; kind?: 'new' | 
 /** Pushed by Claude through the in-process Glassbox MCP server. */
 export type GlassboxSignal =
   | { type: 'diagram'; id: string; title: string; mermaid: string }
+  /** A rough HTML page showing an idea or a problem; the same id again is a new version of it. */
+  | { type: 'sketch'; id: string; title: string; html: string; width?: number; note?: string; /** One of the app's schemes and accents, or the user's. */ scheme?: 'match' | 'dark' | 'light'; accent?: string }
   | { type: 'flow'; id: string; title: string; lanes: string[]; before?: FlowHop[]; after: FlowHop[] }
   | { type: 'task'; summary: string; steps?: TaskStep[] }
   | { type: 'pin'; path: string; reason?: string }
@@ -31,7 +33,7 @@ export type GlassboxSignal =
   | { type: 'loader'; loader: LoaderState }
 
 /** One loader: what it's for, how far along (percent, or unknown), and a line of detail. */
-export type LoaderState = { id: string; label: string; status: 'running' | 'done' | 'failed'; percent?: number; /** Step under way, of `steps`, for work with distinct parts. */ step?: number; steps?: number; detail?: string; started: number; updated: number }
+export type LoaderState = { id: string; label: string; status: 'running' | 'done' | 'failed'; percent?: number; /** Step under way, of `steps`, for work with distinct parts. */ step?: number; steps?: number; detail?: string; started: number; updated: number; /** Glassbox is watching something to move it (a url, file or log). */ watching?: boolean }
 
 export type OpenTarget =
   | { view: 'file'; path: string; line?: number; endLine?: number }
@@ -40,7 +42,7 @@ export type OpenTarget =
   | { view: 'ripple'; path: string }
   | { view: 'preview'; url: string }
   | { view: 'erd'; entities?: string[]; query?: string }
-  | { view: 'tab'; tab: 'conversation' | 'plan' | 'map' | 'database' | 'diagrams' | 'flows' | 'live' | 'ripple' | 'terminal' | 'browser' | 'attachments' | 'showcase' | 'replay' }
+  | { view: 'tab'; tab: 'conversation' | 'plan' | 'map' | 'database' | 'diagrams' | 'flows' | 'live' | 'ripple' | 'terminal' | 'browser' | 'attachments' | 'showcase' | 'replay' | 'sketches' }
 
 export type HostStatus = 'starting' | 'ready' | 'running' | 'stopped'
 

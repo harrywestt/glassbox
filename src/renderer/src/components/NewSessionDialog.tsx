@@ -58,8 +58,20 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
   }, [kind, qaWhere])
 
   useEffect(() => {
-    void window.glassbox.history.list().then((h) => {
-      const dirs = [...new Set(h.map((x) => x.cwd).filter((c): c is string => !!c))].slice(0, 8)
+    void window.glassbox.history.list().then(async (h) => {
+      // Project folders only (a session's worktree counts towards its project), most used first.
+      const cwds = h.map((x) => x.cwd).filter((c): c is string => !!c)
+      const unique = [...new Set(cwds)]
+      const mains = await window.glassbox.git.mainFolders(unique).catch(() => unique)
+      const main = new Map(unique.map((c, i) => [c, mains[i]]))
+      const uses = new Map<string, { dir: string; n: number }>()
+      for (const c of cwds) {
+        const dir = main.get(c)
+        if (!dir) continue
+        const key = dir.replace(/\\/g, '/').toLowerCase()
+        uses.set(key, { dir, n: (uses.get(key)?.n ?? 0) + 1 })
+      }
+      const dirs = [...uses.values()].sort((a, b) => b.n - a.n).map((u) => u.dir).slice(0, 8)
       setRecent(dirs)
       setCwd((c) => c || dirs[0] || '')
     })
@@ -255,16 +267,13 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
 
         {sharing > 0 && changesFiles && (
           <div className="launch-shared">
-            <Icon name="warning" className="warn" />
-            <div className="grow">
-              <strong>
-                {tr('newSessionDialog.sharing', { count: sharing, folder: baseName(cwd) })}
-              </strong>
-              <span className="muted small"> {tr('newSessionDialog.sharingNote')}</span>
-              <label className="check">
-                <input type="checkbox" checked={ownCopy} onChange={(e) => setOwnCopy(e.target.checked)} /> {f.branch?.trim() ? tr('newSessionDialog.ownCopyOnBranch', { branch: f.branch.trim() }) : tr('newSessionDialog.ownCopy')}
-              </label>
+            <div>
+              <span className="shared-word">{tr('sessionView.sharedWord')}</span> {tr('newSessionDialog.sharing', { count: sharing, folder: baseName(cwd) })}{' '}
+              <span className="muted">{tr('newSessionDialog.sharingNote')}</span>
             </div>
+            <label className="check">
+              <input type="checkbox" checked={ownCopy} onChange={(e) => setOwnCopy(e.target.checked)} /> {f.branch?.trim() ? tr('newSessionDialog.ownCopyOnBranch', { branch: f.branch.trim() }) : tr('newSessionDialog.ownCopy')}
+            </label>
           </div>
         )}
         {error && <div className="note note-error">{error}</div>}

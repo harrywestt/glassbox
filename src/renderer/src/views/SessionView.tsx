@@ -28,6 +28,7 @@ import { ContextPanel } from '../panels/ContextPanel'
 import { ChangesPanel } from '../panels/ChangesPanel'
 import { AgentsPanel } from '../panels/AgentsPanel'
 import { DiagramsPanel } from '../panels/DiagramsPanel'
+import { SketchTab } from '../work/SketchTab'
 import { ConnectorsPanel } from '../panels/ConnectorsPanel'
 import { SkillsPanel } from '../panels/SkillsPanel'
 import { ShowcasePanel } from '../panels/ShowcasePanel'
@@ -54,7 +55,7 @@ import { FlowTab } from '../work/FlowTab'
 import { tr } from '../../../shared/i18n'
 
 /** Places a component can ask to show. Each maps to a side tab, or to a work-area tab. */
-export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' | 'decisions' | 'guardrails' | 'services' | 'explorer' | 'context' | 'changes' | 'agents' | 'diagrams' | 'connectors' | 'skills' | 'showcase' | 'raw' | 'git' | 'preview' | 'ticket' | 'live' | 'ripple' | 'flows'
+export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' | 'decisions' | 'guardrails' | 'services' | 'explorer' | 'context' | 'changes' | 'agents' | 'diagrams' | 'sketches' | 'connectors' | 'skills' | 'showcase' | 'raw' | 'git' | 'preview' | 'ticket' | 'live' | 'ripple' | 'flows'
 
 /** The side panel: five tabs you use all the time, and the rest one click away in More. */
 type SideTab = 'route' | 'decisions' | 'changes' | 'ticket' | 'git' | 'context' | 'heatmap' | 'safety' | 'connectors' | 'skills' | 'raw'
@@ -87,7 +88,7 @@ function saveSide(cwd: string, tab: SideTab) {
     /* this run only */
   }
 }
-type MoreItem = { side: SideTab; label: string } | { work: 'ripple' | 'flows' | 'diagrams' | 'showcase' | 'replay' | 'preview' | 'live' | 'attachments'; label: string }
+type MoreItem = { side: SideTab; label: string } | { work: 'ripple' | 'flows' | 'diagrams' | 'sketches' | 'showcase' | 'replay' | 'preview' | 'live' | 'attachments'; label: string }
 const MORE: { group: string; items: MoreItem[] }[] = [
   { group: tr('sessionView.more.lookCloser'), items: [{ side: 'safety', label: tr('sessionView.more.safety') }, { side: 'raw', label: tr('sessionView.more.raw') }] },
   { group: tr('sessionView.more.setUp'), items: [{ side: 'connectors', label: tr('sessionView.more.connectors') }, { side: 'skills', label: tr('sessionView.more.skills') }] }
@@ -128,7 +129,7 @@ const ROUTES: Partial<Record<PanelId, SideTab>> = {
  */
 const ENGINEERING_WORK = new Set(['map', 'ripple', 'flows', 'replay'])
 const EVERYDAY_SIDE = new Set<SideTab>(['route', 'decisions', 'context', 'connectors', 'skills'])
-const EVERYDAY_WORK = new Set(['diagrams', 'showcase', 'attachments', 'preview'])
+const EVERYDAY_WORK = new Set(['diagrams', 'sketches', 'showcase', 'attachments', 'preview'])
 
 // A file dropped outside the drop area mustn't make the window navigate to it.
 window.addEventListener('dragover', (e) => e.preventDefault())
@@ -142,6 +143,7 @@ export type WorkTab =
   | { id: 'flows'; kind: 'flows' }
   | { id: 'live'; kind: 'live' }
   | { id: 'diagrams'; kind: 'diagrams' }
+  | { id: 'sketches'; kind: 'sketches' }
   | { id: 'replay'; kind: 'replay' }
   | { id: 'showcase'; kind: 'showcase' }
   | { id: 'attachments'; kind: 'attachments' }
@@ -212,7 +214,7 @@ const fixedTabs = (qa: boolean): WorkTab[] => [CONVERSATION, qa ? BROWSER : LIVE
 const isFixed = (t: WorkTab, qa: boolean) => t.kind === 'conversation' || t.kind === (qa ? 'preview' : 'live')
 
 /** The views the + in the tab strip opens, with what each is for. */
-type ViewKind = 'plan' | 'terminal' | 'map' | 'erd' | 'ripple' | 'flows' | 'live' | 'diagrams' | 'replay' | 'attachments' | 'preview' | 'showcase'
+type ViewKind = 'plan' | 'terminal' | 'map' | 'erd' | 'ripple' | 'flows' | 'live' | 'diagrams' | 'sketches' | 'replay' | 'attachments' | 'preview' | 'showcase'
 const VIEWS: { kind: ViewKind; label: string; note: string; everyday?: boolean }[] = [
   { kind: 'plan', label: tr('sessionView.views.plan.label'), note: tr('sessionView.views.plan.note'), everyday: true },
   { kind: 'map', label: tr('sessionView.views.map.label'), note: tr('sessionView.views.map.note') },
@@ -221,6 +223,7 @@ const VIEWS: { kind: ViewKind; label: string; note: string; everyday?: boolean }
   { kind: 'ripple', label: tr('sessionView.views.ripple.label'), note: tr('sessionView.views.ripple.note') },
   { kind: 'flows', label: tr('sessionView.views.flows.label'), note: tr('sessionView.views.flows.note') },
   { kind: 'diagrams', label: tr('sessionView.views.diagrams.label'), note: tr('sessionView.views.diagrams.note'), everyday: true },
+  { kind: 'sketches', label: tr('sessionView.views.sketches.label'), note: tr('sessionView.views.sketches.note'), everyday: true },
   { kind: 'attachments', label: tr('sessionView.views.attachments.label'), note: tr('sessionView.views.attachments.note'), everyday: true },
   { kind: 'preview', label: tr('sessionView.views.preview.label'), note: tr('sessionView.views.preview.note'), everyday: true },
   { kind: 'showcase', label: tr('sessionView.views.showcase.label'), note: tr('sessionView.views.showcase.note'), everyday: true },
@@ -231,20 +234,23 @@ const viewTab = (kind: ViewKind): WorkTab => ({ id: kind, kind }) as WorkTab
 // Views you asked to keep open, per project: they open with every session there.
 const KEEP_KEY = 'glassbox.keepOpen'
 const projectKey = (cwd: string) => cwd.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
-function keptViews(cwd: string): ViewKind[] {
+/** Views pinned to stay open, per session (pinning in one session left them open in every other). */
+function keptViews(tabId: string): ViewKind[] {
   try {
-    return (JSON.parse(localStorage.getItem(KEEP_KEY) ?? '{}') as Record<string, ViewKind[]>)[projectKey(cwd)] ?? []
+    return (JSON.parse(localStorage.getItem(KEEP_KEY) ?? '{}') as Record<string, ViewKind[]>)[`tab:${tabId}`] ?? []
   } catch {
     return []
   }
 }
-function setKept(cwd: string, kind: ViewKind, on: boolean) {
+function setKept(tabId: string, kind: ViewKind, on: boolean) {
   try {
     const all = JSON.parse(localStorage.getItem(KEEP_KEY) ?? '{}') as Record<string, ViewKind[]>
-    const list = new Set(all[projectKey(cwd)] ?? [])
+    const key = `tab:${tabId}`
+    const list = new Set(all[key] ?? [])
     if (on) list.add(kind)
     else list.delete(kind)
-    all[projectKey(cwd)] = [...list]
+    if (list.size) all[key] = [...list]
+    else delete all[key]
     localStorage.setItem(KEEP_KEY, JSON.stringify(all))
   } catch {
     /* kept for now only */
@@ -279,8 +285,8 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const [sideOpen, setSideOpen] = useState(!qa)
   const [moreOpen, setMoreOpen] = useState(false)
   // The conversation, plus any views you keep open for this project.
-  const [kept, setKeptState] = useState<ViewKind[]>(() => keptViews(tab.cwd))
-  const [work, setWork] = useState<WorkTab[]>(() => (qa ? fixedTabs(true) : [...fixedTabs(false), ...keptViews(tab.cwd).filter((k) => k !== 'live').map(viewTab)]))
+  const [kept, setKeptState] = useState<ViewKind[]>(() => keptViews(tab.id))
+  const [work, setWork] = useState<WorkTab[]>(() => (qa ? fixedTabs(true) : [...fixedTabs(false), ...keptViews(tab.id).filter((k) => k !== 'live').map(viewTab)]))
   const [activeWork, setActiveWork] = useState('conversation')
   const [unseen, setUnseen] = useState<Set<string>>(new Set())
   // The main conversation by default; an agent's own work is one pick away (the switcher above it).
@@ -352,6 +358,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const showPanel = useCallback(
     (id: PanelId) => {
       if (id === 'diagrams') return openWork({ id: 'diagrams', kind: 'diagrams' })
+      if (id === 'sketches') return openWork({ id: 'sketches', kind: 'sketches' })
       if (id === 'live') return openWork({ id: 'live', kind: 'live' })
       if (id === 'ripple') return openWork({ id: 'ripple', kind: 'ripple' })
       if (id === 'flows') return openWork({ id: 'flows', kind: 'flows' })
@@ -433,6 +440,9 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const diagramCount = Object.keys(session.diagrams).length
   const diagramAt = Math.max(0, ...Object.values(session.diagrams).map((d) => d.at))
   useEffect(() => autoOpen('diagrams', { id: 'diagrams', kind: 'diagrams' }, diagramAt), [diagramAt, autoOpen])
+  const sketchCount = Object.keys(session.sketches ?? {}).length
+  const sketchAt = Math.max(0, ...Object.values(session.sketches ?? {}).map((d) => d.at))
+  useEffect(() => autoOpen('sketches', { id: 'sketches', kind: 'sketches' }, sketchAt), [sketchAt, autoOpen])
   useEffect(() => autoOpen('showcase', { id: 'showcase', kind: 'showcase' }, session.showcase?.at ?? 0), [session.showcase?.at, autoOpen])
 
   // Claude's browser tools: open a page in a Browser tab (and wait for it), or list the tabs.
@@ -642,6 +652,8 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
         return flowCount > 0
       case 'diagrams':
         return diagramCount > 0
+      case 'sketches':
+        return sketchCount > 0
       case 'attachments':
         return attachmentCount > 0
       case 'showcase':
@@ -694,11 +706,12 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               onActivate={(id) => openWork(work.find((w) => w.id === id)!)}
               onClose={closeWork}
               diagramCount={diagramCount}
+              sketchCount={sketchCount}
               claudeBrowsing={claudeInBrowser(session).active}
               kept={kept}
               onKeep={(kind, on) => {
-                setKept(tab.cwd, kind, on)
-                setKeptState(keptViews(tab.cwd))
+                setKept(tab.id, kind, on)
+                setKeptState(keptViews(tab.id))
               }}
               views={VIEWS.filter((v) => !everyday || v.everyday).map((v) => ({ ...v, has: viewHas(v.kind) }))}
               onOpenView={(kind) => openWork(kind === 'map' ? MAP : viewTab(kind))}
@@ -729,6 +742,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
                 </Activity>
               </div>
               {current.kind === 'diagrams' && <DiagramsPanel />}
+              {current.kind === 'sketches' && <SketchTab />}
               {current.kind === 'replay' && <ReplayPanel />}
               {current.kind === 'showcase' && <ShowcasePanel />}
               {current.kind === 'attachments' && <AttachmentsTab />}
@@ -882,7 +896,7 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
   }
 }
 
-const WORK_ICON: Record<WorkTab['kind'], string> = { plan: 'checklist', terminal: 'terminal', erd: 'database', attachments: 'attach', map: 'type-hierarchy', ripple: 'radio-tower', flows: 'arrow-swap', conversation: 'comment-discussion', live: 'pulse', diagrams: 'type-hierarchy-sub', replay: 'history', showcase: 'preview', file: 'file', diff: 'git-compare', commit: 'git-commit', preview: 'globe' }
+const WORK_ICON: Record<WorkTab['kind'], string> = { plan: 'checklist', terminal: 'terminal', erd: 'database', attachments: 'attach', map: 'type-hierarchy', ripple: 'radio-tower', flows: 'arrow-swap', conversation: 'comment-discussion', live: 'pulse', diagrams: 'type-hierarchy-sub', sketches: 'edit', replay: 'history', showcase: 'preview', file: 'file', diff: 'git-compare', commit: 'git-commit', preview: 'globe' }
 
 function workTitle(t: WorkTab): string {
   switch (t.kind) {
@@ -904,6 +918,8 @@ function workTitle(t: WorkTab): string {
       return tr('sessionView.work.live')
     case 'diagrams':
       return tr('sessionView.work.diagrams')
+    case 'sketches':
+      return tr('sessionView.work.sketches')
     case 'replay':
       return tr('sessionView.work.replay')
     case 'showcase':
@@ -928,6 +944,7 @@ function WorkTabs({
   onActivate,
   onClose,
   diagramCount,
+  sketchCount,
   claudeBrowsing,
   kept,
   onKeep,
@@ -943,6 +960,7 @@ function WorkTabs({
   onActivate: (id: string) => void
   onClose: (id: string) => void
   diagramCount: number
+  sketchCount: number
   /** Claude is using the Browser right now: its tab says so. */
   claudeBrowsing: boolean
   kept: ViewKind[]
@@ -975,6 +993,7 @@ function WorkTabs({
             <Icon name={WORK_ICON[t.kind]} />
             <span className="ellipsis">{workTitle(t)}</span>
             {t.kind === 'diagrams' && diagramCount > 0 && <span className="count">{diagramCount}</span>}
+            {t.kind === 'sketches' && sketchCount > 0 && <span className="count">{sketchCount}</span>}
             {t.kind === 'conversation' && yourTurn && t.id !== active && <span className="your-turn-lamp" role="img" aria-label={tr('sessionView.yourTurn')} title={tr('sessionView.yourTurn')} />}
             {t.kind === 'preview' && claudeBrowsing && (
               <span className="claude-browsing" title={tr('sessionView.claudeBrowsing')} aria-label={tr('sessionView.claudeBrowsing')}>
@@ -1049,6 +1068,7 @@ function SharedFolderBanner() {
   const { tab, s, peers, actions } = useSession()
   const [hidden, setHidden] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [naming, setNaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const root = s.git?.root?.replace(/\\/g, '/').toLowerCase()
   const others = root ? peers.filter((p) => p.tab.id !== tab.id && p.s.status !== 'stopped' && p.s.git?.root?.replace(/\\/g, '/').toLowerCase() === root) : []
@@ -1056,40 +1076,57 @@ function SharedFolderBanner() {
   useEffect(() => setName(`${s.git?.branch && !/^(main|master|develop)$/.test(s.git.branch) ? `${s.git.branch}-2` : `session-${Date.now().toString(36).slice(-5)}`}`), [s.git?.branch])
   if (!others.length || hidden) return null
   const fresh = !s.timeline.some((i) => i.kind === 'user')
+  // Each name once, and at most two of them.
+  const unique = [...new Set(others.map((o) => tabTitle(o.tab, o.s)))]
+  const names = unique.slice(0, 2).map((name) => tr('sessionView.quotedName', { name })).join(', ')
+  const withNames = unique.length > 2 ? tr('sessionView.sharedWithMore', { names, n: unique.length - 2 }) : tr('sessionView.sharedWith', { names })
+  const makeCopy = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await window.glassbox.git.fetchDefault(tab.cwd).catch(() => {})
+      const dir = await window.glassbox.git.worktree(tab.cwd, name.trim())
+      actions.retarget(tab.id, dir)
+    } catch (e) {
+      setError(String(e).replace(/^Error:\s*(Error invoking remote method '[^']+':\s*)?(Error:\s*)?/, ''))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
-    <div className="shared-banner" role="status">
-      <Icon name="warning" className="warn" />
-      <div className="grow">
-        <strong>{tr('sessionView.sharesFolder', { names: others.map((o) => tr('sessionView.quotedName', { name: tabTitle(o.tab, o.s) })).join(', ') })}</strong>{' '}
-        <span className="muted">
-          {tr('sessionView.sharedNote')}
-        </span>
-        {error && <div className="err small">{error}</div>}
-      </div>
-      {fresh && (
-        <span className="shared-move">
-          <input className="mono" value={name} onChange={(e) => setName(e.target.value)} aria-label={tr('sessionView.branchForCopy')} />
-          <button
-            className="btn primary"
-            disabled={busy || !name.trim()}
-            onClick={async () => {
-              setBusy(true)
-              setError(null)
-              try {
-                await window.glassbox.git.fetchDefault(tab.cwd).catch(() => {})
-                const dir = await window.glassbox.git.worktree(tab.cwd, name.trim())
-                actions.retarget(tab.id, dir)
-              } catch (e) {
-                setError(String(e).replace(/^Error:\s*(Error invoking remote method '[^']+':\s*)?(Error:\s*)?/, ''))
-              } finally {
-                setBusy(false)
-              }
-            }}
-          >
-            {busy ? tr('sessionView.makingCopy') : tr('sessionView.giveOwnCopy')}
+    <div className="shared-strip" role="status" title={tr('sessionView.sharedNote')}>
+      <span className="shared-word">{tr('sessionView.sharedWord')}</span>
+      <span className="ellipsis shared-text">
+        {withNames} <span className="muted">{error ?? tr('sessionView.sharedShort')}</span>
+      </span>
+      <span className="grow" />
+      {fresh &&
+        (naming ? (
+          <span className="shared-move">
+            <input
+              className="mono"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && name.trim() && !busy) void makeCopy()
+                else if (e.key === 'Escape') setNaming(false)
+              }}
+              aria-label={tr('sessionView.branchForCopy')}
+              title={tr('sessionView.branchForCopy')}
+            />
+            <button className="btn primary" disabled={busy || !name.trim()} onClick={() => void makeCopy()}>
+              {busy ? tr('sessionView.makingCopy') : tr('sessionView.makeCopy')}
+            </button>
+            <button className="btn" disabled={busy} onClick={() => setNaming(false)}>
+              {tr('sessionView.cancelCopy')}
+            </button>
+          </span>
+        ) : (
+          <button className="btn" onClick={() => setNaming(true)} title={tr('sessionView.giveOwnCopyTip')}>
+            {tr('sessionView.giveOwnCopy')}
           </button>
-        </span>
-      )}
+        ))}
       <IconButton icon="close" title={tr('sessionView.hide')} onClick={() => setHidden(true)} />
     </div>
   )

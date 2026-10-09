@@ -117,10 +117,10 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
       const prompt = [
         `Let’s shape this idea together: ${topic}`,
         f.context?.trim() ? `Context and links: ${f.context.trim()}` : '',
-        'This is a thinking session, so don’t change any project files. Work like a thoughtful tech lead: explore the codebase and any docs where it helps, ask me the questions that matter with log_decision (kind question), a few at a time, sketch the options with show_diagram, and log decisions and assumptions as you go.',
+        'This is a thinking session, so don’t change any project files. Work like a thoughtful tech lead: explore the codebase and any docs where it helps, ask me the questions that matter with log_decision (kind question), a few at a time, and log decisions and assumptions as you go. Show options rather than only describing them: show_diagram for how parts connect, and show_sketch for anything with a look or a layout (screens, flows a user clicks through), with each option as a data-pick so I can choose by clicking.',
         f.prd
           ? `When we’ve settled on a direction, write it up as a PRD: the problem and evidence for it; users and what they’re trying to do; goals and non-goals; requirements, each with acceptance criteria; UX flows (show_diagram); data and API impact; risks and open questions; rollout and how we’ll measure success. Write it to docs/prd/${slug(topic) || 'prd'}.md (ask before overwriting an existing file) and present_file it.${f.confluence ? ' When I approve it, publish it to Confluence with the Atlassian connector and give me the link.' : ''}`
-          : 'Finish with two or three options, their trade-offs, and your recommendation. Then offer to write it up as a PRD.'
+          : 'Finish with two or three options, their trade-offs, and your recommendation (sketched side by side with show_sketch where they differ in how they look). Then offer to write it up as a PRD.'
       ]
         .filter(Boolean)
         .join('\n\n')
