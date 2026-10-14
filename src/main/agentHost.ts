@@ -32,9 +32,12 @@ import { loadExtras, saveExtras, type SessionExtras } from './sessionExtras'
 import { cachedScan, importTargets, warmScan } from './architecture'
 import { isPublicEntry } from '../shared/architecture'
 import { isReadOnlyShell } from '../shared/readonlyShell'
-import type { BrowserBridge } from './browserTools'
+import type { BrowserBridge, BrowserHooks } from './browserTools'
 import { tr } from '../shared/i18n'
 import { Loaders } from './loaders'
+import { modelFor, pickTier, type Tier } from './modelRouter'
+import { costByModel, recordSpend } from './spend'
+import { UxReviewer } from './uxReviewer'
 import { automation } from './automation'
 
 /** Commands that usually run for minutes: watching deploys and CI, builds, full test runs, installs, migrations. */
@@ -286,7 +289,7 @@ export class AgentHost {
     /** This session's services (what Run all starts), so Claude can run the app in the preview. */
     private app?: () => ProjectServices,
     /** The session's Browser tabs, for Claude's browser tools. */
-    private browser?: { bridge: BrowserBridge; shotsDir: string },
+    private browser?: { bridge: BrowserBridge; shotsDir: string; record?: BrowserHooks['record'] },
     /** The other live sessions working in this same folder (the same git working tree). */
     private peers: () => AgentHost[] = () => []
   ) {
@@ -295,8 +298,37 @@ export class AgentHost {
       cwd,
       () => this.currentTask,
       (findings, reviewed) => this.emit({ kind: 'reviewer', findings, reviewed }),
-      (busy, pending, error) => this.emit({ kind: 'reviewer-state', busy, pending, error })
+      (busy, pending, error) => this.emit({ kind: 'reviewer-state', busy, pending, error }),
+      (msg) => this.spentHelper('review', msg)
     )
+    this.ux = new UxReviewer(
+      cwd,
+      () => this.currentTask,
+      (findings) => this.emit({ kind: 'reviewer', findings, reviewed: [] }),
+      ({ busy, reviewed, pending, error }) => {
+        const total = reviewed + pending + (busy ? 1 : 0)
+        this.loaders.set({
+          id: 'ux-review',
+          label: tr('mainUx.label'),
+          status: busy || pending ? 'running' : 'done',
+          percent: total ? (reviewed / total) * 100 : undefined,
+          detail: error ? tr('mainUx.retrying') : busy || pending ? tr('mainUx.progress', { reviewed, pending: pending + (busy ? 1 : 0) }) : tr('mainUx.done', { count: reviewed }),
+          byGlassbox: true
+        })
+      },
+      (msg) => this.spentHelper('ux', msg)
+    )
+  }
+
+  /** The UX reviewer, and whether every screenshot goes to it (a deep QA run). */
+  private ux: UxReviewer
+  uxAuto = false
+  /** Sends a screenshot to the UX reviewer (as browser_screenshot with review does). */
+  reviewUx(shot: { path: string; url?: string; title?: string; note?: string }) {
+    return this.ux.add(shot)
+  }
+  private onShot = (s: { path: string; url: string; title: string; review: boolean; note?: string }) => {
+    if (this.uxAuto || s.review) this.ux.add({ path: s.path, url: s.url, title: s.title, note: s.note })
   }
 
   async open(resume?: string, access: AccessMode = 'default') {
@@ -324,6 +356,7 @@ export class AgentHost {
         this.costBase = extras.costUsd
         for (const r of extras.shellEdits) for (const f of r.files) this.sessionEdits.add(f)
         this.emit({ kind: 'restore', costUsd: extras.costUsd, shellEdits: extras.shellEdits })
+        this.emit({ kind: 'spend', byModel: extras.byModel ?? {}, helpers: extras.helpers ?? {} })
       }
     }
     // The api-only boundary check reads imports with the map's resolver; have it ready.
@@ -347,8 +380,8 @@ export class AgentHost {
       options: {
         cwd: this.cwd,
         resume,
-        // The model you picked carries over when the session restarts.
-        ...(this.chosenModel ? { model: this.chosenModel } : {}),
+        // The model you picked carries over when the session restarts (Auto picks per message, below).
+        ...(this.chosenModel && this.chosenModel !== 'auto' ? { model: this.chosenModel } : this.autoModel ? { model: this.autoModel } : {}),
         permissionMode: access,
         // Lets you switch to Full access later; guardrails still run as hooks in every mode.
         allowDangerouslySkipPermissions: true,
@@ -373,13 +406,15 @@ export class AgentHost {
             this.app,
             undefined,
             this.cwd,
-            this.browser,
-            this.loaders
+            this.browser && { ...this.browser, hooks: { record: this.browser.record, shot: this.onShot } },
+            this.loaders,
+            this.ux
           )
         },
         allowedTools: GLASSBOX_TOOLS,
         settingSources: ['user', 'project', 'local'],
-        env: SESSION_ENV,
+        // On Auto, agents Claude starts use Sonnet unless it asks for a model.
+        env: this.isAuto() ? { ...SESSION_ENV, CLAUDE_CODE_SUBAGENT_MODEL: process.env.CLAUDE_CODE_SUBAGENT_MODEL ?? 'sonnet' } : SESSION_ENV,
         systemPrompt: { type: 'preset', preset: 'claude_code', append: GLASSBOX_INSTRUCTIONS + SERVICES_INSTRUCTIONS },
         includePartialMessages: true,
         // A predicted next prompt after each turn (as in the CLI), offered in the message box.
@@ -406,6 +441,8 @@ export class AgentHost {
     try {
       const init = await q.initializationResult()
       this.emit({ kind: 'capabilities', commands: init.commands, models: init.models, account: init.account })
+      this.modelValues = init.models.map((m) => m.value)
+      this.emit({ kind: 'model-auto', on: this.isAuto(), ...(this.autoTier ? { tier: this.autoTier, model: this.autoModel } : {}) })
       this.emit({ kind: 'status', status: 'ready' })
       await this.refreshContext()
       // Connectors finish connecting in the background; re-poll so statuses settle.
@@ -422,6 +459,7 @@ export class AgentHost {
   async send(text: string, opts: SendOptions) {
     if (!this.input || !this.q) throw new Error('Session is not running')
     if (opts.plan && this.mode !== 'plan') await this.setMode('plan')
+    await this.routeModel(text, !!opts.plan || this.mode === 'plan')
     const msg = { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, uuid: opts.uuid, priority: opts.priority } as SDKUserMessage
     this.input.push(msg)
     const wasBusy = this.busy
@@ -498,7 +536,10 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
           env: SESSION_ENV
         }
       })) {
-        if (msg.type === 'result') reply = msg.subtype === 'success' ? msg.result : ''
+        if (msg.type === 'result') {
+          reply = msg.subtype === 'success' ? msg.result : ''
+          this.spentHelper('quick', msg)
+        }
       }
       this.emit(reply.trim() ? { kind: 'quick-answer', uuid, status: 'done', text: reply.trim() } : { kind: 'quick-answer', uuid, status: 'failed' })
     } catch {
@@ -599,6 +640,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     // Anything you held is let go (turned down), so nothing waits on a closed session.
     for (const id of [...this.holdWaiting.keys()]) this.releaseHold(id, false)
     this.reviewer.dispose()
+    this.ux.dispose()
     this.loaders.stopAll(tr('mainLoaders.sessionStopped'))
     this.loaders.dispose()
     for (const t of this.sideTasks.values()) t.abort.abort()
@@ -730,6 +772,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
             }
           }
           if (msg.type === 'result') {
+            this.spentHelper('side', msg)
             update({
               status: msg.is_error ? 'failed' : 'done',
               endedAt: Date.now(),
@@ -828,14 +871,86 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     if (p.toolName === 'ExitPlanMode') void this.setMode(this.baseMode)
   }
 
-  /** The model you picked for this session (undefined: the account's default). */
+  /** The model you picked for this session ('auto': picked per message; undefined: Auto if it's on in Settings, else the account's default). */
   private chosenModel?: string
+  /** The session's kind (qa, review, planning…), which Auto weighs. */
+  kind?: string
+  /** On Auto: the model it last asked for, and which kind. */
+  private autoModel?: string
+  private autoTier?: Tier
+  private modelValues: string[] = []
+  private userMessages = 0
 
-  /** Switch the model this session uses, from your next message on. */
+  private isAuto() {
+    return this.chosenModel === 'auto' || (this.chosenModel === undefined && automation().autoModel)
+  }
+
+  /** Switch the model this session uses, from your next message on ('auto' to have it picked per message). */
   async setModel(model: string) {
     this.chosenModel = model
+    if (model === 'auto') return this.emit({ kind: 'model-auto', on: true, ...(this.autoTier ? { tier: this.autoTier, model: this.autoModel } : {}) })
+    this.autoModel = undefined
+    this.autoTier = undefined
     await this.q?.setModel(model)
     this.emit({ kind: 'model', model })
+    this.emit({ kind: 'model-auto', on: false })
+  }
+
+  /**
+   * The session's own spend from a turn's result: the SDK's running totals per model, less what was
+   * already counted (a resumed session's first result includes the turns before; after /clear the
+   * totals start again).
+   */
+  private spentMain(msg: Parameters<typeof costByModel>[0]) {
+    const now = costByModel(msg)
+    const last = this.extras.lastUsage ?? {}
+    const restarted = Object.entries(last).some(([m, v]) => (now[m] ?? 0) + 1e-9 < v)
+    const delta: Record<string, number> = {}
+    for (const [m, v] of Object.entries(now)) {
+      const d = restarted ? v : v - (last[m] ?? 0)
+      if (d > 1e-9) delta[m] = d
+    }
+    this.extras.lastUsage = now
+    this.addSpend(delta)
+  }
+
+  /** A helper's spend (quick answers, the reviewers, side tasks): each run starts from nothing. */
+  private spentHelper(helper: string, msg: Parameters<typeof costByModel>[0]) {
+    const cost = costByModel(msg)
+    const total = Object.values(cost).reduce((a, b) => a + b, 0)
+    if (!total) return
+    this.extras.helpers = { ...this.extras.helpers, [helper]: (this.extras.helpers?.[helper] ?? 0) + total }
+    this.addSpend(cost, helper)
+  }
+
+  private addSpend(byModel: Record<string, number>, helper?: string) {
+    if (!Object.keys(byModel).length) return
+    const sum = { ...this.extras.byModel }
+    for (const [m, v] of Object.entries(byModel)) sum[m] = (sum[m] ?? 0) + v
+    this.extras.byModel = sum
+    recordSpend({ cwd: this.cwd, session: this.sid, helper }, byModel)
+    if (this.sid) void saveExtras(this.sid, this.extras)
+    this.emit({ kind: 'spend', byModel: sum, helpers: this.extras.helpers ?? {} })
+  }
+
+  /** On Auto: the model for this message (see modelRouter), switched to before it's sent. */
+  private async routeModel(text: string, plan: boolean) {
+    const first = this.userMessages++ === 0
+    // Glassbox's own notes to Claude and slash commands carry on with whatever model is in use.
+    // A message sent mid-turn waits for the turn to end: switching now would change model part way through it.
+    if (!this.isAuto() || !this.q || this.busy || text.startsWith('[Glassbox') || text.trim().startsWith('/')) return
+    const pick = pickTier({ text, plan, kind: this.kind, contextTokens: this.contextTokens, current: this.autoTier, firstMessage: first, wideSonnet: this.modelValues.includes('sonnet[1m]') })
+    const model = modelFor(pick.tier, this.modelValues, this.contextTokens)
+    if (model !== this.autoModel) {
+      try {
+        await this.q.setModel(model)
+        this.autoModel = model
+        this.autoTier = pick.tier
+      } catch {
+        return
+      }
+    }
+    this.emit({ kind: 'model-auto', on: true, tier: pick.tier, model, reason: pick.reason })
   }
 
   async setMode(mode: PermissionMode) {
@@ -1078,6 +1193,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
         if (msg.type === 'result') {
           // The query's cost starts again at 0 after a resume; the saved total carries on from before.
           this.extras.costUsd = this.costBase + (msg.total_cost_usd ?? 0)
+          this.spentMain(msg)
           if (this.sid) void saveExtras(this.sid, this.extras)
           this.busy = false
           this.emit({ kind: 'status', status: 'ready' })

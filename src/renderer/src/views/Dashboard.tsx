@@ -2,7 +2,7 @@ import { AccountsButton } from './AccountsButton'
 import { setPinned, usePinned } from '../pins'
 import { StandupButton } from './StandupButton'
 import { AutomationCard } from './AutomationCard'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useActions } from '../App'
 import type { SessionState } from '../session'
 import type { Tab } from '../tabs'
@@ -15,6 +15,7 @@ import { AdminChip } from './AdminCard'
 import { SessionsOverview } from './SessionsOverview'
 import { GitHubSection } from './GitHubSection'
 import { money, useFx } from '../money'
+import { SpendCard } from '../components/Spend'
 import { tr } from '../../../shared/i18n'
 import type { UpdateState } from '../../../shared/events'
 
@@ -22,7 +23,25 @@ type Props = { tabs: Tab[]; sessions: Record<string, SessionState>; visible: boo
 
 const REFRESH_MS = 60_000
 
-export function Dashboard({ tabs, sessions, visible, active }: Props & { active?: string }) {
+/**
+ * The value, but changing at most once every `ms` while `on` (and not at all while off): the board
+ * re-sorted every session on every streamed word, which a busy session sends many times a second.
+ */
+function useCalm<T>(value: T, on: boolean, ms = 1000): T {
+  const [calm, setCalm] = useState(value)
+  const last = useRef(0)
+  useEffect(() => {
+    if (!on || value === calm) return
+    const t = setTimeout(() => ((last.current = Date.now()), setCalm(value)), Math.max(0, last.current + ms - Date.now()))
+    return () => clearTimeout(t)
+  }, [value, on, calm, ms])
+  return calm
+}
+
+export const Dashboard = memo(DashboardView, (a, b) => !a.visible && !b.visible && a.tabs === b.tabs && a.active === b.active)
+
+function DashboardView({ tabs, sessions: liveSessions, visible, active }: Props & { active?: string }) {
+  const sessions = useCalm(liveSessions, !!visible)
   // Each part loads on its own and its card fills in when it arrives; nothing waits on the slowest.
   const [usage, setUsage] = useState<UsageSnapshot | null>(null)
   const [days, setDays] = useState<UsageSnapshot['days'] | null>(null)
@@ -147,6 +166,8 @@ export function Dashboard({ tabs, sessions, visible, active }: Props & { active?
                 </div>
               )}
             </section>
+
+            <SpendCard visible={!!visible} />
 
             <section className="card">
               <div className="card-title" title={tr('dashboard.tokensPerDayTitle')}>{tr('dashboard.tokensPerDay')}</div>

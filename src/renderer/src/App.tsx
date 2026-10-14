@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { THEMES, useTheme, type ThemeTokens } from './theme'
 import { ErrorBoundary, logError } from './components/ErrorBoundary'
-import { appReducer, DASHBOARD, loadTabs, rememberView, saveTabs, type AppAction, type SessionViewMode } from './tabs'
+import { appReducer, DASHBOARD, hostKind, loadTabs, rememberView, saveTabs, type AppAction, type SessionViewMode } from './tabs'
 import { disposeTerminal } from './work/TerminalTab'
 import { TitleBar } from './components/TitleBar'
 import { Dashboard } from './views/Dashboard'
@@ -17,12 +17,13 @@ import type { OpenTarget, Requirements } from '../../shared/events'
 import { bangContext, type CommentTarget } from './session'
 import { commentPrompt } from './review'
 import { tr } from '../../shared/i18n'
+import { startRecorder } from './recorder'
 
 const ThemeContext = createContext<ThemeTokens>(THEMES['glassbox-dark'])
 export const useThemeTokens = () => useContext(ThemeContext)
 
 export type AppActions = {
-  openSession: (cwd: string, opts?: { resumeId?: string; title?: string; kind?: SessionKind; pendingStart?: PendingStart }) => void
+  openSession: (cwd: string, opts?: { resumeId?: string; title?: string; kind?: SessionKind; pendingStart?: PendingStart; deep?: boolean }) => void
   showLauncher: (cwd?: string) => void
   closeTab: (id: string) => void
   activate: (id: string) => void
@@ -96,6 +97,8 @@ export function App() {
 
   // A desktop notification click brings its session to the front.
   useEffect(() => window.glassbox.onFocusTab((id) => dispatch({ type: 'activate', id })), [])
+  // Browser recordings are encoded here, whichever view is showing.
+  useEffect(() => startRecorder(), [])
 
   useEffect(() => {
     const t = setTimeout(() => saveTabs(state), 300)
@@ -107,7 +110,7 @@ export function App() {
     const tab = state.tabs.find((t) => t.id === state.active)
     if (!tab || opened.current.has(tab.id)) return
     opened.current.add(tab.id)
-    void window.glassbox.session.open(tab.id, tab.cwd, tab.resumeId, loadAccess(), tab.kind)
+    void window.glassbox.session.open(tab.id, tab.cwd, tab.resumeId, loadAccess(), hostKind(tab))
   }, [state.active, state.tabs])
 
   const actions = useMemo<AppActions>(
@@ -117,7 +120,7 @@ export function App() {
           ? stateRef.current.tabs.find((t) => t.resumeId === opts.resumeId || stateRef.current.sessions[t.id]?.sessionId === opts.resumeId)
           : undefined
         if (existing) return dispatch({ type: 'activate', id: existing.id })
-        dispatch({ type: 'open', tab: { id: newId(), cwd, title: opts?.title ?? tr('app.newSession'), resumeId: opts?.resumeId, kind: opts?.kind, pendingStart: opts?.pendingStart } })
+        dispatch({ type: 'open', tab: { id: newId(), cwd, title: opts?.title ?? tr('app.newSession'), resumeId: opts?.resumeId, kind: opts?.kind, pendingStart: opts?.pendingStart, deep: opts?.deep } })
       },
       closeTab(id) {
         opened.current.delete(id)
@@ -163,7 +166,7 @@ export function App() {
         if (!tab) return
         tab.cwd = cwd
         opened.current.add(tabId)
-        void window.glassbox.session.open(tabId, cwd, undefined, loadAccess(), tab.kind)
+        void window.glassbox.session.open(tabId, cwd, undefined, loadAccess(), hostKind(tab))
         dispatch({ type: 'activate', id: tabId })
       }
     }),
@@ -231,7 +234,7 @@ export function App() {
               onClose={() => setLauncher(null)}
               onLaunch={(r: LaunchRequest) => {
                 setLauncher(null)
-                actions.openSession(r.cwd, { title: r.title, kind: r.kind, pendingStart: r.start })
+                actions.openSession(r.cwd, { title: r.title, kind: r.kind, pendingStart: r.start, deep: r.deep })
               }}
             />
           )}

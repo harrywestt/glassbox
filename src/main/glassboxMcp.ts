@@ -3,13 +3,15 @@ import { z } from 'zod'
 import type { GlassboxSignal } from '../shared/events'
 import { showcasePrompt } from './showcase'
 import { SERVICES_FILE, type ProjectServices } from './services'
-import { BROWSER_TOOL_NAMES, browserTools, type BrowserBridge } from './browserTools'
+import { BROWSER_TOOL_NAMES, browserTools, type BrowserBridge, type BrowserHooks } from './browserTools'
+import type { UxReviewer } from './uxReviewer'
 import { Loaders } from './loaders'
 
 export const GLASSBOX_TOOLS = [
   'mcp__glassbox__show_diagram',
   'mcp__glassbox__show_flow',
   'mcp__glassbox__show_sketch',
+  'mcp__glassbox__review_ux',
   'mcp__glassbox__set_current_task',
   'mcp__glassbox__pin_file',
   'mcp__glassbox__showcase_ready',
@@ -66,11 +68,12 @@ Use the glassbox MCP tools to keep the user oriented:
 - Glassbox has a view for each kind of thing you might show; use the tool for it rather than describing it or writing your own page: a plan (ExitPlanMode, show_plan_on_map), where code lives (show_on_map), the database (show_database), a diagram (show_diagram), a request's path (show_flow), an idea or problem to look at (show_sketch), what a change could affect (show_impact), a web page (open_preview), a file or diff (open_file, open_diff), something you made (present_file), a deck (build_showcase). open_tab brings any view to the front, including the terminal for a command the user should run themselves.
 - Keep one task list and keep it current: your to-do list (TodoWrite, or TaskCreate and TaskUpdate). Mark each item in progress when you start it and completed the moment it's done, and add or delete items when the plan changes; the user watches it as Tasks and an out-of-date list misleads them. Use set_current_task for the one-line summary and the files each step will change (for the map), with the same step names, and update it whenever the list changes.
 - To run, try or test the app, call start_app: it starts the project's services the same way the user's Run all button does and opens the app in the Glassbox Browser. Never open a browser window and never start dev servers yourself in the shell (no "npm run dev &", "start http://…"). Use app_status to see what's running, app_logs to read a service's output, and stop_app to stop. If the project has no services file yet, create it first (see below). Test runners and curl against an API are fine.
-- To look at, click through or check any web page (your app, docs, a dashboard), use the Glassbox Browser tools, not Playwright, Puppeteer, headless Chrome or an external browser: browser_open, then browser_snapshot (a short text outline with numbered controls), browser_click / browser_type / browser_press on those numbers, browser_eval to pull out exactly what you need in one call, browser_wait, browser_tabs. The user watches it happen. Read pages with browser_snapshot (narrow it with find) or browser_eval; take a browser_screenshot only when how it looks matters. The Browser keeps the user's sign-ins: if a page needs a login, ask the user to sign in in the Browser tab, then carry on; never ask for their password.
+- To look at, click through or check any web page (your app, docs, a dashboard), use the Glassbox Browser tools, not Playwright, Puppeteer, headless Chrome or an external browser: browser_open, then browser_snapshot (a short text outline with numbered controls), browser_click / browser_type / browser_press on those numbers, browser_eval to pull out exactly what you need in one call, browser_wait, browser_tabs, browser_close, browser_logs (the page's console errors, failed requests and API calls: check it whenever something should have saved or loaded; other results say when there are new errors), browser_viewport (phone or tablet width, to check a page works on small screens). browser_open reuses the tab showing; open a new tab only when you need two pages at once, and close tabs you're done with (browser_close) so the Browser doesn't fill up. The user watches it happen. Read pages with browser_snapshot (narrow it with find) or browser_eval; take a browser_screenshot only when how it looks matters (full_page for the whole page). To record a video of a flow (a bug reproduction, a walkthrough), browser_record start and stop, then present_file the video. For a design or UX opinion on screens, send screenshots to the UX reviewer (browser_screenshot with review, or review_ux with image paths): a separate agent reviews them in the background and its findings arrive on their own. The Browser keeps the user's sign-ins: if a page needs a login, ask the user to sign in in the Browser tab, then carry on; never ask for their password.
 - Tools and skills that start their own local preview server (hyperframes preview, vite, storybook and the like) open a browser by default: always pass their no-open flag (e.g. --no-open), then call open_preview with the URL they print. When you produce a video, image or recording the user should see (a rendered brag.mp4, a screenshot, a chart), call open_file on it: it plays inline in the conversation. Never open these in an external player or browser.
 These tools only affect the Glassbox UI; they are cheap, so use them freely.
 - When a command genuinely needs administrator rights (installing system software, changing system settings, services or protected folders), run it with run_as_admin rather than your normal shell. The user approves each one in a Windows prompt, so batch related steps into one command and never use it for things that don't need elevation.
 - Don't let work hang. Anything that may not exit (a dev server, a watcher, a REPL) or could wait for input belongs in the background (run_in_background) or under start_app, never in the foreground. Make commands non-interactive (--yes, --no-input, CI=1, a timeout). While background work runs, check its output now and then (TaskOutput) rather than waiting blindly, and stop anything that has hung (TaskStop). Glassbox's watchdog may also prompt you to check on quiet background work.
+- Agents you start may default to a smaller model (Glassbox's Auto model): give an agent that writes or changes code model opus; reading, searching and checking agents are fine on the default.
 - Stay answerable. When work will take more than a couple of minutes (several subagents, a long build or test run), start it in the background (run_in_background: true) so you remain free to reply. When the user writes while work is running, reply to them first, briefly, then carry on.
 - In markdown tables each row must stay on one line. For a line break inside a cell use <br>; for a list inside a cell write "- first<br>- second" (Glassbox shows it as bullets). Keep cells short; put long explanations below the table.
 The user may attach "Glassbox session requirements" to their messages: files they marked must-read, must-edit or don't-touch, and connectors or skills they require. Treat these as firm instructions.`
@@ -99,9 +102,11 @@ export function createGlassboxServer(
   /** The session's folder, for paths Claude gives relative to it. */
   cwd?: string,
   /** The session's Browser tabs, for Claude's browser tools. */
-  browser?: { bridge: BrowserBridge; shotsDir: string },
+  browser?: { bridge: BrowserBridge; shotsDir: string; hooks?: BrowserHooks },
   /** The session's loaders, kept across its restarts (a background task gets its own). */
-  sessionLoaders?: Loaders
+  sessionLoaders?: Loaders,
+  /** The UX reviewer: a second agent that looks over screenshots in the background. */
+  ux?: Pick<UxReviewer, 'add' | 'status' | 'flush'>
 ) {
   const loaders = sessionLoaders ?? new Loaders(cwd ?? process.cwd(), (loader) => emit({ type: 'loader', loader }))
   return createSdkMcpServer({
@@ -429,7 +434,29 @@ export function createGlassboxServer(
         ALWAYS_LOAD
       ),
       ...(app ? appTools(app, emit) : []),
-      ...(browser ? browserTools(browser.bridge, browser.shotsDir) : []),
+      ...(browser ? browserTools(browser.bridge, browser.shotsDir, browser.hooks) : []),
+      ...(ux
+        ? [
+            tool(
+              'review_ux',
+              "The UX reviewer: a separate agent that looks over screenshots for bad UX, inconsistencies between screens and AI slop, in the background so you carry on meanwhile; its findings appear in the user's Findings as they're ready. Pass images (screenshot or image file paths) to send them for review (browser_screenshot with review does the same for a screenshot it takes). Pass wait to wait for everything sent so far to be reviewed and get all its findings back, e.g. before writing a report.",
+              {
+                images: z.array(z.string()).optional().describe('Image files to review (png, jpg, webp)'),
+                note: z.string().optional().describe('What these screens are, for the reviewer'),
+                wait: z.boolean().optional().describe('Wait for the reviews to finish and return every finding so far')
+              },
+              async ({ images, note, wait }) => {
+                const queued = (images ?? []).filter((p) => ux.add({ path: p, note })).length
+                if (!wait) return ok(images?.length ? `Sent ${queued} of ${images.length} for review${queued < images.length ? ' (the rest were already sent, missing, or not images)' : ''}. Findings arrive in Findings as they're ready; carry on.` : `Reviewed ${ux.status().reviewed} screenshots so far, ${ux.status().pending} waiting.`)
+                await ux.flush()
+                const st = ux.status()
+                const list = st.findings.map((f) => `- [${f.severity}] ${f.title}${f.page ? ` (${f.page})` : ''}${f.detail ? `: ${f.detail}` : ''}${f.suggestion ? ` Suggested: ${f.suggestion}` : ''}${f.image ? ` [screenshot: ${f.image}]` : ''}`).join('\n')
+                return ok(`${st.reviewed} screenshots reviewed${st.pending ? `, ${st.pending} still waiting (stopped waiting)` : ''}. ${st.findings.length ? `UX findings:\n${list}` : 'No UX findings.'}`)
+              },
+              ALWAYS_LOAD
+            )
+          ]
+        : []),
       tool(
         'build_showcase',
         'Get the instructions for building a showcase deck of this work (a shareable page for teammates, published as a Claude Artifact). Call it when the user asks for a showcase, demo, deck or "something to show the team" about the work (a PR, a ticket, a feature); then follow the instructions it returns.',

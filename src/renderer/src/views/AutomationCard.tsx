@@ -18,6 +18,13 @@ export function AutomationCard() {
         </span>
         <Toggle checked={auto.quickAnswers} onChange={(quickAnswers) => set({ quickAnswers })} />
       </label>
+      <label className="setting">
+        <span className="setting-text">
+          <span className="setting-label">{tr('automationCard.autoModel')}</span>
+          <span className="setting-note">{tr('automationCard.autoModelNote')}</span>
+        </span>
+        <Toggle checked={auto.autoModel ?? true} onChange={(autoModel) => set({ autoModel })} />
+      </label>
       <div className="setting">
         <span className="setting-text">
           <span className="setting-label">{tr('automationCard.holdEdits')}</span>

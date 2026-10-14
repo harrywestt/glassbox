@@ -150,8 +150,10 @@ export function useFolded(id: string): [boolean, () => void] {
  * A side-panel section with a heading you click to fold it away. `meta` sits beside the title
  * (a count, a short note); `actions` sit at the right and stay clickable when folded.
  */
-export function Section({ id, title, meta, actions, className = '', tip, children }: { id: string; title: ReactNode; meta?: ReactNode; actions?: ReactNode; className?: string; tip?: string; children?: ReactNode }) {
-  const [folded, toggle] = useFolded(`section:${id}`)
+export function Section({ id, title, meta, actions, className = '', tip, children, defaultFolded }: { id: string; title: ReactNode; meta?: ReactNode; actions?: ReactNode; className?: string; tip?: string; children?: ReactNode; /** Starts folded until you open it. */ defaultFolded?: boolean }) {
+  // Folded-by-default sections remember being opened instead of being folded.
+  const [toggled, toggle] = useFolded(defaultFolded ? `section-open:${id}` : `section:${id}`)
+  const folded = defaultFolded ? !toggled : toggled
   return (
     <section className={`card section${folded ? ' folded' : ''} ${className}`}>
       <div className="card-title section-head">

@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { blockedOnYou, type SessionState } from '../session'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { blockedOnYou, useLiveSession, type SessionState } from '../session'
 import type { Tab } from '../tabs'
 import { baseName, relPath } from '../lib'
 import { setAppearance, useAppearance } from '../appearance'
@@ -45,7 +45,13 @@ type Props = { tab: Tab; s: SessionState; nav: LiveNav; active: boolean }
  * Live: what Claude is doing right now, and whether to trust it. Three panes when there's room:
  * what needs you, the stage (who's doing what, and the edit being written), and the checks.
  */
-export function LiveScreen({ tab, s, nav, active }: Props) {
+export function LiveScreen({ tab, s: stable, nav, active }: Props) {
+  // Live shows text and edits as they stream in, so it reads the session as it is this moment;
+  // hidden, it holds still and catches up when you open it (it used to redo all its work per word).
+  const live = useLiveSession(stable)
+  const held = useRef(live)
+  if (active) held.current = live
+  const s = held.current
   // Times ("20s ago", the lanes' right edge) move every two seconds; the wait timer ticks on its own.
   const now = useTick(active, 2000)
   const rel = useCallback((p: string) => relPath(tab.cwd, p), [tab.cwd])
@@ -719,12 +725,14 @@ function useLookedAt(cwd: string, s: SessionState): LookedAtData {
   return useMemo(() => {
     const norm = (p: string) => relPath(cwd, p).replace(/\\/g, '/').toLowerCase()
     const readKeys = new Set([...reads.keys()].map(norm))
+    // Files written whole (not edited), found once rather than once per changed file.
+    const writes = new Set(Object.values(s.toolCalls).flatMap((c) => (c.name === 'Write' && typeof c.input.file_path === 'string' ? [c.input.file_path] : [])))
     const files: LookedFile[] = [...changed].map(([path, at]) => {
       const text = texts[path]
       const total = text ? text.split('\n').length : 0
       const read = reads.get(path) ?? []
       const ch = text ? changedRanges(s, path, text) : []
-      const written = Object.values(s.toolCalls).some((c) => c.name === 'Write' && c.input.file_path === path) && !read.length
+      const written = writes.has(path) && !read.length
       return { path, at, total, read, changed: ch, unread: written ? 0 : unreadChanged(read, ch), written }
     })
     const changedKeys = new Set([...changed.keys()].map(norm))

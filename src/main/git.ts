@@ -261,3 +261,65 @@ export async function gitShowFile(cwd: string, ref: string, path: string): Promi
     return ''
   }
 }
+
+/** One file in the working copy, as Source Control lists it: staged, not staged, or both. */
+export type WorkingFile = { path: string; oldPath?: string; staged?: string; unstaged?: string }
+
+/** The working copy's changes, staged and not (untracked files are unstaged "?"). */
+export async function gitStatus(cwd: string): Promise<{ root: string; files: WorkingFile[] }> {
+  const root = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim()
+  const out = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+  const parts = out.split('\0')
+  const files: WorkingFile[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const e = parts[i]
+    if (e.length < 4) continue
+    const x = e[0], y = e[1], path = e.slice(3)
+    // A rename or copy is followed by the old path.
+    const oldPath = x === 'R' || x === 'C' ? parts[++i] : undefined
+    if (x === '?' && y === '?') files.push({ path, unstaged: '?' })
+    else files.push({ path, oldPath, staged: x !== ' ' ? x : undefined, unstaged: y !== ' ' ? y : undefined })
+  }
+  return { root, files }
+}
+
+const BATCH = 200
+async function inBatches(root: string, args: string[], paths: string[]) {
+  for (let i = 0; i < paths.length; i += BATCH) await git(root, [...args, '--', ...paths.slice(i, i + BATCH)])
+}
+
+export async function gitStage(cwd: string, paths: string[]) {
+  const root = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim()
+  await inBatches(root, ['add', '-A'], paths)
+}
+
+export async function gitUnstage(cwd: string, paths: string[]) {
+  const root = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim()
+  // A repo with no commits yet has nothing to restore from: take them out of the index instead.
+  if (await tryGit(root, ['rev-parse', '--verify', 'HEAD'])) await inBatches(root, ['restore', '--staged'], paths)
+  else await inBatches(root, ['rm', '--cached', '-r', '-q'], paths)
+}
+
+/** Throws away the working copy's changes to these files: tracked ones go back to the index, new ones are deleted. */
+export async function gitDiscard(cwd: string, paths: string[]) {
+  const { root, files } = await gitStatus(cwd)
+  const untracked = new Set(files.filter((f) => f.unstaged === '?').map((f) => f.path))
+  const tracked = paths.filter((p) => !untracked.has(p))
+  const fresh = paths.filter((p) => untracked.has(p))
+  if (tracked.length) await inBatches(root, ['restore', '--worktree'], tracked)
+  if (fresh.length) await inBatches(root, ['clean', '-f', '-q'], fresh)
+}
+
+/** Commits what's staged (or, with nothing staged, every change, as VS Code's smart commit does). */
+export async function gitCommit(cwd: string, message: string): Promise<string> {
+  const { root, files } = await gitStatus(cwd)
+  if (!files.some((f) => f.staged)) await git(root, ['add', '-A'])
+  await git(root, ['commit', '-m', message])
+  return (await git(root, ['rev-parse', '--short', 'HEAD'])).trim()
+}
+
+export async function gitPush(cwd: string) {
+  const upstream = await tryGit(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])
+  if (upstream) await git(cwd, ['push'], 120_000)
+  else await git(cwd, ['push', '-u', 'origin', 'HEAD'], 120_000)
+}

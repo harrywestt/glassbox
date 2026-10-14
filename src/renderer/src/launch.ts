@@ -31,6 +31,8 @@ export type LaunchFields = {
   env?: 'local' | 'url'
   url?: string
   notes?: string
+  /** QA: quick (does it work) or deep (also every screen screenshotted for the UX reviewer). */
+  depth?: 'quick' | 'deep'
 }
 
 export type PendingStart = { prompt: string; display: string; plan?: boolean; requirements?: Partial<Requirements> }
@@ -150,10 +152,15 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
           where
             ? `3. Open ${where} in the Glassbox Browser (browser_open). If it needs signing in, call check_in asking me to sign in in the Browser tab and to answer when I’m in. Never ask for a password and never type credentials yourself.`
             : '3. Start the app with start_app and wait until it’s up. If it needs signing in, call check_in asking me to sign in in the Browser tab and to answer when I’m in. Never ask for a password and never type credentials yourself.',
-          '4. Run each case in the Glassbox Browser: browser_snapshot to read the page, browser_click and browser_type to use it, browser_eval to check details, and browser_screenshot as evidence for anything that matters. Show progress with show_progress (step N of M, one step per case). As each case finishes, update its criterion: tested with the evidence (what you did and saw), or failing.',
+          '4. Run each case in the Glassbox Browser: browser_snapshot to read the page, browser_click and browser_type to use it, browser_eval to check details, browser_logs to catch console errors and failed requests the page doesn’t show (check it after every case: a 500 or an exception is a bug even when the screen looks fine), and browser_screenshot as evidence for anything that matters. Show progress with show_progress (step N of M, one step per case). As each case finishes, update its criterion: tested with the evidence (what you did and saw), or failing.',
+          ...(f.depth === 'deep'
+            ? [
+                '4a. This is a deep test, so as well as checking each case works, take a browser_screenshot of every distinct screen and state you reach (with a note saying what it is): each step of a flow, empty, loading, error and success states, validation messages, dialogs and menus open. Use full_page for long pages. Each one goes to the UX reviewer, a separate agent that looks for bad UX, inconsistencies between screens and AI slop while you carry on. Don’t stop to review them yourself and don’t wait for it: keep testing.'
+              ]
+            : []),
           '5. For each bug, call report_finding the moment you find it: severity, steps to reproduce, what should happen and what did, and the screenshot path.',
           '6. Be careful with shared environments: call check_in before anything destructive or irreversible (deleting records, sending emails or notifications, payments, inviting people, changing settings others rely on). On production only look, never change anything. Prefix any test data you create with "QA " and today’s date, so it’s easy to find and clean up.',
-          `7. Finish with a QA report: a table of the cases with pass or fail and the evidence, the bugs found with their severity, anything you couldn’t test and why, and what you’d test next. Write it to .glassbox/qa/${slug(name) || 'report'}.md and present_file it. Then offer to file the bugs${keys.length ? ' in Jira' : ''} (ask before creating anything) or to fix them in a coding session.`
+          `7. Finish with a QA report: a table of the cases with pass or fail and the evidence, the bugs found with their severity, ${f.depth === 'deep' ? 'the UX findings (call review_ux with wait first, so every screenshot has been reviewed, and include its findings with their screenshots, grouped by screen), ' : ''}anything you couldn’t test and why, and what you’d test next. Write it to .glassbox/qa/${slug(name) || 'report'}.md and present_file it. Then offer to file the bugs${keys.length ? ' in Jira' : ''} (ask before creating anything) or to fix them in a coding session.`
         ].join('\n\n')
       ]
         .filter(Boolean)

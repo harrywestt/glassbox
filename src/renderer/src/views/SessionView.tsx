@@ -1,6 +1,6 @@
 import { Activity, createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
-import { blockedOnYou, claudeInBrowser, type SessionState } from '../session'
+import { blockedOnYou, claudeInBrowser, LiveSessionContext, sameApartFromStreaming, useStableSession, type SessionState } from '../session'
 import { useScrollStrip } from '../components/useScrollStrip'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { defaultView, tabTitle, type Tab } from '../tabs'
@@ -28,6 +28,7 @@ import { ContextPanel } from '../panels/ContextPanel'
 import { ChangesPanel } from '../panels/ChangesPanel'
 import { AgentsPanel } from '../panels/AgentsPanel'
 import { DiagramsPanel } from '../panels/DiagramsPanel'
+import { SourceControl } from '../panels/SourceControl'
 import { SketchTab } from '../work/SketchTab'
 import { ConnectorsPanel } from '../panels/ConnectorsPanel'
 import { SkillsPanel } from '../panels/SkillsPanel'
@@ -43,7 +44,7 @@ import { DiffTab } from '../work/DiffTab'
 import { CommitTab } from '../work/CommitTab'
 import { useServices } from '../services'
 import { BrowserTab } from '../work/BrowserTab'
-import { activeBrowserTab, browserTabs, openInBrowser, waitForPage } from '../browser'
+import { activeBrowserTab, browserTabs, closeBrowserTab, openInBrowser, updateBrowserTab, waitForPage } from '../browser'
 import { GitPanel, PrCard } from '../panels/GitPanel'
 import { loadAutoCommit } from '../panels/GitPanel'
 import { LiveScreen, type LiveNav } from '../live/LiveScreen'
@@ -264,12 +265,29 @@ type SessionViewProps = { tab: Tab; session: SessionState; active: boolean; peer
  * for overlap warnings and the map) matter only to the tab you're looking at; a fresh list of them
  * on every update used to redraw every tab whenever any session streamed a word.
  */
-export const SessionView = memo(SessionViewInner, (a: SessionViewProps, b: SessionViewProps) => {
-  if (a.tab !== b.tab || a.session !== b.session || a.active !== b.active) return false
-  if (!b.active) return true
+export const SessionView = memo(SessionViewOuter, (a: SessionViewProps, b: SessionViewProps) => {
+  if (a.tab !== b.tab || a.active !== b.active) return false
+  // A tab in the background doesn't redraw for text streaming in; it catches up on real changes.
+  if (!b.active) return sameApartFromStreaming(a.session, b.session)
+  if (a.session !== b.session) return false
   const pa = a.peers ?? [], pb = b.peers ?? []
-  return pa.length === pb.length && pa.every((p, i) => p.tab === pb[i].tab && p.s === pb[i].s)
+  return pa.length === pb.length && pa.every((p, i) => p.tab === pb[i].tab && sameApartFromStreaming(p.s, pb[i].s))
 })
+
+/**
+ * Text streams in many times a second. This thin layer takes every update and passes the live
+ * session only to what shows streaming text; the view itself gets a session that changes only when
+ * something else does, so a reply coming in doesn't redraw the panels, the header and every step.
+ */
+function SessionViewOuter(props: SessionViewProps) {
+  const stable = useStableSession(props.session)
+  return (
+    <LiveSessionContext.Provider value={props.session}>
+      <SessionBody {...props} session={stable} />
+    </LiveSessionContext.Provider>
+  )
+}
+const SessionBody = memo(SessionViewInner)
 
 function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps) {
   const appearance = useAppearance()
@@ -302,6 +320,8 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const composerRef = useRef<{ insert: (text: string) => void; attach: (paths: string[]) => void } | null>(null)
   // Everyday or Engineering: chosen per session; unset, the one you last picked (Engineering to begin with).
   const everyday = (tab.view ?? defaultView()) === 'everyday'
+  // Whether Claude is using the Browser (its tab says so): worked out once per change, not per word.
+  const browsing = useMemo(() => claudeInBrowser(session).active, [session])
   // Everyday doesn't offer every side tab: one it hides (picked in Engineering) shows Route instead,
   // without changing what Engineering remembers.
   useEffect(() => {
@@ -461,6 +481,18 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
             (e) => window.glassbox.browser.reply(reqId, null, String(e instanceof Error ? e.message : e))
           )
           return
+        }
+        if (cmd.cmd === 'resize' && cmd.tab) {
+          updateBrowserTab(tab.id, cmd.tab, { width: cmd.width || undefined })
+          // Answer once the new width has been laid out.
+          return requestAnimationFrame(() => requestAnimationFrame(() => window.glassbox.browser.reply(reqId, null)))
+        }
+        if (cmd.cmd === 'close') {
+          const all = browserTabs(tab.id)
+          const showing = activeBrowserTab(tab.id) ?? all[0]?.id
+          const doomed = cmd.others ? all.filter((b) => b.id !== showing).map((b) => b.id) : (cmd.ids ?? []).filter((id) => all.some((b) => b.id === id))
+          for (const id of doomed) closeBrowserTab(tab.id, id)
+          return window.glassbox.browser.reply(reqId, { closed: doomed.length, left: browserTabs(tab.id).length })
         }
         window.glassbox.browser.reply(reqId, null, `Unknown browser request ${cmd.cmd}`)
       }),
@@ -707,7 +739,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               onClose={closeWork}
               diagramCount={diagramCount}
               sketchCount={sketchCount}
-              claudeBrowsing={claudeInBrowser(session).active}
+              claudeBrowsing={browsing}
               kept={kept}
               onKeep={(kind, on) => {
                 setKept(tab.id, kind, on)
@@ -855,6 +887,8 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
         <PanelActionsContext.Provider value="stacked">
           <div className="panel stack">
             {s.git?.isRepo && <PrCard />}
+            {/* As VS Code's Source Control: commit, staged changes, changes. Then the whole branch against main, folded away. */}
+            {s.git?.isRepo && <SourceControl />}
             <ChangesPanel />
             <ReviewPanel compact />
             {s.git?.isRepo !== false && <GitPanel withPr={false} />}

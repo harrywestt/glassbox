@@ -7,7 +7,14 @@ import { join } from 'node:path'
  * tree, not from the transcript) and the running cost (result messages aren't in the transcript).
  */
 export type ShellEditRecord = { toolId: string; files: string[]; agentId: string | null; at: number }
-export type SessionExtras = { costUsd: number; shellEdits: ShellEditRecord[] }
+export type SessionExtras = {
+  costUsd: number
+  shellEdits: ShellEditRecord[]
+  /** Spend by model (all of it, helpers included) and by helper, and the SDK's running totals as last seen. */
+  byModel?: Record<string, number>
+  helpers?: Record<string, number>
+  lastUsage?: Record<string, number>
+}
 
 const dir = async () => join((await import('electron')).app.getPath('userData'), 'session-extras')
 const fileFor = async (sessionId: string) => join(await dir(), `${sessionId.replace(/[^\w-]/g, '')}.json`)

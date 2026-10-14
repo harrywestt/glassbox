@@ -114,6 +114,13 @@ const api = {
     worktree: (cwd: string, branch: string): Promise<string> => invoke('git:worktree', cwd, branch),
     /** Update the default branch (only it) before a copy branches from it; never throws. */
     fetchDefault: (cwd: string): Promise<void> => invoke('git:fetchDefault', cwd),
+    /** Source Control: the working copy's changes (staged and not), and staging, discarding, committing, pushing. */
+    status: (cwd: string): Promise<{ root: string; files: { path: string; oldPath?: string; staged?: string; unstaged?: string }[] }> => invoke('git:status', cwd),
+    stage: (cwd: string, paths: string[]): Promise<void> => invoke('git:stage', cwd, paths),
+    unstage: (cwd: string, paths: string[]): Promise<void> => invoke('git:unstage', cwd, paths),
+    discard: (cwd: string, paths: string[]): Promise<void> => invoke('git:discard', cwd, paths),
+    commit: (cwd: string, message: string): Promise<string> => invoke('git:commit', cwd, message),
+    push: (cwd: string): Promise<void> => invoke('git:push', cwd),
     /** Each path's project folder (worktrees map to their main checkout; gone folders to null). */
     mainFolders: (paths: string[]): Promise<(string | null)[]> => invoke('git:mainFolders', paths),
     /** How many other live sessions work in this same repo folder. */
@@ -193,6 +200,10 @@ const api = {
   },
   standup: (force?: boolean): Promise<Standup> => invoke('standup:get', force),
   /** The database schema, read from the code, and Claude's pick of the tables an area uses. */
+  /** What Claude has cost: today, the week, and 14 days, by model, project and helper. */
+  spend: {
+    summary: (): Promise<import('../shared/events').SpendSummary> => invoke('spend:summary')
+  },
   /** Where a sketch's HTML is served (sketch://, sandboxed). */
   sketch: {
     url: (html: string): Promise<string> => invoke('sketch:url', html)
@@ -203,12 +214,28 @@ const api = {
   },
   /** Claude's browser tools asking the window to open a tab or list them; the window answers with reply. */
   browser: {
-    onRequest(callback: (req: { reqId: string; tabId: string; cmd: { cmd: string; url?: string; newTab?: boolean } }) => void) {
-      const listener = (_e: IpcRendererEvent, req: { reqId: string; tabId: string; cmd: { cmd: string; url?: string; newTab?: boolean } }) => callback(req)
+    onRequest(callback: (req: { reqId: string; tabId: string; cmd: { cmd: string; url?: string; newTab?: boolean; ids?: string[]; others?: boolean; tab?: string; width?: number } }) => void) {
+      const listener = (_e: IpcRendererEvent, req: { reqId: string; tabId: string; cmd: { cmd: string; url?: string; newTab?: boolean; ids?: string[]; others?: boolean; tab?: string; width?: number } }) => callback(req)
       ipcRenderer.on('glassbox:browser-request', listener)
       return () => void ipcRenderer.off('glassbox:browser-request', listener)
     },
-    reply: (reqId: string, result: unknown, error?: string) => ipcRenderer.send('browser:reply', reqId, result, error)
+    reply: (reqId: string, result: unknown, error?: string) => ipcRenderer.send('browser:reply', reqId, result, error),
+    /** A screenshot of a tab's page (or the whole page), saved as a PNG; resolves with its path. */
+    screenshot: (wcId: number, fullPage?: boolean): Promise<string> => invoke('browser:screenshot', wcId, fullPage),
+    /** Video of a tab: start, stop (resolves with the saved WebM, or null), or whether one is running. */
+    record: (wcId: number, action: 'start' | 'stop' | 'state'): Promise<{ started: number } | string | null> => invoke('browser:record', wcId, action),
+    /** What a page reported: console messages, its API calls and failed requests. */
+    logs: (wcId: number): Promise<{ at: number; kind: 'console' | 'network' | 'navigation'; level: string; text: string; source?: string; method?: string; url?: string; status?: number; ms?: number }[]> => invoke('browser:logs', wcId),
+    clearLogs: (wcId: number): Promise<void> => invoke('browser:clearLogs', wcId)
+  },
+  /** The window encodes recordings (MediaRecorder): frames come in, the finished video goes back. */
+  recorder: {
+    on(callback: (m: { kind: 'start'; id: string; fps: number } | { kind: 'frame'; id: string; jpeg: Uint8Array } | { kind: 'stop'; id: string }) => void) {
+      const listener = (_e: IpcRendererEvent, m: Parameters<typeof callback>[0]) => callback(m)
+      ipcRenderer.on('glassbox:recorder', listener)
+      return () => void ipcRenderer.off('glassbox:recorder', listener)
+    },
+    encoded: (id: string, data: ArrayBuffer | null): Promise<string | null> => invoke('recorder:encoded', id, data)
   },
   /** Your own shells, in a session's folder. */
   terminal: {

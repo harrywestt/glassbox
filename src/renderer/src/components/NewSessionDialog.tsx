@@ -6,7 +6,7 @@ import { tr } from '../../../shared/i18n'
 
 type Pr = { number: number; title: string; author: string; branch: string; isDraft: boolean; url: string; updatedAt: string; reviewRequested: boolean }
 
-export type LaunchRequest = { cwd: string; kind: SessionKind; title: string; start?: PendingStart }
+export type LaunchRequest = { cwd: string; kind: SessionKind; title: string; start?: PendingStart; deep?: boolean }
 
 /** Addresses you've QA'd against, per project, newest first (and whether you last tested locally). */
 const QA_KEY = (cwd: string) => `glassbox.qa.where.${cwd.replace(/\\/g, '/').toLowerCase()}`
@@ -122,7 +122,7 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
       }
       const { title, start, requirements } = buildLaunch(kind, fields)
       if (kind === 'qa') saveQaWhere(cwd, f.env ?? 'local', f.env === 'url' ? f.url?.trim() : undefined)
-      onLaunch({ cwd: dir, kind, title, start: start ? { ...start, requirements } : undefined })
+      onLaunch({ cwd: dir, kind, title, start: start ? { ...start, requirements } : undefined, deep: kind === 'qa' && f.depth === 'deep' })
     } catch (err) {
       setError(String(err).replace(/^Error: /, ''))
       setBusy(null)
@@ -255,6 +255,11 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
                   ))}
                 </div>
               )}
+              <div className="field">
+                <span>{tr('newSessionDialog.qaDepth')}</span>
+                <Segmented<'quick' | 'deep'> value={f.depth ?? 'quick'} onChange={(depth) => set({ depth })} options={[{ value: 'quick', label: tr('newSessionDialog.qaQuick') }, { value: 'deep', label: tr('newSessionDialog.qaDeep') }]} />
+                <span className="muted small">{f.depth === 'deep' ? tr('newSessionDialog.qaDeepHint') : tr('newSessionDialog.qaQuickHint')}</span>
+              </div>
               <label className="field">
                 <span>{tr('newSessionDialog.qaNotes')}</span>
                 <textarea rows={2} placeholder={tr('newSessionDialog.qaNotesPlaceholder')} value={f.notes ?? ''} onChange={(e) => set({ notes: e.target.value })} />

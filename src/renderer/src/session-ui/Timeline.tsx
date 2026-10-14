@@ -1,11 +1,11 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useActions } from '../App'
 import { useSession, type AgentFilter } from '../views/SessionView'
-import { withoutBangs, CHANGE_TOOLS, toolSummary, type DecisionEntry, type SessionState, type TimelineItem, type ToolCall } from '../session'
-import { renderMarkdown, baseName, relPath, mediaKind, mediaUrl, absPath, formatDuration } from '../lib'
+import { withoutBangs, CHANGE_TOOLS, toolSummary, useLiveSession, type DecisionEntry, type SessionState, type TimelineItem, type ToolCall } from '../session'
+import { dateTime, timeOfDay, renderMarkdown, baseName, relPath, mediaKind, mediaUrl, absPath, formatDuration } from '../lib'
 import { targetLabel, toolTarget } from '../review'
 import { CommentBox } from '../components/CommentBox'
-import { CheckInCard, FindingCard } from './Signals'
+import { CheckInCard, FindingCard, UxReviewCard } from './Signals'
 import { describeTool, summarizeTools } from './describe'
 import { EditCard } from './EditCard'
 import { Icon } from '../components/ui'
@@ -86,12 +86,12 @@ export function Timeline() {
   const { s, tab, filter, setFilter } = useSession()
   const scroller = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
-  const items = s.timeline.filter((i) => visible(i, filter, s))
+  const items = useMemo(() => s.timeline.filter((i) => visible(i, filter, s)), [s, filter])
   const viewingAgent = filter !== 'all' && filter !== 'main' && s.agents[filter] ? filter : null
   // Each image shows once, where it first comes up (again only if it has changed since).
   const seenMedia = new Set<string>()
-  const drafts = Object.entries(s.drafts).filter(([key]) => filter === 'all' || (filter === 'main' ? key === 'main' : key === filter))
-  const draftLength = drafts.reduce((n, [, d]) => n + d.text.length, 0)
+  // Whether a reply is under way (the text itself streams into Drafts, below, on its own).
+  const drafting = Object.keys(s.drafts).length > 0
 
   const content = useRef<HTMLDivElement>(null)
   // A long conversation draws only its latest SHOWN groups; earlier ones load on request, 50 at a
@@ -187,7 +187,7 @@ export function Timeline() {
     if (!el || !stick.current) return
     if (gliding.current) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     else el.scrollTop = el.scrollHeight
-  }, [items.length, s.toolCalls, draftLength])
+  }, [items.length, s.toolCalls])
 
   return (
     <div className="timeline-wrap">
@@ -211,7 +211,7 @@ export function Timeline() {
       >
         <div className="timeline-content" ref={content}>
         {viewingAgent && <AgentBrief agentId={viewingAgent} s={s} />}
-        {items.length === 0 && !drafts.length && !viewingAgent ? (
+        {items.length === 0 && !drafting && !viewingAgent ? (
           <Welcome />
         ) : (
           (() => {
@@ -266,19 +266,7 @@ export function Timeline() {
             )
           })()
         )}
-        {/* An empty draft (thinking or reply) says nothing the working line doesn't, and would only add a gap. */}
-        {drafts.filter(([, d]) => d.text.trim()).map(([key, d]) => (
-          <div key={key} className="row">
-            {d.kind === 'thinking' ? (
-              <div className="thinking live">
-                <div className="live-label"><Icon name="lightbulb" /> {tr('timeline.thinking')}</div>
-                <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, tab.cwd, true) }} />
-              </div>
-            ) : (
-              <div className="msg assistant markdown live" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, tab.cwd, true) + '<span class="caret"></span>' }} />
-            )}
-          </div>
-        ))}
+        <Drafts filter={filter} cwd={tab.cwd} />
         <Working />
         </div>
       </div>
@@ -309,6 +297,18 @@ const WORKING_WORDS = ['working', 'thinking', 'pondering', 'mullingItOver', 'tin
  * seconds, how long this has been going, and (when nothing new has shown for a while) that it's
  * still going, so a long quiet stretch never looks like a hang.
  */
+/** When a step last started or finished, worked out once per change to the steps. */
+const lastActivityOf = new WeakMap<SessionState['toolCalls'], number>()
+function lastActivity(calls: SessionState['toolCalls']): number {
+  let t = lastActivityOf.get(calls)
+  if (t === undefined) {
+    t = 0
+    for (const c of Object.values(calls)) t = Math.max(t, c.endedAt ?? c.at)
+    lastActivityOf.set(calls, t)
+  }
+  return t
+}
+
 function Working() {
   const { s } = useSession()
   const [now, setNow] = useState(Date.now())
@@ -326,7 +326,7 @@ function Working() {
   if (!on) return null
   const since = s.busySince ?? Math.min(...background.map((a) => a.at), ...tasks.map((t) => t.since), now)
   const took = Math.max(0, Math.floor((now - since) / 1000))
-  const last = Math.max(since, s.timeline.at(-1)?.at ?? 0, ...Object.values(s.toolCalls).map((c) => c.endedAt ?? c.at))
+  const last = Math.max(since, s.timeline.at(-1)?.at ?? 0, lastActivity(s.toolCalls))
   const quiet = Math.floor((now - last) / 1000)
   const word = tr(`timeline.workingWords.${WORKING_WORDS[Math.floor(took / 6) % WORKING_WORDS.length]}`)
   const clock = (n: number) => (n < 60 ? tr('timeline.seconds', { n }) : formatDuration(n * 1000))
@@ -377,6 +377,33 @@ function Welcome() {
           : tr('timeline.startingClaude')}
       </p>
     </div>
+  )
+}
+
+/**
+ * Claude's reply (or thinking) as it streams in. The only part of the conversation that redraws for
+ * each new word; the steps above it stay as they are. The view follows it down as it grows.
+ */
+function Drafts({ filter, cwd }: { filter: AgentFilter; cwd: string }) {
+  const { s: stable } = useSession()
+  const s = useLiveSession(stable)
+  const drafts = Object.entries(s.drafts).filter(([key]) => filter === 'all' || (filter === 'main' ? key === 'main' : key === filter))
+  // An empty draft (thinking or reply) says nothing the working line doesn't, and would only add a gap.
+  return (
+    <>
+      {drafts.filter(([, d]) => d.text.trim()).map(([key, d]) => (
+        <div key={key} className="row">
+          {d.kind === 'thinking' ? (
+            <div className="thinking live">
+              <div className="live-label"><Icon name="lightbulb" /> {tr('timeline.thinking')}</div>
+              <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, cwd, true) }} />
+            </div>
+          ) : (
+            <div className="msg assistant markdown live" dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text, cwd, true) + '<span class="caret"></span>' }} />
+          )}
+        </div>
+      ))}
+    </>
   )
 }
 
@@ -514,7 +541,10 @@ function Item({ item, s }: { item: TimelineItem; s: SessionState }) {
       )
     case 'finding': {
       const f = s.findings.find((x) => x.id === item.id)
-      return f ? <FindingCard f={f} compact /> : null
+      if (!f) return null
+      // The UX reviewer's findings on one screenshot show together, as one card with the picture.
+      if (f.source === 'ux' && f.image) return s.findings.find((x) => x.source === 'ux' && x.image === f.image)?.id === f.id ? <UxReviewCard image={f.image} /> : null
+      return <FindingCard f={f} compact />
     }
     case 'checkin':
       return <CheckInCard id={item.id} />
@@ -756,7 +786,8 @@ function MediaStrip({ items, s, seen }: { items: ToolItem[]; s: SessionState; se
     if (c.name === 'Read' || c.name === 'Write' || c.name === 'mcp__glassbox__open_file') add(c.input.file_path ?? c.input.path)
   }
   // Files a shell command made (a screenshot script, an image export).
-  for (const f of s.files) if (ids.has(f.toolId)) add(f.path)
+  for (const id of ids) for (const f of filesOf(s.files, id)) add(f.path)
+  if (!paths.length) return null
   // Re-read an image Claude has regenerated since.
   const version = (p: string) => s.files.filter((f) => same(f.path) === same(p) && CHANGE_TOOLS.has(f.tool)).length
   const fresh = paths.filter((p) => {
@@ -790,12 +821,38 @@ function MediaStrip({ items, s, seen }: { items: ToolItem[]; s: SessionState; se
   )
 }
 
-function ToolGroup({ items, s }: { items: ToolItem[]; s: SessionState }) {
-  return (
-    <div className="row">
-      <ToolGroupBody items={items} s={s} />
-    </div>
-  )
+/**
+ * A group of steps redraws only when one of its own steps (or what it shows about them) changed,
+ * not whenever any step anywhere in the session does: a long session has hundreds of groups.
+ */
+const ToolGroup = memo(
+  function ToolGroup({ items, s }: { items: ToolItem[]; s: SessionState }) {
+    return (
+      <div className="row">
+        <ToolGroupBody items={items} s={s} />
+      </div>
+    )
+  },
+  (a, b) =>
+    a.items.length === b.items.length &&
+    a.items.every((it, i) => it.toolId === b.items[i].toolId && a.s.toolCalls[it.toolId] === b.s.toolCalls[it.toolId]) &&
+    a.s.files === b.s.files &&
+    a.s.agents === b.s.agents &&
+    a.s.plan === b.s.plan &&
+    a.s.permissions === b.s.permissions &&
+    a.s.held === b.s.held
+)
+
+/** Each step's file changes, indexed once per change to the session's files. */
+const filesByTool = new WeakMap<SessionState['files'], Map<string, SessionState['files']>>()
+function filesOf(files: SessionState['files'], toolId: string): SessionState['files'] {
+  let index = filesByTool.get(files)
+  if (!index) {
+    index = new Map()
+    for (const f of files) index.set(f.toolId, [...(index.get(f.toolId) ?? []), f])
+    filesByTool.set(files, index)
+  }
+  return index.get(toolId) ?? []
 }
 
 const EDIT_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
@@ -819,7 +876,7 @@ function ToolGroupBody({ items, s }: { items: ToolItem[]; s: SessionState }) {
       segments.push({ kind: 'plan', call: c })
       continue
     }
-    const shellEdits = s.files.some((f) => f.toolId === c.id && f.tool === 'ShellEdit')
+    const shellEdits = filesOf(s.files, c.id).some((f) => f.tool === 'ShellEdit')
     if (EDIT_NAMES.has(c.name) && c.name !== 'NotebookEdit') segments.push({ kind: 'edit', call: c })
     else if (shellEdits || isTestCall(c)) {
       // One command can both change files and run the tests: show both.
@@ -1012,10 +1069,9 @@ function StepTime({ at, endedAt, running }: { at: number; endedAt?: number; runn
   const now = useClock(running)
   if (!at) return null
   const took = running ? now - at : endedAt ? endedAt - at : undefined
-  const start = new Date(at)
   return (
-    <span className="step-time" title={took === undefined ? tr('timeline.started', { time: start.toLocaleString() }) : tr(running ? 'timeline.startedRunningFor' : 'timeline.startedTook', { time: start.toLocaleString(), took: formatDuration(took) })}>
-      <span className="step-time-at">{start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
+    <span className="step-time" title={took === undefined ? tr('timeline.started', { time: dateTime(at) }) : tr(running ? 'timeline.startedRunningFor' : 'timeline.startedTook', { time: dateTime(at), took: formatDuration(took) })}>
+      <span className="step-time-at">{timeOfDay(at)}</span>
       {took !== undefined && <span className={running ? 'step-time-took live' : 'step-time-took'}>{formatDuration(took)}</span>}
     </span>
   )
