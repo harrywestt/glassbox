@@ -1782,6 +1782,83 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 @keyframes plan-decide-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .plan-decide-inner { animation: none; } }
 
+/* ── Markdown viewer: a .md file read as a document, its outline beside it when there's room ── */
+.md-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); container-type: inline-size; }
+.md-view > .comment-box { margin: var(--s-2) var(--s-3) 0; }
+.md-scroll { flex: 1; min-height: 0; overflow-y: auto; position: relative; scroll-padding-top: var(--s-5); }
+.md-layout { display: grid; grid-template-columns: minmax(0, 760px); justify-content: center; gap: var(--s-6); padding: 40px var(--s-5) 96px; }
+.md-outline { display: none; }
+@container (min-width: 1060px) {
+  .md-layout.with-outline { grid-template-columns: 196px minmax(0, 760px); padding-right: calc(196px + var(--s-6) + var(--s-5)); }
+  .md-outline { position: sticky; top: var(--s-5); align-self: start; display: flex; flex-direction: column; max-height: calc(100cqh - 2 * var(--s-5)); overflow-y: auto; padding-top: 4px; }
+}
+.md-outline-title { font-size: 12px; font-weight: 600; color: var(--fg); padding: 0 0 var(--s-2) 12px; }
+.md-outline button { all: unset; box-sizing: border-box; padding: 3px var(--s-2) 3px 10px; border-left: 2px solid var(--border); color: var(--muted); font-size: 12.5px; line-height: 1.45; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+.md-outline button:hover { color: var(--fg); }
+.md-outline button.on { color: var(--fg); border-left-color: var(--accent); }
+.md-outline button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+.md-outline-meta { font-size: 12px; color: var(--muted); padding: var(--s-3) 0 0 12px; }
+.md-empty { padding: 64px 0; text-align: center; }
+
+.md-doc { font-size: 14.5px; line-height: 1.72; min-width: 0; }
+.md-doc p { margin: 0 0 14px; }
+.md-doc h1, .md-doc h2, .md-doc h3, .md-doc h4 { scroll-margin-top: var(--s-4); color: var(--strong); font-weight: 650; }
+.md-doc h1 { font-size: 27px; line-height: 1.22; letter-spacing: -.018em; margin: 0 0 var(--s-4); }
+.md-doc h2 { font-size: 19px; line-height: 1.3; letter-spacing: -.008em; margin: 40px 0 var(--s-3); padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.md-doc h3 { font-size: 15.5px; line-height: 1.35; margin: 28px 0 var(--s-2); }
+.md-doc h4 { font-size: 14px; margin: 22px 0 var(--s-1); }
+.md-doc > h2:first-child, .md-doc > .md-front + h2 { margin-top: 0; }
+.md-doc ul, .md-doc ol { margin: 0 0 14px; padding-left: 22px; }
+.md-doc li { margin: 4px 0; }
+.md-doc li > p { margin-bottom: 6px; }
+.md-doc hr { border: 0; border-top: 1px solid var(--border); margin: 36px 0; }
+.md-doc blockquote { margin: 0 0 14px; padding: 2px 0 2px 14px; border-left: 3px solid var(--border); color: var(--muted); }
+.md-doc blockquote > :last-child { margin-bottom: 0; }
+.md-doc :not(pre) > code { font-size: .86em; padding: 2px 5px; }
+.md-doc table { margin: 0 0 var(--s-4); }
+/* Badges and inline icons stay as they are; a picture on its own line gets a frame. */
+.md-doc img { max-height: none; box-shadow: none; border-radius: 0; vertical-align: middle; }
+.md-doc p > img:only-child, .md-doc p > a:only-child > img:only-child { display: block; margin: var(--s-2) auto; border-radius: var(--r-md); box-shadow: 0 0 0 1px var(--border); }
+.md-doc a { color: var(--accent); text-underline-offset: 2px; cursor: pointer; }
+
+.md-front { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px var(--s-4); margin: 0 0 var(--s-5); padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font-size: 12.5px; line-height: 1.5; }
+.md-front dt { color: var(--muted); }
+.md-front dd { margin: 0; overflow-wrap: anywhere; }
+
+.md-code { position: relative; margin: 0 0 var(--s-4); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.md-doc .md-code pre { margin: 0; border: 0; border-radius: inherit; background: none; padding: 12px 16px; font-size: 12.5px; line-height: 1.6; }
+.md-doc .md-code pre code { font-size: inherit; }
+.md-code-head { position: absolute; top: 6px; right: 6px; display: flex; align-items: center; gap: 6px; opacity: 0; transition: opacity .12s var(--ease); }
+.md-code:hover .md-code-head, .md-code-head:focus-within { opacity: 1; }
+.md-code-head > span { font: 11px/1 var(--mono); color: var(--muted); }
+.md-copy { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r-sm); color: var(--muted); background: var(--surface); border: 1px solid var(--border); cursor: pointer; }
+.md-copy:hover { color: var(--fg); background: var(--elevated); }
+.md-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.md-mermaid { margin: 0 0 var(--s-4); padding: var(--s-4); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); overflow-x: auto; text-align: center; }
+.md-mermaid svg { display: inline-block; max-width: none; height: auto; vertical-align: top; }
+.md-mermaid.failed { display: block; padding: 0; }
+.md-mermaid.failed pre { border: 0; margin: 0; }
+.md-mermaid figcaption { padding: 6px 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--err); }
+
+.md-alert { --alert: var(--info); border-left-color: var(--alert); background: color-mix(in srgb, var(--alert) 7%, transparent); border-radius: 0 var(--r-md) var(--r-md) 0; padding: 10px 14px; color: var(--fg); }
+.md-alert-tip { --alert: var(--ok); }
+.md-alert-important { --alert: var(--accent); }
+.md-alert-warning { --alert: var(--warn); }
+.md-alert-caution { --alert: var(--err); }
+.md-alert-title { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--alert); }
+
+.md-doc .md-tasks { list-style: none; padding-left: 2px; }
+.md-task { display: flex; align-items: baseline; gap: 10px; }
+.md-task > input { appearance: none; flex: none; width: 15px; height: 15px; margin: 0; position: relative; top: 3px; border: 1px solid color-mix(in srgb, var(--fg) 30%, transparent); border-radius: 4px; background: var(--bg); }
+.md-task > input:checked { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 11px no-repeat; border-color: var(--accent); }
+.md-task:has(> input:checked) { color: var(--muted); }
+
+.md-hit { animation: md-hit 2.2s var(--ease); border-radius: var(--r-sm); }
+@keyframes md-hit { 0%, 40% { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 16%, transparent); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.md-comment-pop { position: absolute; z-index: 5; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font-size: 12px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-pop); animation: pop-in .12s var(--ease); }
+@media (prefers-reduced-motion: reduce) { .md-hit, .md-comment-pop { animation: none; } .md-code-head { transition: none; } }
+
 /* "! command": a command you ran yourself, and the message box while you type one. */
 .bang-card { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); overflow: hidden; }
 .bang-card.failed { border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
