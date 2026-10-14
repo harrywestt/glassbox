@@ -2855,5 +2855,25 @@
       "ux": "UX review",
       "side": "side tasks"
     }
+  },
+  "markdownView": {
+    "preview": "Preview",
+    "outline": "Sections of this document",
+    "onThisPage": "On this page",
+    "readingTime_one": "{count} min read",
+    "readingTime_other": "{count} min read",
+    "wordsTitle_one": "{count} word",
+    "wordsTitle_other": "{count} words",
+    "copyCode": "Copy code",
+    "copied": "Copied",
+    "comment": "Comment",
+    "empty": "This file is empty.",
+    "alert": {
+      "note": "Note",
+      "tip": "Tip",
+      "important": "Important",
+      "warning": "Warning",
+      "caution": "Caution"
+    }
   }
 }

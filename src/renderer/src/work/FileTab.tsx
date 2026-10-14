@@ -3,9 +3,21 @@ import { useSession } from '../views/SessionView'
 import { absPath, mediaKind, mediaUrl, relPath } from '../lib'
 import { MediaView } from '../components/MediaView'
 import { CodeView, useSelectionComment } from '../components/Code'
-import { Icon, IconButton } from '../components/ui'
+import { Icon, IconButton, Segmented } from '../components/ui'
+import { MarkdownView } from './MarkdownView'
 import type { FileMark } from '../../../shared/events'
 import { tr } from '../../../shared/i18n'
+
+/** How Markdown files open: as a document, or as their source (remembered across files). */
+type MdMode = 'preview' | 'source'
+const MD_KEY = 'glassbox.markdownMode'
+const savedMode = (): MdMode => {
+  try {
+    return localStorage.getItem(MD_KEY) === 'source' ? 'source' : 'preview'
+  } catch {
+    return 'preview'
+  }
+}
 
 const MARKS: { mark: FileMark; icon: string; label: string }[] = [
   { mark: 'read', icon: 'eye', label: 'fileTab.marks.read' },
@@ -27,6 +39,20 @@ export function FileTab({ path, line, endLine }: { path: string; line?: number; 
   const pdf = /\.pdf$/i.test(path)
   const [source, setSource] = useState(false)
   const asText = (!media && !pdf) || source
+  const markdown = /\.(md|markdown|mdown|mkd)$/i.test(path)
+  const [mdMode, setMdModeState] = useState<MdMode>(savedMode)
+  const setMdMode = (m: MdMode) => {
+    setMdModeState(m)
+    try {
+      localStorage.setItem(MD_KEY, m)
+    } catch {
+      /* just this time */
+    }
+  }
+  const preview = markdown && mdMode === 'preview'
+  // The line you were reading in the document, for Source to open on.
+  const [readLine, setReadLine] = useState<number | undefined>(undefined)
+  const goLine = readLine ?? line
   // A file from outside the project (an attachment, something in Downloads) can't be marked for Claude.
   const outside = /^\.\.|^[a-z]:|^\//i.test(rel)
   const touches = s.files.filter((f) => relPath(tab.cwd, f.path) === rel).length
@@ -61,21 +87,34 @@ export function FileTab({ path, line, endLine }: { path: string; line?: number; 
             <Icon name="code" /> {tr('fileTab.source')}
           </button>
         )}
-        {asText && comment.button}
+        {markdown && (
+          <Segmented
+            value={mdMode}
+            onChange={setMdMode}
+            options={[
+              { value: 'preview', label: tr('markdownView.preview') },
+              { value: 'source', label: tr('fileTab.source') }
+            ]}
+          />
+        )}
+        {asText && !preview && comment.button}
         <IconButton icon="mention" title={tr('fileTab.mention')} onClick={() => composerRef.current?.insert(`@${rel}`)} />
         <IconButton icon="go-to-file" title={tr('fileTab.openInEditor')} onClick={() => void window.glassbox.openPath(file && 'content' in file ? `${tab.cwd}/${rel}` : path)} />
       </div>
       {comment.box}
       <div className="work-body">
-        {pdf ? <iframe className="pdf-view" src={`${mediaUrl(absFile)}?v=${touches}`} title={rel} /> : !asText ? <MediaView path={absFile} version={touches} /> : !file ? <div className="muted pad">{tr('fileTab.loading')}</div> : file.error ? <div className="note note-error">{file.error}</div> : <CodeView
+        {pdf ? <iframe className="pdf-view" src={`${mediaUrl(absFile)}?v=${touches}`} title={rel} /> : !asText ? <MediaView path={absFile} version={touches} /> : !file ? <div className="muted pad">{tr('fileTab.loading')}</div> : file.error ? <div className="note note-error">{file.error}</div> : preview ? (
+          <MarkdownView path={absFile} rel={rel} content={file.content ?? ''} line={line} onLine={setReadLine} />
+        ) : <CodeView
             path={rel}
             content={file.content ?? ''}
             onEditor={(ed) => {
               comment.bind(ed)
-              if (!line) return
-              const end = Math.max(line, endLine ?? line)
-              ed.revealLinesInCenter(line, end)
-              ed.setSelection({ startLineNumber: line, startColumn: 1, endLineNumber: end, endColumn: Number.MAX_SAFE_INTEGER })
+              if (!goLine) return
+              if (goLine !== line) return void ed.revealLineNearTop(goLine)
+              const end = Math.max(goLine, endLine ?? goLine)
+              ed.revealLinesInCenter(goLine, end)
+              ed.setSelection({ startLineNumber: goLine, startColumn: 1, endLineNumber: end, endColumn: Number.MAX_SAFE_INTEGER })
             }}
           />}
       </div>
