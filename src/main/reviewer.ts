@@ -28,7 +28,9 @@ export class Reviewer {
     private cwd: string,
     private task: () => string | undefined,
     private emit: (findings: Finding[], reviewed: string[]) => void,
-    private state: (busy: boolean, pending: number, error?: string) => void
+    private state: (busy: boolean, pending: number, error?: string) => void,
+    /** What each review cost (the SDK's result), for the session's spend. */
+    private onCost?: (msg: { modelUsage?: Record<string, { costUSD?: number }>; total_cost_usd?: number }) => void
   ) {}
 
   add(edit: PendingEdit) {
@@ -75,6 +77,7 @@ export class Reviewer {
         prompt,
         options: { cwd: this.cwd, model, tools: [], settingSources: [], persistSession: false, maxTurns: 1, thinking: model === 'haiku' ? { type: 'disabled' } : { type: 'adaptive' } }
       })) {
+        if (msg.type === 'result') this.onCost?.(msg)
         if (msg.type === 'result' && msg.subtype === 'success') text = msg.result
       }
       this.emit(parse(text), batch.map((b) => b.toolUseId))

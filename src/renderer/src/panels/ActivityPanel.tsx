@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { HIDDEN_TOOLS, taskOf, toolSummary, type ToolCall } from '../session'
-import { baseName, relPath, renderMarkdown } from '../lib'
+import { baseName, dateTime, relPath, renderMarkdown, timeOfDay } from '../lib'
 import { Empty, Icon, PanelHeader, Section } from '../components/ui'
 import { CommentBox } from '../components/CommentBox'
 import { SideTasks } from '../session-ui/SideTasks'
@@ -39,12 +39,17 @@ export function ActivityPanel() {
     return () => clearInterval(t)
   }, [])
 
-  // Glassbox's own tools show up as the task, decisions and checklist, not as activity.
-  const calls = Object.values(s.toolCalls).filter((c) => !c.name.startsWith('mcp__glassbox__') && !HIDDEN_TOOLS.has(c.name))
+  // Glassbox's own tools show up as the task, decisions and checklist, not as activity. Worked out
+  // when the steps change, not on every tick of the clock (a long session has thousands).
+  const { running, agents, recent } = useMemo(() => {
+    const calls = Object.values(s.toolCalls).filter((c) => !c.name.startsWith('mcp__glassbox__') && !HIDDEN_TOOLS.has(c.name))
+    return {
+      running: calls.filter((c) => c.status === 'running' && !s.agents[c.id]),
+      agents: Object.values(s.agents).filter((a) => a.status === 'running'),
+      recent: calls.filter((c) => c.status !== 'running').sort((a, b) => (b.endedAt ?? b.at) - (a.endedAt ?? a.at)).slice(0, 12)
+    }
+  }, [s.toolCalls, s.agents])
   const waitingOnYou = s.checkins.filter((c) => c.answer === undefined)
-  const running = calls.filter((c) => c.status === 'running' && !s.agents[c.id])
-  const agents = Object.values(s.agents).filter((a) => a.status === 'running')
-  const recent = calls.filter((c) => c.status !== 'running').sort((a, b) => (b.endedAt ?? b.at) - (a.endedAt ?? a.at)).slice(0, 12)
   const secs = (t: number) => {
     const v = Math.max(0, Math.round((now - t) / 1000))
     return v >= 60 ? `${Math.floor(v / 60)}m ${v % 60}s` : `${v}s`
@@ -177,7 +182,7 @@ export function ActivityPanel() {
                 <span className="grow ellipsis">
                   {describeTool(c)}
                 </span>
-                <span className="activity-time muted small" title={c.endedAt ? tr('activityPanel.startedTook', { time: new Date(c.at).toLocaleString(), duration: took(c.endedAt - c.at) }) : tr('activityPanel.started', { time: new Date(c.at).toLocaleString() })}>
+                <span className="activity-time muted small" title={c.endedAt ? tr('activityPanel.startedTook', { time: dateTime(c.at), duration: took(c.endedAt - c.at) }) : tr('activityPanel.started', { time: dateTime(c.at) })}>
                   <span className="num">{clock(c.at)}</span>
                   {!c.endedAt && c.status === 'running' && <span>{tr('activityPanel.runningStatus')}</span>}
                 </span>
@@ -197,7 +202,7 @@ export function ActivityPanel() {
 
 
 /** Time of day for an activity row, e.g. 16:43:57. */
-const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+const clock = timeOfDay
 
 /** How long something took: 0.4s, 12s, 3m 05s. */
 function took(ms: number): string {
@@ -209,8 +214,8 @@ function took(ms: number): string {
 /** Test status while Claude works; hidden until the first test run. */
 function TestsNow() {
   const { s, everyday } = useSession()
+  const any = useMemo(() => Object.values(s.toolCalls).some((c) => (c.name === 'Bash' || c.name === 'PowerShell') && /test/i.test(String(c.input.command ?? ''))), [s.toolCalls])
   if (everyday) return null
-  const any = Object.values(s.toolCalls).some((c) => (c.name === 'Bash' || c.name === 'PowerShell') && /test/i.test(String(c.input.command ?? '')))
   if (!any) return null
   return (
     <Section id="tests" title={tr('activityPanel.tests')}>

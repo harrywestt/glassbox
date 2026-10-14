@@ -9,7 +9,10 @@ export const DASHBOARD = 'dashboard'
  * Unset, it follows the folder (a git repository opens in Engineering).
  */
 export type SessionViewMode = 'everyday' | 'engineering'
-export type Tab = { id: string; cwd: string; title: string; resumeId?: string; kind?: SessionKind; pendingStart?: PendingStart; view?: SessionViewMode }
+export type Tab = { id: string; cwd: string; title: string; resumeId?: string; kind?: SessionKind; pendingStart?: PendingStart; view?: SessionViewMode; /** A QA session that also screenshots every screen for the UX reviewer. */ deep?: boolean }
+
+/** What the session host needs to know about the tab's kind (a deep QA run sends every screenshot to the UX reviewer). */
+export const hostKind = (t: Tab): string | undefined => (t.kind === 'qa' && t.deep ? 'qa-deep' : t.kind)
 
 export type AppState = { tabs: Tab[]; active: string; sessions: Record<string, SessionState> }
 
@@ -30,7 +33,9 @@ export function loadTabs(): AppState {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { tabs: Tab[]; active: string } | null
     if (saved?.tabs) {
-      return { tabs: saved.tabs, active: saved.active ?? DASHBOARD, sessions: Object.fromEntries(saved.tabs.map((t) => [t.id, newSession()])) }
+      // Each tab once (a duplicate would show the same session twice).
+      const tabs = saved.tabs.filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i)
+      return { tabs, active: saved.active ?? DASHBOARD, sessions: Object.fromEntries(tabs.map((t) => [t.id, newSession()])) }
     }
   } catch {
     /* start fresh */
@@ -58,6 +63,8 @@ export function tabTitle(tab: Tab, session?: SessionState): string {
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'open':
+      // A tab that's already open is shown, not opened twice (two views of one session would each answer for it).
+      if (state.tabs.some((t) => t.id === action.tab.id)) return { ...state, active: action.tab.id }
       return {
         tabs: [...state.tabs, action.tab],
         active: action.tab.id,

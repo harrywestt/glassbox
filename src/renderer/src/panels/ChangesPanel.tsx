@@ -150,8 +150,9 @@ export function ChangesPanel() {
       {/* The changes as one section you can fold away: the count and size in its heading, the
           controls as quiet icons at its right. */}
       <Section
-        id="changes"
-        title={tr('changesPanel.title')}
+        id="changes-branch"
+        defaultFolded
+        title={base ? tr('changesPanel.onBranchVs', { base }) : tr('changesPanel.onBranch')}
         meta={
           <span className="small changes-count">
             {tr('changesPanel.files', { count: counted.length })}

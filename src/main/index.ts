@@ -1,11 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, powerMonitor, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { Updater } from './updater'
 import { setAutomation } from './automation'
 import type { Automation } from '../shared/events'
 import { abortAllQueries } from './claude'
 import { askMap, type MapAskModule } from './mapAsk'
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
@@ -17,7 +17,7 @@ import { runBang, stopBang, stopAllBangs } from './bang'
 import { pinSession, pinnedSessions, refreshPinned, restorePinned, unpinSession } from './pinned'
 import { AgentHost } from './agentHost'
 import { listProjectFiles, readProjectFile } from './files'
-import { gitBranches, gitDiff, gitFileAt, gitBranchList, gitSwitch, gitLog, gitCommitFiles, gitShowFile, gitWorktree, gitFetchDefault, gitInfo, mainFolders } from './git'
+import { gitBranches, gitDiff, gitFileAt, gitBranchList, gitSwitch, gitLog, gitCommitFiles, gitShowFile, gitWorktree, gitFetchDefault, gitInfo, mainFolders, gitStatus, gitStage, gitUnstage, gitDiscard, gitCommit, gitPush } from './git'
 import { glassboxCommits, undoGlassboxCommit } from './autocommit'
 import { showcaseDir, showcasePrompt, skillDeckDir, type ShowcaseRequest } from './showcase'
 import { UsageService } from './usage'
@@ -30,7 +30,9 @@ import { getStandup } from './standup'
 import { architectureDiff } from './archDiff'
 import { focusErd, getErd } from './erd'
 import { closeTerminal, closeTerminals, openTerminal, resizeTerminal, writeTerminal } from './terminal'
-import { browserTools, type BrowserBridge } from './browserTools'
+import { browserTools, captureTab, type BrowserBridge, type BrowserHooks } from './browserTools'
+import { clearLogs, pageLogs, watchNetwork, watchPage } from './browserLogs'
+import { capturesDir, isRecording, recordingEncoded, startRecording, stopRecording } from './recorder'
 import { forgetDecision, listDecisions } from './projectDecisions'
 import { explainModule } from './mapExplain'
 import { attachContextMenu, setMacMenu } from './contextMenu'
@@ -44,6 +46,7 @@ import { commentOnTicket, getTicket, getTransitions, transitionTicket } from './
 import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
 import { sketchPage, sketchUrl } from './sketch'
+import { spendSummary } from './spend'
 import { adminState, dismissAdminPrompt, elevateAtStartupIfWanted, setRunAsAdmin } from './admin'
 import type { AccessMode, DiffMode, GuardRule, SideTaskSpec, PermissionDecision, Requirements, ReviewModel, SendOptions, ServicesEvent, SessionEvent, TabEvent } from '../shared/events'
 import { tr } from '../shared/i18n'
@@ -266,12 +269,30 @@ function createWindow() {
  * in the renderer, waits `wait` ms, and saves a PNG to `out`. The app quits after the last step.
  */
 async function captureSnapshots(w: BrowserWindow, file: string) {
-  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; tool?: { tabId: string; name: string; args: Record<string, unknown> }; win?: 'minimize' | 'restore' | 'blur'; click?: string }[]
+  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; tool?: { tabId: string; name: string; args: Record<string, unknown> }; win?: 'minimize' | 'restore' | 'blur'; click?: string; ux?: { tabId: string; path: string }; profile?: { ms: number; out: string } }[]
   await new Promise<void>((r) => w.webContents.once('did-finish-load', () => r()))
   for (const step of steps) {
     if (step.win === 'minimize') w.minimize()
     if (step.win === 'restore') w.restore()
     if (step.win === 'blur') w.blur()
+    // Dev aid: a CPU profile of the window for a while (open the .cpuprofile in Chrome DevTools).
+    if (step.profile) {
+      const dbg = w.webContents.debugger
+      if (!dbg.isAttached()) dbg.attach('1.3')
+      await dbg.sendCommand('Profiler.enable')
+      await dbg.sendCommand('Profiler.setSamplingInterval', { interval: 500 })
+      await dbg.sendCommand('Profiler.start')
+      await new Promise((r) => setTimeout(r, step.profile!.ms))
+      const { profile } = (await dbg.sendCommand('Profiler.stop')) as { profile: unknown }
+      writeFileSync(step.profile.out, JSON.stringify(profile))
+      dbg.detach()
+    }
+    // path "newest" means the latest capture saved by the Browser's buttons.
+    if (step.ux) {
+      const newest = () => readdirSync(capturesDir()).map((n) => join(capturesDir(), n)).filter((f) => f.endsWith('.png')).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]
+      const path = step.ux.path === 'newest' ? newest() : step.ux.path
+      console.log('UX queued', path, hosts.get(step.ux.tabId)?.reviewUx({ path, note: 'test page' }))
+    }
     // A real mouse click where a renderer expression says ({ x, y } in window coordinates).
     if (step.click) {
       const at = (await w.webContents.executeJavaScript(step.click).catch(() => null)) as { x: number; y: number } | null
@@ -284,7 +305,7 @@ async function captureSnapshots(w: BrowserWindow, file: string) {
     // Run one of Claude's browser tools directly, as a session would, and log what it returned.
     if (step.tool) {
       const { tabId, name, args } = step.tool
-      const t = browserTools(browserFor(tabId).bridge, browserFor(tabId).shotsDir).find((x) => x.name === name)
+      const t = browserTools(browserFor(tabId).bridge, browserFor(tabId).shotsDir, { record: browserFor(tabId).record }).find((x) => x.name === name)
       const started = Date.now()
       const r = t ? await (t.handler as (a: unknown, e: unknown) => Promise<{ content: { type: string; text?: string }[]; isError?: boolean }>)(args, {}).catch((e) => ({ content: [{ type: 'text', text: 'THREW ' + String(e) }], isError: true })) : { content: [{ type: 'text', text: 'no tool' }], isError: true }
       console.log('TOOL', name, JSON.stringify(args), `${Date.now() - started}ms`, r.isError ? 'ERROR' : 'ok', JSON.stringify(r.content.map((c) => c.text ?? `[${c.type}]`).join(' | ')).slice(0, 900))
@@ -339,12 +360,15 @@ function browserRequest<T>(tabId: string, cmd: Record<string, unknown>, ms = 200
     win.webContents.send('glassbox:browser-request', { reqId, tabId, cmd })
   })
 }
-const browserFor = (tabId: string): { bridge: BrowserBridge; shotsDir: string } => ({
+const browserFor = (tabId: string): { bridge: BrowserBridge; shotsDir: string; record: NonNullable<BrowserHooks['record']> } => ({
   bridge: {
     open: (url, newTab) => browserRequest(tabId, { cmd: 'open', url, newTab }),
-    tabs: () => browserRequest(tabId, { cmd: 'tabs' }, 5000)
+    tabs: () => browserRequest(tabId, { cmd: 'tabs' }, 5000),
+    close: (ids, others) => browserRequest(tabId, { cmd: 'close', ids, others }, 5000),
+    resize: (tab, width) => browserRequest(tabId, { cmd: 'resize', tab, width }, 5000)
   },
-  shotsDir: join(app.getPath('userData'), 'browser-shots')
+  shotsDir: join(app.getPath('userData'), 'browser-shots'),
+  record: { start: (wcId) => startRecording(win ?? undefined, wcId), stop: (wcId) => stopRecording(win ?? undefined, wcId) }
 })
 
 // Sessions
@@ -381,7 +405,10 @@ ipcMain.handle('session:open', (_e, tabId: string, cwd: string, resume?: string,
   )
   hosts.set(tabId, h)
   // A QA session tests; it doesn't change the project.
-  h.testOnly = kind === 'qa'
+  h.testOnly = kind === 'qa' || kind === 'qa-deep'
+  h.kind = kind
+  // A deep QA run: every screenshot also goes to the UX reviewer.
+  h.uxAuto = kind === 'qa-deep'
   void h.open(resume, access)
   // A new session redraws its project's map in the background; resuming keeps the cached one.
   if (!resume) void refreshArchitecture(cwd)
@@ -438,6 +465,25 @@ ipcMain.handle('architecture:group', (_e, root: string, mods: HeatModule[], forc
 ipcMain.handle('architecture:get', (_e, cwd: string, force?: boolean) => getArchitecture(cwd, force))
 ipcMain.handle('architecture:diff', (_e, cwd: string, ref: string, mode: DiffMode, apiOnly?: string[]) => architectureDiff(cwd, ref, mode, apiOnly))
 ipcMain.handle('decisions:list', (_e, cwd: string) => listDecisions(cwd))
+// The Browser's own capture buttons: a screenshot of the tab, or a video of it.
+ipcMain.handle('browser:screenshot', async (_e, wcId: number, fullPage?: boolean) => {
+  const { webContents } = await import('electron')
+  const wc = webContents.fromId(wcId)
+  if (!wc || wc.isDestroyed()) throw new Error('That tab is not open.')
+  const img = await captureTab(wc, !!fullPage)
+  const path = join(capturesDir(), `screenshot-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`)
+  writeFileSync(path, img.toPNG())
+  return path
+})
+ipcMain.handle('browser:logs', (_e, wcId: number) => pageLogs(wcId))
+ipcMain.handle('browser:clearLogs', (_e, wcId: number) => clearLogs(wcId))
+ipcMain.handle('browser:record', async (_e, wcId: number, action: 'start' | 'stop' | 'state') => {
+  if (action === 'start') return startRecording(win ?? undefined, wcId)
+  if (action === 'stop') return stopRecording(win ?? undefined, wcId)
+  return isRecording(wcId)
+})
+ipcMain.handle('recorder:encoded', (_e, id: string, data: ArrayBuffer | null) => recordingEncoded(id, data))
+ipcMain.handle('spend:summary', () => spendSummary())
 ipcMain.handle('sketch:url', (_e, html: string) => sketchUrl(String(html)))
 ipcMain.handle('erd:get', (_e, cwd: string) => getErd(cwd))
 ipcMain.handle('terminal:open', (_e, scope: string, cwd: string, cols: number, rows: number) => openTerminal(scope, cwd, cols, rows, toRenderer))
@@ -522,6 +568,13 @@ ipcMain.handle('session:peers', async (_e, cwd: string, except?: string) => {
 })
 ipcMain.handle('git:worktree', (_e, cwd: string, branch: string) => gitWorktree(cwd, branch))
 ipcMain.handle('git:mainFolders', (_e, paths: string[]) => mainFolders(paths))
+// Source Control: the working copy's changes, staged and not, and what you do with them.
+ipcMain.handle('git:status', (_e, cwd: string) => gitStatus(cwd))
+ipcMain.handle('git:stage', (_e, cwd: string, paths: string[]) => gitStage(cwd, paths))
+ipcMain.handle('git:unstage', (_e, cwd: string, paths: string[]) => gitUnstage(cwd, paths))
+ipcMain.handle('git:discard', (_e, cwd: string, paths: string[]) => gitDiscard(cwd, paths))
+ipcMain.handle('git:commit', (_e, cwd: string, message: string) => gitCommit(cwd, message))
+ipcMain.handle('git:push', (_e, cwd: string) => gitPush(cwd))
 ipcMain.handle('git:fetchDefault', (_e, cwd: string) => gitFetchDefault(cwd))
 ipcMain.handle('git:diff', (_e, cwd: string, ref: string, mode: DiffMode) => gitDiff(cwd, ref, mode))
 ipcMain.handle('git:fileAt', (_e, cwd: string, ref: string, mode: DiffMode, path: string) => gitFileAt(cwd, ref, mode, path))
@@ -695,6 +748,8 @@ app.whenReady().then(async () => {
     return net.fetch(pathToFileURL(full).toString())
   })
   protocol.handle('sketch', (req) => sketchPage(req.url))
+  // The Browser's requests (every tab shares this profile), for browser_logs.
+  watchNetwork(session.fromPartition('persist:preview'))
   // Only media files, by extension; everything else is refused. Byte ranges are honoured, which
   // video needs to play and seek.
   protocol.handle('media', async (req) => {
@@ -748,6 +803,8 @@ app.on('window-all-closed', () => (closeTerminals(), stopAllBangs(), app.quit())
 app.on('web-contents-created', (_e, contents) => {
   if (contents.getType() !== 'webview') return
   contents.setBackgroundThrottling(false)
+  // Its console and page loads, for Claude's browser_logs and the Browser's error badge.
+  watchPage(contents)
   contents.setWindowOpenHandler(({ url }) => {
     void contents.loadURL(url)
     return { action: 'deny' }

@@ -92,6 +92,8 @@ export function GitPanel({ withPr = true }: { withPr?: boolean } = {}) {
               <Icon name={lastError.error ? 'error' : 'info'} /> {lastError.error ?? lastError.skipped}
             </div>
           )}
+          {/* Under Source Control (the Changes tab) the working copy is already there; here only on its own. */}
+          {withPr && (
           <div className="git-status">
             <span className="small">
               {log ? (log.uncommitted ? <><strong>{log.uncommitted}</strong> {tr('gitPanel.uncommittedChanges', { count: log.uncommitted })}</> : tr('gitPanel.nothingUncommitted')) : tr('gitPanel.loading')}
@@ -102,6 +104,7 @@ export function GitPanel({ withPr = true }: { withPr?: boolean } = {}) {
               {busy ? <Icon name="loading" className="codicon-modifier-spin" /> : <Icon name="git-commit" />} {tr('gitPanel.commitNow')}
             </button>
           </div>
+          )}
           {error && <div className="note note-error">{error}</div>}
         </section>
 

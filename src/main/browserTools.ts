@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tool } from '@anthropic-ai/claude-agent-sdk'
+import { logsText, newProblems } from './browserLogs'
 import { z } from 'zod'
 
 /**
@@ -14,6 +15,10 @@ export type BrowserBridge = {
   /** Open a URL in a new tab (or the current one); resolves once the page is attached. */
   open(url: string, newTab: boolean): Promise<{ tab: string; wcId: number }>
   tabs(): Promise<{ tab: string; url: string; title?: string; wcId?: number; active: boolean }[]>
+  /** Show a tab at this width (0: the full view); resolves once it's laid out. */
+  resize(tab: string, width: number): Promise<void>
+  /** Close these tabs, or (others) every tab but the one showing; resolves with how many are left. */
+  close(ids: string[], others: boolean): Promise<{ closed: number; left: number }>
 }
 
 type WC = Electron.WebContents
@@ -130,9 +135,87 @@ function press(wc: WC, key: string) {
   wc.sendInputEvent({ type: 'keyUp', keyCode: code })
 }
 
-const where = (wc: WC) => `Now on "${wc.getTitle()}" (${wc.getURL()}).`
+/** Where the tab is now, and any errors the page reported since Claude last heard (so it notices a 500 behind a spinner). */
+const where = (wc: WC) => `Now on "${wc.getTitle()}" (${wc.getURL()}).${newProblems(wc.id)}`
 
-export function browserTools(bridge: BrowserBridge, shotsDir: string) {
+/**
+ * A picture of a tab: what shows, or the whole page top to bottom. A page that sets no background
+ * is see-through, which a JPEG turns black, so it gets the white a browser would.
+ */
+export async function captureTab(wc: WC, fullPage = false): Promise<Electron.NativeImage> {
+  const white = await wc.insertCSS('html { background-color: #fff }', { cssOrigin: 'user' }).catch(() => null)
+  try {
+    if (fullPage) {
+      const whole = await stitchPage(wc).catch(() => null)
+      if (whole) return whole
+    }
+    return await inTime(wc.capturePage(), PAGE_MS)
+  } finally {
+    if (white) void wc.removeInsertedCSS(white).catch(() => {})
+  }
+}
+
+/**
+ * The whole page, top to bottom: scrolled a screenful at a time, each captured as it shows, and
+ * stitched into one picture. (The page's own full-page screenshot command stalls in an embedded
+ * page.) Fixed and sticky parts, like a header, appear once at the top rather than on every slice.
+ * Pages taller than 12,000px stop there; the scroll position is put back afterwards.
+ */
+async function stitchPage(wc: WC): Promise<Electron.NativeImage | null> {
+  const { nativeImage } = await import('electron')
+  // Scrollbars would be drawn into every slice.
+  const bars = await wc.insertCSS('::-webkit-scrollbar { display: none !important } html { scrollbar-width: none !important }', { cssOrigin: 'user' }).catch(() => null)
+  try {
+    return await stitchSlices(wc, nativeImage)
+  } finally {
+    if (bars) void wc.removeInsertedCSS(bars).catch(() => {})
+  }
+}
+
+async function stitchSlices(wc: WC, nativeImage: typeof Electron.nativeImage): Promise<Electron.NativeImage | null> {
+  const m = (await inTime(wc.executeJavaScript('({ h: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0), vh: innerHeight, y: scrollY, x: scrollX })'), PAGE_MS)) as { h: number; vh: number; y: number; x: number }
+  if (!m.vh || m.h <= m.vh + 2) return null
+  const total = Math.min(m.h, 12_000)
+  const slices: { img: Electron.NativeImage; at: number }[] = []
+  try {
+    for (let want = 0; want < total; want += m.vh) {
+      const at = (await wc.executeJavaScript(`new Promise((r) => { scrollTo(0, ${want}); requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => r(scrollY), 60))) })`)) as number
+      slices.push({ img: await inTime(wc.capturePage(), PAGE_MS), at })
+      // After the first screenful, fixed and sticky parts (a header, a cookie bar) are hidden so they don't repeat.
+      if (slices.length === 1)
+        await wc.executeJavaScript(`for (const el of document.querySelectorAll('body *')) { const p = getComputedStyle(el).position; if (p === 'fixed' || p === 'sticky') { el.dataset.gbHid = el.style.visibility; el.style.visibility = 'hidden' } }`)
+      if (at + m.vh >= total) break
+    }
+  } finally {
+    await wc.executeJavaScript(`for (const el of document.querySelectorAll('[data-gb-hid]')) { el.style.visibility = el.dataset.gbHid; delete el.dataset.gbHid } scrollTo(${m.x}, ${m.y})`).catch(() => {})
+  }
+  const first = slices[0].img.getSize()
+  const scale = first.height / m.vh
+  const width = first.width
+  const height = Math.round(Math.min(total, slices.at(-1)!.at + m.vh) * scale)
+  const out = Buffer.alloc(width * height * 4)
+  let filled = 0
+  for (const s of slices) {
+    const top = Math.round(s.at * scale)
+    const bmp = s.img.toBitmap()
+    const size = s.img.getSize()
+    // Only the rows this slice adds below what's already there.
+    for (let row = Math.max(0, filled - top); row < size.height && top + row < height; row++) {
+      const src = row * size.width * 4
+      bmp.copy(out, (top + row) * width * 4, src, src + Math.min(size.width, width) * 4)
+    }
+    filled = Math.max(filled, Math.min(height, top + size.height))
+  }
+  return nativeImage.createFromBitmap(out, { width, height })
+}
+
+/** What else the browser tools hand on: each screenshot (for the UX reviewer), and video recording. */
+export type BrowserHooks = {
+  shot?: (s: { path: string; url: string; title: string; review: boolean; note?: string }) => void
+  record?: { start: (wcId: number) => { started: number }; stop: (wcId: number) => Promise<string | null> }
+}
+
+export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: BrowserHooks = {}) {
   const TAB = z.string().optional().describe('Browser tab id (from browser_open or browser_tabs); defaults to the tab showing')
   return [
     tool(
@@ -140,12 +223,12 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
       "Open a web page in the Glassbox Browser (the user sees it; sign-ins they've made there are kept). Returns the page as a short text outline with numbered controls. Use this, never an external browser, Playwright or curl, to look at or try a web page.",
       {
         url: z.string().describe('The address, e.g. http://localhost:5173/login'),
-        new_tab: z.boolean().optional().describe('Open in a new tab (default) or reuse the current one'),
+        new_tab: z.boolean().optional().describe('Open in a new tab instead of the current one (default: reuse the current tab). Only when you need two pages side by side'),
         find: z.string().optional().describe('Only show outline lines containing these words (plus headings)')
       },
       async ({ url, new_tab, find }) => {
         try {
-          const { tab, wcId } = await bridge.open(url, new_tab !== false)
+          const { tab, wcId } = await bridge.open(url, new_tab === true)
           const { webContents } = await import('electron')
           const wc = webContents.fromId(wcId)
           if (!wc) return fail('The tab opened but its page is not ready.')
@@ -167,7 +250,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
         await settle(c.wc, 3000)
-        return ok(await inTime(c.wc.executeJavaScript(SNAPSHOT(find ?? '', limit ?? 4000)), PAGE_MS))
+        return ok((await inTime(c.wc.executeJavaScript(SNAPSHOT(find ?? '', limit ?? 4000)), PAGE_MS)) + newProblems(c.wc.id))
       },
       { alwaysLoad: true }
     ),
@@ -246,28 +329,96 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
     ),
     tool(
       'browser_screenshot',
-      'A picture of what a Browser tab shows. Use it when the look matters (layout, styling, a chart); for content and controls, browser_snapshot is far cheaper.',
-      { tab: TAB },
-      async ({ tab }) => {
+      'A picture of what a Browser tab shows (or the whole page, top to bottom, with full_page). Use it when the look matters (layout, styling, a chart) and as evidence; for content and controls, browser_snapshot is far cheaper. With review, the screenshot also goes to the UX reviewer, a separate agent that checks it for bad UX, inconsistencies and AI slop in the background (its findings arrive on their own; carry on meanwhile).',
+      {
+        tab: TAB,
+        full_page: z.boolean().optional().describe('The whole page, not just what fits in the window'),
+        review: z.boolean().optional().describe('Also send it to the UX reviewer'),
+        note: z.string().optional().describe('For the reviewer: what this screen is or what state it shows, e.g. "checkout, card declined"')
+      },
+      async ({ tab, full_page, review, note }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
         await settle(c.wc, 4000)
         let img: Electron.NativeImage
-        // A page that sets no background is see-through, which a JPEG turns black: give it the white a browser would.
-        const white = await c.wc.insertCSS('html { background-color: #fff }', { cssOrigin: 'user' }).catch(() => null)
         try {
-          img = await inTime(c.wc.capturePage(), PAGE_MS)
+          img = await captureTab(c.wc, full_page)
         } catch (e) {
           return e instanceof TimedOut ? slow('The screenshot', PAGE_MS) : fail(`Couldn't take the screenshot: ${e instanceof Error ? e.message : String(e)}`)
-        } finally {
-          if (white) void c.wc.removeInsertedCSS(white).catch(() => {})
         }
-        const small = img.getSize().width > 1400 ? img.resize({ width: 1400 }) : img
-        const jpeg = small.toJPEG(72)
         mkdirSync(shotsDir, { recursive: true })
         const file = join(shotsDir, `shot-${Date.now()}.jpg`)
-        writeFileSync(file, jpeg)
+        // The saved copy at full detail (the reviewer and the report use it); Claude gets a smaller one.
+        const saved = img.getSize().width > 1600 ? img.resize({ width: 1600 }) : img
+        writeFileSync(file, saved.toJPEG(85))
+        const size = img.getSize()
+        const forClaude = size.height > size.width * 2.5 ? img.resize({ width: Math.min(size.width, 900) }) : size.width > 1400 ? img.resize({ width: 1400 }) : img
+        const jpeg = forClaude.toJPEG(72)
+        hooks.shot?.({ path: file, url: c.wc.getURL(), title: c.wc.getTitle(), review: !!review, note })
         return { content: [{ type: 'image' as const, data: jpeg.toString('base64'), mimeType: 'image/jpeg' }, { type: 'text' as const, text: `Saved to ${file}. ${where(c.wc)}` }] }
+      },
+      { alwaysLoad: true }
+    ),
+    tool(
+      'browser_record',
+      'Record a video of a Browser tab: start before you go through a flow, stop after; stopping saves a WebM and gives its path (present_file it so the user can watch). Use it when the user wants a video (a bug reproduction, a walkthrough, evidence of a flow), not routinely. Stops by itself after 10 minutes.',
+      { action: z.enum(['start', 'stop']), tab: TAB },
+      async ({ action, tab }) => {
+        if (!hooks.record) return fail('Recording is not available here.')
+        const c = await contents(bridge, tab)
+        if (typeof c === 'string') return fail(c)
+        try {
+          if (action === 'start') {
+            hooks.record.start(c.wc.id)
+            return ok(`Recording ${where(c.wc)} Call browser_record with action stop when you're done.`)
+          }
+          const path = await hooks.record.stop(c.wc.id)
+          return path ? ok(`Saved the recording to ${path}. Use present_file to show it.`) : fail('Nothing was recorded (no recording was running in that tab, or the page showed nothing).')
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e))
+        }
+      },
+      { alwaysLoad: true }
+    ),
+    tool(
+      'browser_logs',
+      "What a Browser page reported behind the scenes: console errors and warnings, and its requests (API calls with their status and time, and any request that failed). Use it to check a page actually worked (an error or a 500 the page doesn't show), after an action that should call an API, or when something looks stuck. By default it shows problems since you last asked; other tools' results tell you when there are new ones.",
+      {
+        show: z.enum(['problems', 'console', 'network', 'all']).optional().describe('problems (default): console errors and warnings, and failed requests; console: every console message; network: API calls and failed requests; all: everything'),
+        all: z.boolean().optional().describe('Everything kept for the page, not just what is new since you last asked'),
+        find: z.string().optional().describe('Only lines containing this, e.g. "/api/orders"'),
+        tab: TAB
+      },
+      async ({ show, all, find, tab }) => {
+        const c = await contents(bridge, tab)
+        if (typeof c === 'string') return fail(c)
+        return ok(logsText(c.wc.id, { show: show ?? 'problems', all, find }))
+      },
+      { alwaysLoad: true }
+    ),
+    tool(
+      'browser_viewport',
+      'Show a Browser tab at a phone or tablet width (or a width you give, or back to desktop), to test how a page works and looks there: the page lays out as it would on that screen. Everything after (snapshots, clicks, screenshots) uses that width until you change it back.',
+      { size: z.union([z.enum(['phone', 'tablet', 'desktop']), z.number().int().min(280).max(2400)]).describe('phone (390px), tablet (820px), desktop (the full view), or a width in px'), tab: TAB },
+      async ({ size, tab }) => {
+        const c = await contents(bridge, tab)
+        if (typeof c === 'string') return fail(c)
+        const width = size === 'phone' ? 390 : size === 'tablet' ? 820 : size === 'desktop' ? 0 : size
+        await bridge.resize(c.tab, width)
+        await new Promise((r) => setTimeout(r, 400))
+        const w = (await inTime(c.wc.executeJavaScript('innerWidth'), PAGE_MS).catch(() => null)) as number | null
+        return ok(`${width ? `Showing at ${w ?? width}px wide` : `Back to the full view (${w ?? '?'}px wide)`}. ${where(c.wc)}`)
+      },
+      { alwaysLoad: true }
+    ),
+    tool(
+      'browser_close',
+      'Close Browser tabs you no longer need: the ones named, or every tab except the one showing (others). Keep the Browser tidy: close tabs when you are done with them rather than leaving many open.',
+      { tabs: z.array(z.string()).optional().describe('Tab ids to close (from browser_tabs)'), others: z.boolean().optional().describe('Close every tab except the one showing') },
+      async ({ tabs, others }) => {
+        if (!tabs?.length && !others) return fail('Say which tabs to close (tabs), or pass others to close all but the one showing.')
+        const r = await bridge.close(tabs ?? [], !!others)
+        return ok(`Closed ${r.closed} tab${r.closed === 1 ? '' : 's'}; ${r.left} open.`)
       },
       { alwaysLoad: true }
     ),
@@ -300,4 +451,4 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string) {
   ]
 }
 
-export const BROWSER_TOOL_NAMES = ['browser_open', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_press', 'browser_eval', 'browser_screenshot', 'browser_tabs', 'browser_wait'].map((n) => `mcp__glassbox__${n}`)
+export const BROWSER_TOOL_NAMES = ['browser_open', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_press', 'browser_eval', 'browser_screenshot', 'browser_record', 'browser_logs', 'browser_viewport', 'browser_close', 'browser_tabs', 'browser_wait'].map((n) => `mcp__glassbox__${n}`)

@@ -45,9 +45,10 @@ export class Loaders {
     return [...this.state.values()].filter((l) => l.status === 'running' && !l.watching)
   }
 
-  set(l: Omit<LoaderState, 'started' | 'updated' | 'watching'> & { watch?: Watch }) {
+  /** `byGlassbox`: Glassbox moves this one itself (it isn't Claude's to finish). */
+  set(l: Omit<LoaderState, 'started' | 'updated' | 'watching'> & { watch?: Watch; byGlassbox?: boolean }) {
     const had = this.state.get(l.id)
-    const { watch, ...given } = l
+    const { watch, byGlassbox, ...given } = l
     const next: LoaderState = { ...had, ...given, started: had?.started ?? Date.now(), updated: Date.now() }
     // A step moves the bar too (with the total given before, if this update leaves it out).
     if (next.step && next.steps && (given.step !== undefined || given.steps !== undefined) && given.percent === undefined) next.percent = ((Math.min(next.step, next.steps) - 1) / next.steps) * 100
@@ -55,7 +56,7 @@ export class Loaders {
     // Starting again (a new run under the same id) starts the clock again.
     if (had && had.status !== 'running' && next.status === 'running') next.started = Date.now()
     if (next.status !== 'running') this.stop(l.id)
-    next.watching = next.status === 'running' && (!!watch || this.watching.has(l.id))
+    next.watching = next.status === 'running' && (!!watch || !!byGlassbox || this.watching.has(l.id))
     this.state.set(l.id, next)
     this.emit(next)
     if (watch && next.status === 'running') this.watch(l.id, watch)

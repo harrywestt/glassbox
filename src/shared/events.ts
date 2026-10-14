@@ -106,6 +106,10 @@ export type SessionEvent =
   | { kind: 'hold-done'; toolUseId: string; allowed: boolean }
   /** The model the session now uses (you picked another). */
   | { kind: 'model'; model: string }
+  /** What the session has cost so far, by model, and the part Glassbox's helpers spent (USD, the SDK's estimate). */
+  | { kind: 'spend'; byModel: Record<string, number>; helpers: Record<string, number> }
+  /** Auto model: on or off, and (once a message has gone) the model it picked for it, and why. */
+  | { kind: 'model-auto'; on: boolean; tier?: 'haiku' | 'sonnet' | 'opus'; model?: string; reason?: string }
   | { kind: 'mcp'; servers: McpServerStatus[] }
   | { kind: 'context'; usage: ContextUsage }
   | { kind: 'git'; info: GitInfo }
@@ -162,6 +166,18 @@ export type UsageSnapshot = {
   projects: { cwd: string; tokens: number; sessions: number }[]
 }
 
+/** Spend from Glassbox's ledger (USD, the SDK's estimates): today, the last 7 days, and 14 days by day. */
+export type SpendSummary = {
+  today: number
+  week: number
+  /** The week's spend on sessions' own work (the rest is helpers). */
+  mainWeek: number
+  days: { date: string; total: number; byModel: Record<string, number> }[]
+  byModel: Record<string, number>
+  byProject: { cwd: string; total: number }[]
+  helpers: Record<string, number>
+}
+
 export type FileEntry = { path: string; isDir: boolean }
 
 export type ServiceConfig = {
@@ -215,7 +231,7 @@ export type GlassboxCommit = { sha: string; message: string; files: string[]; at
 export type ReviewModel = 'haiku' | 'sonnet' | 'opus'
 
 /** An issue raised about the code: by Claude in a review session, or by the background reviewer. */
-export type Finding = { id: string; source: 'claude' | 'reviewer'; severity: FindingSeverity; title: string; detail?: string; file?: string; line?: number; suggestion?: string; at: number }
+export type Finding = { id: string; source: 'claude' | 'reviewer' | 'ux'; severity: FindingSeverity; title: string; detail?: string; file?: string; line?: number; suggestion?: string; at: number; /** The UX reviewer's: the screenshot it's about, and the page. */ image?: string; page?: string }
 
 export type CheckIn = { id: string; confidence: 'low' | 'medium'; about: string; reason: string; options?: string[]; at: number }
 
@@ -316,8 +332,10 @@ export type Automation = {
   micWarm: boolean
   /** When an edit waits for you before it lands: only when you press Hold, every edit, or edits to files the plan doesn't name. */
   holdEdits: HoldPolicy
+  /** New sessions pick the model for each message (Opus, Sonnet or Haiku) rather than using one for everything. */
+  autoModel: boolean
 }
 
 export type HoldPolicy = 'ask' | 'all' | 'offplan'
 
-export const AUTOMATION_DEFAULTS: Automation = { quickAnswers: true, watchdog: true, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask' }
+export const AUTOMATION_DEFAULTS: Automation = { quickAnswers: true, watchdog: true, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask', autoModel: true }

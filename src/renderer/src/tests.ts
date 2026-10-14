@@ -85,21 +85,50 @@ function commandHead(cmd: string): string {
   return cmd.replace(/<<-?\s*['"]?(\w+)['"]?[\s\S]*?\n\s*\1\b/g, '<<heredoc').replace(/(["'])(?:(?!\1)[\s\S]){60,}?\1/g, '""')
 }
 
-export const isTestCall = (c: ToolCall) => SHELL.has(c.name) && TEST_COMMAND.test(commandHead(String(c.input.command ?? '')))
+/** Whether a step ran the tests, worked out once per step (asked of every step on every update). */
+const testCalls = new WeakMap<ToolCall, boolean>()
+export const isTestCall = (c: ToolCall) => {
+  let t = testCalls.get(c)
+  if (t === undefined) testCalls.set(c, (t = SHELL.has(c.name) && TEST_COMMAND.test(commandHead(String(c.input.command ?? '')))))
+  return t
+}
 
-/** Every test run in the session, oldest first, each with the edits made since the one before. */
-export function testRuns(s: SessionState): TestRun[] {
-  const calls = Object.values(s.toolCalls)
-    .filter((c) => c.status !== 'running' && isTestCall(c))
-    .sort((a, b) => a.at - b.at)
-  const edits = s.files.filter((f) => CHANGE_TOOLS.has(f.tool) && !isClaudeOwnFile(f.path) && s.toolCalls[f.toolId]?.status !== 'error')
-  const runs: TestRun[] = []
-  let prevAt = 0
-  for (const c of calls) {
+/** A run's counts and failing tests, read from its output once (a long session re-asks for every run on every step). */
+const parsedRuns = new WeakMap<ToolCall, { n: ReturnType<typeof counts>; failures: string[] }>()
+function parsed(c: ToolCall) {
+  let p = parsedRuns.get(c)
+  if (!p) {
     const out = c.result ?? ''
     const n = counts(out)
     // When the last run in the output passed, earlier failures in the same command were fixed.
-    const failures = n && n.failed === 0 ? [] : failureNames(out)
+    p = { n, failures: n && n.failed === 0 ? [] : failureNames(out) }
+    parsedRuns.set(c, p)
+  }
+  return p
+}
+
+/** Every test run in the session, oldest first, each with the edits made since the one before. */
+/** The runs, worked out once per change to the steps or files, however many panels ask. */
+const runsCache = new WeakMap<SessionState['toolCalls'], { files: SessionState['files']; runs: TestRun[] }>()
+export function testRuns(s: SessionState): TestRun[] {
+  const hit = runsCache.get(s.toolCalls)
+  if (hit && hit.files === s.files) return hit.runs
+  const runs = computeRuns(s)
+  runsCache.set(s.toolCalls, { files: s.files, runs })
+  return runs
+}
+
+function computeRuns(s: SessionState): TestRun[] {
+  const calls = Object.values(s.toolCalls)
+    .filter((c) => c.status !== 'running' && isTestCall(c))
+    .sort((a, b) => a.at - b.at)
+  const edits = s.files.filter((f) => CHANGE_TOOLS.has(f.tool) && !isClaudeOwnFile(f.path) && s.toolCalls[f.toolId]?.status !== 'error').sort((a, b) => a.at - b.at)
+  const runs: TestRun[] = []
+  let prevAt = 0
+  let e = 0
+  for (const c of calls) {
+    const { n, failures } = parsed(c)
+    const out = c.result ?? ''
     const failed = n?.failed ?? (c.status === 'error' ? Math.max(1, failures.length) : failures.length)
     const passed = n?.passed ?? 0
     // A run with no recognisable summary that errored still counts as red.
@@ -107,7 +136,11 @@ export function testRuns(s: SessionState): TestRun[] {
       prevAt = c.at
       continue
     }
-    const since = [...new Set(edits.filter((e) => e.at > prevAt && e.at < c.at).map((e) => e.path))]
+    // The edits between the previous run and this one (both lists are in time order: one pass).
+    const between = new Set<string>()
+    while (e < edits.length && edits[e].at <= prevAt) e++
+    for (let k = e; k < edits.length && edits[k].at < c.at; k++) between.add(edits[k].path)
+    const since = [...between]
     runs.push({ toolId: c.id, at: c.at, command: String(c.input.command ?? ''), passed, failed, skipped: n?.skipped ?? 0, failures, ok: failed === 0 && c.status !== 'error', editsSince: since })
     prevAt = c.at
   }

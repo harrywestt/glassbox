@@ -25,10 +25,14 @@ export function ModelPicker() {
   // Before the first message the session hasn't said its model: show what the default is.
   const fallback = models.find((m) => m.value === 'default')
   const shown = current ?? (!s.model ? fallback : undefined)
-  const name = current?.displayName ?? (s.model ? s.model.replace(/^claude-/, '').replace(/\[1m\]/i, ' (1M)') : fallback ? fallback.description.split(' · ')[0] || fallback.displayName : tr('modelPicker.default'))
+  const modelName = current?.displayName ?? (s.model ? s.model.replace(/^claude-/, '').replace(/\[1m\]/i, ' (1M)') : fallback ? fallback.description.split(' · ')[0] || fallback.displayName : tr('modelPicker.default'))
+  const auto = s.autoModel?.on
+  const tierName = s.autoModel?.tier ? tr(`modelPicker.tier.${s.autoModel.tier}`) : null
+  const name = auto ? (tierName ? tr('modelPicker.autoWith', { model: tierName }) : tr('modelPicker.auto')) : modelName
+  const title = auto ? (s.autoModel?.reason && tierName ? tr('modelPicker.autoTitleWhy', { model: tierName, reason: s.autoModel.reason }) : tr('modelPicker.autoTitle')) : tr('modelPicker.title', { model: name })
   const pick = async (value: string) => {
     setOpen(false)
-    if (value === shown?.value) return
+    if (value === 'auto' ? auto : !auto && value === shown?.value) return
     setBusy(value)
     try {
       await window.glassbox.session.setModel(tab.id, value)
@@ -38,7 +42,7 @@ export function ModelPicker() {
   }
   return (
     <div className="model-picker">
-      <button className={open ? 'chip-btn on' : 'chip-btn'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={tr('modelPicker.title', { model: name })}>
+      <button className={open ? 'chip-btn on' : 'chip-btn'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={title}>
         <Icon name={busy ? 'loading' : 'sparkle'} className={busy ? 'codicon-modifier-spin' : undefined} /> {name} <Icon name="chevron-up" />
       </button>
       {open && (
@@ -46,11 +50,18 @@ export function ModelPicker() {
           <div className="menu-scrim" onMouseDown={() => setOpen(false)} />
           <div className="menu model-menu" role="menu">
             <div className="menu-heading">{tr('modelPicker.heading')}</div>
+            <button role="menuitemradio" aria-checked={!!auto} className={auto ? 'menu-item current' : 'menu-item'} onClick={() => void pick('auto')}>
+              <span className="model-menu-label">
+                {tr('modelPicker.auto')}
+                {auto && <Icon name="check" />}
+              </span>
+              <span className="model-menu-note">{tr('modelPicker.autoNote')}</span>
+            </button>
             {models.map((m) => (
-              <button key={m.value} role="menuitemradio" aria-checked={m === shown} className={m === shown ? 'menu-item current' : 'menu-item'} onClick={() => void pick(m.value)}>
+              <button key={m.value} role="menuitemradio" aria-checked={!auto && m === shown} className={!auto && m === shown ? 'menu-item current' : 'menu-item'} onClick={() => void pick(m.value)}>
                 <span className="model-menu-label">
                   {m.displayName}
-                  {m === shown && <Icon name="check" />}
+                  {!auto && m === shown && <Icon name="check" />}
                 </span>
                 {m.description && <span className="model-menu-note">{m.description}</span>}
               </button>

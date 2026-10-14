@@ -220,7 +220,9 @@
     "micWarm": "Keep the microphone ready",
     "micWarmNote": "Leave it open for two minutes after you speak, so the next hold starts at once.",
     "holdEdits": "Edits wait for you",
-    "holdEditsNote": "Before an edit reaches the file, Live shows it and waits for you to let it land."
+    "holdEditsNote": "Before an edit reaches the file, Live shows it and waits for you to let it land.",
+    "autoModel": "Pick the model for each message",
+    "autoModelNote": "New sessions start on Auto: Opus writes the code and does the planning, debugging and reviews; Sonnet answers questions, runs tests, builds and QA; Haiku handles quick replies and git chores; agents Claude starts use Sonnet unless they write code. Change it per session from the model menu."
   },
   "awayDigest": {
     "title": "While you were away",
@@ -307,7 +309,12 @@
     "openExternal": "Open in your browser",
     "didntLoad": "The page didn’t load",
     "loadFailed": "{reason} ({url})",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "size": "Page width",
+    "sizeDesktop": "Desktop",
+    "sizeTablet": "Tablet ({width}px)",
+    "sizePhone": "Phone ({width}px)",
+    "sizeCustom": "{width}px"
   },
   "changesPanel": {
     "statusAdded": "Added",
@@ -369,7 +376,9 @@
     "showMore_other": "Show {count} more files",
     "title": "Changes",
     "showArchitecture": "Show how the change affects the architecture",
-    "hideArchitecture": "Hide the architecture changes"
+    "hideArchitecture": "Hide the architecture changes",
+    "onBranchVs": "On this branch, compared with {base}",
+    "onBranch": "On this branch"
   },
   "code": {
     "commentOnSelectionTip": "Select lines in the file, then comment on them",
@@ -1504,7 +1513,17 @@
     "default": "Default model",
     "title": "This session uses {model}. Click to switch.",
     "heading": "Model for this session",
-    "foot": "Applies from your next message."
+    "foot": "Applies from your next message.",
+    "auto": "Auto",
+    "autoWith": "Auto · {model}",
+    "autoNote": "Picks for each message: Opus writes the code and does the planning, debugging and reviews; Sonnet answers questions, runs tests and checks things; Haiku handles quick replies and git chores. Uses far fewer tokens.",
+    "autoTitle": "Auto: the model is picked for each message",
+    "autoTitleWhy": "Auto picked {model} for your last message: {reason}",
+    "tier": {
+      "haiku": "Haiku",
+      "sonnet": "Sonnet",
+      "opus": "Opus"
+    }
   },
   "money": {
     "noRate": "{original} (no GBP exchange rate available yet)",
@@ -1585,7 +1604,12 @@
     "qaUrlPlaceholder": "https://qa.example.com",
     "qaNotes": "Notes (optional)",
     "qaNotesPlaceholder": "Test accounts to use, data that already exists, things to leave alone",
-    "qaHint": "Claude writes a test plan for you to approve first, asks you to sign in in the Browser if it needs to, and asks before anything it can’t undo. It can’t change the project’s code."
+    "qaHint": "Claude writes a test plan for you to approve first, asks you to sign in in the Browser if it needs to, and asks before anything it can’t undo. It can’t change the project’s code.",
+    "qaDepth": "How thorough",
+    "qaQuick": "Quick",
+    "qaDeep": "Deep",
+    "qaQuickHint": "Checks each case works.",
+    "qaDeepHint": "Also screenshots every screen and state; a second agent reviews them for bad UX, inconsistencies and AI slop while the testing carries on."
   },
   "panZoom": {
     "zoomOut": "Zoom out (-)",
@@ -2160,7 +2184,15 @@
     },
     "criteriaTitle": "Acceptance criteria",
     "criteriaTested": "{tested} of {total} tested",
-    "untested": "{count} marked done without a test proving it"
+    "untested": "{count} marked done without a test proving it",
+    "sourceUx": "UX review",
+    "openScreenshot": "Open the screenshot",
+    "screenshotAlt": "Screenshot for: {title}",
+    "uxTitle_one": "UX review: {count} finding",
+    "uxTitle_other": "UX review: {count} findings",
+    "askAll": "Ask Claude about these",
+    "uxExcerpt_one": "UX review: {count} finding",
+    "uxExcerpt_other": "UX review: {count} findings"
   },
   "skillsPanel": {
     "title": "Skills and commands",
@@ -2738,5 +2770,90 @@
     "commentNote": "What about it?",
     "send": "Send to Claude",
     "cancel": "Cancel (Esc)"
+  },
+  "mainUx": {
+    "label": "UX review of screenshots",
+    "progress": "{reviewed} reviewed, {pending} to go",
+    "retrying": "The review hit a problem; trying again shortly",
+    "done_one": "{count} screenshot reviewed",
+    "done_other": "{count} screenshots reviewed"
+  },
+  "browserCapture": {
+    "screenshot": "Take a screenshot",
+    "visible": "What shows",
+    "wholePage": "The whole page",
+    "record": "Record a video of this tab",
+    "stop": "Stop",
+    "stopTip": "Stop recording and save the video",
+    "nothingRecorded": "Nothing was recorded.",
+    "savedShot": "Screenshot saved",
+    "savedVideo": "Recording saved",
+    "attach": "Attach to message",
+    "copy": "Copy",
+    "showInFolder": "Show in folder",
+    "dismiss": "Dismiss"
+  },
+  "sourceControl": {
+    "message": "Message (Ctrl+Enter to commit)",
+    "messageOn": "Message (Ctrl+Enter to commit on \"{branch}\")",
+    "messageLabel": "Commit message",
+    "commit": "Commit",
+    "commitAll": "Commit all",
+    "commitStagedTip": "Commit the staged changes",
+    "commitAllTip": "Nothing is staged: stage every change and commit it",
+    "push_one": "Push {count} commit",
+    "push_other": "Push {count} commits",
+    "clean": "No changes in the working copy.",
+    "staged": "Staged Changes",
+    "changes": "Changes",
+    "stage": "Stage changes",
+    "stageAll": "Stage all changes",
+    "unstage": "Unstage changes",
+    "unstageAll": "Unstage all changes",
+    "discard": "Discard changes",
+    "delete": "Delete this new file",
+    "discardAll": "Discard all changes",
+    "openFile": "Open file",
+    "claudeChanged": "Claude changed this file in this session",
+    "conflict": "Conflict",
+    "confirmDiscardOne": "Discard your changes to {file}? This can’t be undone.",
+    "confirmDeleteOne": "Delete {file}? It’s a new file, so this can’t be undone.",
+    "confirmDiscardMany": "Discard all changes to {count} files? New files are deleted. This can’t be undone."
+  },
+  "browserLogs": {
+    "title": "Console and network",
+    "problemsTip_one": "The page reported {count} problem since it loaded",
+    "problemsTip_other": "The page reported {count} problems since it loaded",
+    "noneTip": "Console and network: no problems since the page loaded",
+    "showCalls": "Show API calls",
+    "ask": "Ask Claude about these",
+    "askText": "The page in the Browser reported these problems:\n{lines}\nWhat’s causing them?",
+    "clear": "Clear",
+    "nothing": "Nothing logged since the page loaded.",
+    "noProblems": "No errors or warnings since the page loaded.",
+    "failed": "Failed",
+    "level": {
+      "error": "Error",
+      "warning": "Warning",
+      "info": "Info",
+      "log": "Log",
+      "debug": "Debug"
+    }
+  },
+  "spend": {
+    "title": "Spend",
+    "cardTip": "What Claude cost in Glassbox, as Claude Code estimates it (API prices, converted to pounds), by model and project. Includes Glassbox’s helpers.",
+    "today": "Today",
+    "week": "Last 7 days",
+    "byModel": "By model",
+    "other": "Other",
+    "nothingYet": "Nothing spent yet.",
+    "helpers": "Helpers: {amount} ({percent}% of it)",
+    "helper": {
+      "quick": "quick answers",
+      "review": "code review",
+      "ux": "UX review",
+      "side": "side tasks"
+    }
   }
 }

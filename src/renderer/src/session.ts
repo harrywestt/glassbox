@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { createContext, useContext, useMemo, useRef } from 'react'
 import type { SDKMessage, SDKRateLimitInfo } from '@anthropic-ai/claude-agent-sdk'
 import { type UserQuestion,
   emptyRequirements,
@@ -233,6 +233,10 @@ export interface SessionState {
   status: SessionStatus
   sessionId?: string
   model?: string
+  /** What the session has cost, by model, and the helpers' part (USD). */
+  spend?: { byModel: Record<string, number>; helpers: Record<string, number> }
+  /** Auto model: whether it's on, and what it picked for the last message (and why). */
+  autoModel?: { on: boolean; tier?: 'haiku' | 'sonnet' | 'opus'; model?: string; reason?: string }
   /** The models this account can use, for the model picker. */
   models?: { value: string; resolvedModel?: string; displayName: string; description: string }[]
   mode: string
@@ -411,6 +415,39 @@ export function useSettledSession(s: SessionState): SessionState {
   return useMemo(() => s, [s.files, s.toolCalls, s.agents, s.status, s.permissions, s.userQuestions, s.checkins, s.decisions, s.requirements, s.task, s.todos, s.agentTodos, s.todosAt, s.backgroundTasks, s.planMap, s.plan, s.held, s.git, s.open])
 }
 
+/** What changes as Claude's words and edits stream in, many times a second. */
+const STREAMING = new Set(['drafts', 'writing', 'writingNow'])
+
+/** True when two states differ only in what's streaming in (or not at all). */
+export function sameApartFromStreaming(a: SessionState, b: SessionState): boolean {
+  if (a === b) return true
+  // A reply or thinking starting or ending is a change (labels say "Writing"); only its words aren't.
+  const da = Object.entries(a.drafts), db = b.drafts
+  if (da.length !== Object.keys(db).length || da.some(([k, d]) => db[k]?.kind !== d.kind)) return false
+  for (const k of Object.keys(b) as (keyof SessionState)[]) if (!STREAMING.has(k) && a[k] !== b[k]) return false
+  for (const k of Object.keys(a) as (keyof SessionState)[]) if (!STREAMING.has(k) && !(k in b)) return false
+  return true
+}
+
+/**
+ * The session for everything that doesn't show text as it streams: the same object until something
+ * other than the streaming text changes, so a reply coming in word by word doesn't redraw the side
+ * panels, the conversation's earlier steps or the header for every word. (What's streaming, read
+ * from this, is as of the last real change; the live text comes from useDrafts.)
+ */
+export function useStableSession(s: SessionState): SessionState {
+  const ref = useRef(s)
+  if (ref.current !== s && !sameApartFromStreaming(ref.current, s)) ref.current = s
+  return ref.current
+}
+
+/**
+ * The session as it is this moment, text streaming in included: for the few things that show it
+ * (the reply being written, Live). Everything else reads the stable session from useSession.
+ */
+export const LiveSessionContext = createContext<SessionState | null>(null)
+export const useLiveSession = (fallback: SessionState): SessionState => useContext(LiveSessionContext) ?? fallback
+
 /** Claude can't carry on until you answer: a question, a permission, a check-in or an edit you held. */
 export function blockedOnYou(s: SessionState): boolean {
   return !!(s.permissions.length || s.userQuestions?.length || s.checkins.some((c) => c.answer === undefined) || Object.keys(s.held ?? {}).length)
@@ -505,6 +542,10 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       return { ...state, commands: event.commands, models: event.models }
     case 'model':
       return { ...state, model: event.model }
+    case 'spend':
+      return { ...state, spend: { byModel: event.byModel, helpers: event.helpers } }
+    case 'model-auto':
+      return { ...state, autoModel: { on: event.on, tier: event.tier ?? (event.on ? state.autoModel?.tier : undefined), model: event.model ?? (event.on ? state.autoModel?.model : undefined), reason: event.reason }, ...(event.model ? { model: event.model } : {}) }
     case 'held':
       return { ...state, held: { ...state.held, [event.toolUseId]: Date.now() } }
     case 'hold-done': {

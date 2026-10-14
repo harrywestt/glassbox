@@ -8,6 +8,9 @@ import { CHANGE_TOOLS } from '../session'
 import { Icon, IconButton, Toggle } from '../components/ui'
 import { Select } from '../components/Select'
 import { tr } from '../../../shared/i18n'
+import { BrowserCapture } from './BrowserCapture'
+import { BrowserLogs } from './BrowserLogs'
+import { VIEWPORTS } from '../browser'
 import { activateBrowserTab, closeBrowserTab, openInBrowser, updateBrowserTab, useBrowser, type BrowserTabState } from '../browser'
 
 const RELOAD_DELAY_MS = 1500
@@ -115,6 +118,20 @@ function AddressBar({ t, web, follow, setFollow }: { t: BrowserTabState; web: { 
       <label className="live-follow" title={tr('browserTab.reloadAfterEditsTip')}>
         {tr('browserTab.reloadAfterEdits')} <Toggle checked={follow} onChange={setFollow} />
       </label>
+      <Select
+        className="browser-size"
+        value={String(t.width ?? 0)}
+        onChange={(v) => updateBrowserTab(tab.id, t.id, { width: Number(v) || undefined })}
+        aria-label={tr('browserTab.size')}
+        options={[
+          { value: '0', label: tr('browserTab.sizeDesktop') },
+          { value: String(VIEWPORTS.tablet), label: tr('browserTab.sizeTablet', { width: VIEWPORTS.tablet }) },
+          { value: String(VIEWPORTS.phone), label: tr('browserTab.sizePhone', { width: VIEWPORTS.phone }) },
+          ...(t.width && !Object.values(VIEWPORTS).includes(t.width as never) ? [{ value: String(t.width), label: tr('browserTab.sizeCustom', { width: t.width }) }] : [])
+        ]}
+      />
+      <BrowserLogs wcId={t.wcId} />
+      <BrowserCapture wcId={t.wcId} />
       <IconButton icon="link-external" title={tr('browserTab.openExternal')} onClick={() => void window.glassbox.openExternal(t.url)} />
     </div>
   )
@@ -173,7 +190,7 @@ function Page({ t, visible, follow, edits }: { t: BrowserTabState; visible: bool
   }, [edits, follow])
 
   return (
-    <div className={visible ? 'browser-page' : 'browser-page hidden'} inert={!visible}>
+    <div className={`${visible ? 'browser-page' : 'browser-page hidden'}${t.width ? ' sized' : ''}`} inert={!visible} style={t.width ? ({ '--page-width': `${t.width}px` } as React.CSSProperties) : undefined}>
       <webview ref={ref} data-browser-tab={`${tab.id}:${t.id}`} className="preview-frame" src={src} partition="persist:preview" allowpopups={true} />
       {failed && visible && (
         <div className="preview-failed">

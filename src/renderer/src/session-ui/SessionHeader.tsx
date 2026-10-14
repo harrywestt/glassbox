@@ -10,8 +10,9 @@ import { AccessToggle, loadAccess } from './AccessToggle'
 import { money, useFx } from '../money'
 import { ticketKeyFromBranch } from '../../../shared/ticket'
 import { setPinned, usePinned } from '../pins'
-import { tabTitle } from '../tabs'
+import { hostKind, tabTitle } from '../tabs'
 import { tr } from '../../../shared/i18n'
+import { HelperLine, SpendBreakdown } from '../components/Spend'
 
 export function SessionHeader({ active }: { active: boolean }) {
   const { tab, s, actions, showPanel, everyday } = useSession()
@@ -88,7 +89,8 @@ function Usage() {
   const { tab, s } = useSession()
   const [open, setOpen] = useState(false)
   const fx = useFx()
-  const cost = money(s.usage.costUsd, 'USD', fx)
+  // Everything the session has cost (agents and Glassbox's helpers too), where that's been tracked; the main loop's own total otherwise.
+  const cost = money(Math.max(s.usage.costUsd, Object.values(s.spend?.byModel ?? {}).reduce((a, b) => a + b, 0)), 'USD', fx)
   const ctx = s.context
   const max = ctx?.maxTokens ?? 1_000_000
   const used = ctx?.totalTokens ?? s.usage.contextTokens
@@ -123,6 +125,13 @@ function Usage() {
               <dt>{tr('sessionHeader.cost')}</dt>
               <dd className="num" title={cost.title}>{cost.text}</dd>
             </dl>
+            {s.spend && Object.keys(s.spend.byModel).length > 0 && (
+              <div className="usage-spend">
+                <div className="usage-spend-title">{tr('spend.byModel')}</div>
+                <SpendBreakdown byModel={s.spend.byModel} compact />
+                <HelperLine helpers={s.spend.helpers} total={Object.values(s.spend.byModel).reduce((a, b) => a + b, 0)} />
+              </div>
+            )}
             <button className="btn quiet" onClick={() => void window.glassbox.session.refresh(tab.id)} disabled={s.status === 'new' || s.status === 'stopped'}>
               <Icon name="refresh" /> {tr('sessionHeader.refresh')}
             </button>
@@ -148,7 +157,7 @@ function StatusPill() {
   const busy = s.busySince ? Math.round((now - s.busySince) / 1000) : 0
   if (s.status === 'stopped')
     return (
-      <button className="status-btn" title={tr('sessionHeader.restartTitle')} onClick={() => void window.glassbox.session.open(tab.id, tab.cwd, s.sessionId ?? tab.resumeId, loadAccess(), tab.kind)}>
+      <button className="status-btn" title={tr('sessionHeader.restartTitle')} onClick={() => void window.glassbox.session.open(tab.id, tab.cwd, s.sessionId ?? tab.resumeId, loadAccess(), hostKind(tab))}>
         <span className="tally-lamp tally-err" aria-hidden /> {tr('sessionHeader.stoppedRestart')}
       </button>
     )

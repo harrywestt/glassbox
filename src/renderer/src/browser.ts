@@ -6,7 +6,11 @@ import { useEffect, useState } from 'react'
  * Every tab shares one saved profile, so sign-ins and cookies carry across tabs and restarts.
  */
 
-export type BrowserTabState = { id: string; url: string; title?: string; icon?: string; loading?: boolean; /** The page's webContents id once it's attached (what Claude's tools drive). */ wcId?: number }
+export type BrowserTabState = { id: string; url: string; title?: string; icon?: string; loading?: boolean; /** The page's webContents id once it's attached (what Claude's tools drive). */ wcId?: number; /** Width the page is shown at, to see it as a phone or tablet would (unset: the full view). */ width?: number }
+
+/** The sizes to try a page at. */
+export const VIEWPORTS = { desktop: 0, tablet: 820, phone: 390 } as const
+export type Viewport = keyof typeof VIEWPORTS
 type State = { tabs: BrowserTabState[]; active: string | null }
 
 const states = new Map<string, State>()

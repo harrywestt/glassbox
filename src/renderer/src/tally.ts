@@ -51,6 +51,17 @@ const VERBS: Record<string, (input: Record<string, unknown>) => string> = {
 }
 const file = (i: Record<string, unknown>) => baseName(String(i.file_path ?? i.notebook_path ?? i.path ?? tr('tally.aFile')))
 
+/** The newest step still running, worked out once per change to the steps (a long session has thousands). */
+const running = new WeakMap<SessionState['toolCalls'], SessionState['toolCalls'][string] | null>()
+function latestRunning(calls: SessionState['toolCalls']) {
+  if (!running.has(calls)) {
+    let best: SessionState['toolCalls'][string] | null = null
+    for (const c of Object.values(calls)) if (c.status === 'running' && (!best || c.at > best.at)) best = c
+    running.set(calls, best)
+  }
+  return running.get(calls) ?? undefined
+}
+
 /** What the session is doing right now, in a few words, for the label under its monitor. */
 export function liveVerb(s: SessionState | undefined): string {
   // A restored tab's session starts the first time you open it.
@@ -73,7 +84,7 @@ export function liveVerb(s: SessionState | undefined): string {
       return s.timeline.some((i) => i.kind === 'result') ? tr('tally.done') : tr('tally.ready')
     }
   }
-  const running = Object.values(s.toolCalls).filter((c) => c.status === 'running').sort((a, b) => b.at - a.at)[0]
+  const running = latestRunning(s.toolCalls)
   if (running) {
     const name = running.name.startsWith('mcp__') ? running.name.split('__').pop()!.replace(/_/g, ' ') : running.name
     return VERBS[running.name]?.(running.input) ?? tr('tally.using', { name })

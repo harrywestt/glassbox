@@ -1578,7 +1578,38 @@ button.agent-run:hover:not(:disabled) { background: none; text-decoration: under
 .browser-tab:hover .browser-tab-close, .browser-tab.active .browser-tab-close { opacity: 1; }
 .browser-page { position: absolute; inset: 0; display: flex; }
 .browser-page.hidden { opacity: 0; pointer-events: none; }
+/* A page shown at a phone or tablet width: that width, centred, on a quiet backdrop. */
+.browser-page.sized { justify-content: center; background: var(--surface2); }
+.browser-page.sized > webview { flex: none; width: min(var(--page-width), 100%); box-shadow: 0 0 0 1px var(--border); }
+.browser-size { flex: none; }
+/* What the page reported (console, requests): a count in the bar, the list behind it. */
+.browser-logs { position: relative; display: inline-flex; flex: none; }
+.browser-logs-btn { gap: 4px; padding: 0 var(--s-2); color: var(--muted); }
+.browser-logs-btn.has-errors { color: var(--err); }
+.browser-logs-btn.has-warnings { color: var(--warn); }
+.browser-logs-pop { position: absolute; top: calc(100% + var(--s-1)); right: 0; z-index: 40; width: min(640px, 80vw); max-height: 60vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.browser-logs-head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--border); font-size: 13px; }
+.browser-logs-empty { padding: var(--s-3); }
+.browser-logs-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.browser-log { display: flex; align-items: baseline; gap: var(--s-2); padding: 4px var(--s-3); font-size: 12px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.browser-log-time { flex: none; color: var(--subtle); }
+.browser-log-kind { flex: none; width: 52px; font-weight: 600; color: var(--muted); }
+.browser-log-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.browser-log.error .browser-log-text { white-space: normal; overflow-wrap: anywhere; }
+.browser-log-ms { flex: none; color: var(--subtle); }
 .browser .preview-stage { position: relative; flex: 1; min-height: 0; }
+/* Capture: a screenshot or a video of the tab, and a note about what was saved under the bar. */
+.preview-bar-wide { position: relative; }
+.browser-capture { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.browser-capture-shot { position: relative; display: inline-flex; }
+.menu.capture-menu { left: auto; right: 0; width: 180px; }
+.menu.capture-menu .menu-item { gap: var(--s-2); }
+.capture-stop { gap: var(--s-1); font-variant-numeric: tabular-nums; }
+.capture-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tally-live); animation: on-air 2.4s ease-in-out infinite; }
+.capture-note { position: absolute; top: calc(100% + var(--s-2)); right: var(--s-3); z-index: 30; display: flex; align-items: center; gap: var(--s-2); max-width: min(520px, calc(100% - 2 * var(--s-3))); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3); background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); font-size: 13px; animation: pop-in .14s var(--ease); }
+.capture-note > .codicon { color: var(--muted); }
+.capture-thumb { width: 44px; height: 30px; object-fit: cover; object-position: top; border-radius: var(--r-sm); border: 1px solid var(--border); flex: none; }
+@media (prefers-reduced-motion: reduce) { .capture-dot, .capture-note { animation: none; } }
 /* Buttons sitting straight in the tab strip (full screen) centre like the + beside them. */
 .work-tabs > .icon-btn { align-self: center; }
 
@@ -1621,6 +1652,79 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .loader-steps > span.now { background: color-mix(in srgb, var(--accent) 45%, transparent); animation: loader-step 1.6s ease-in-out infinite; }
 @keyframes loader-step { 50% { background: color-mix(in srgb, var(--accent) 75%, transparent); } }
 .loader-watching { margin-left: var(--s-2); color: var(--subtle); }
+/* Source Control, as VS Code lays it out: the commit box, then Staged Changes and Changes, a row per
+   file (name, folder, actions on hover, status letter). */
+.scm { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); padding-bottom: var(--s-1); }
+.scm-commit { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); }
+.scm-message { width: 100%; min-height: 32px; resize: vertical; font: 13px/1.45 var(--font); padding: 6px var(--s-2); }
+.scm-commit-btn { width: 100%; justify-content: center; gap: var(--s-1); }
+.scm-error { margin: 0 var(--s-3) var(--s-2); }
+.scm-empty { padding: 0 var(--s-3) var(--s-2); }
+.scm-group-head { display: flex; align-items: center; height: 26px; padding: 0 var(--s-2) 0 var(--s-1); }
+.scm-group-head:hover .scm-actions, .scm-group-head:focus-within .scm-actions { visibility: visible; }
+.scm-group-toggle { all: unset; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); cursor: pointer; }
+.scm-group-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.scm-group.folded .section-chevron { transform: rotate(-90deg); }
+.scm-actions { display: inline-flex; visibility: hidden; }
+.scm-actions .icon-btn, .scm-row-actions .icon-btn { width: 22px; height: 22px; }
+.scm-count { min-width: 18px; height: 18px; padding: 0 5px; margin-left: var(--s-1); border-radius: 9px; background: color-mix(in srgb, var(--fg) 12%, transparent); color: var(--fg); font-size: 11px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.scm-files { display: flex; flex-direction: column; }
+.scm-row { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 var(--s-2) 0 22px; font-size: 13px; cursor: pointer; outline: none; }
+.scm-row:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.scm-row:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.scm-row.selected { background: var(--selection); }
+.scm-icon { flex: none; font-size: 14px; color: var(--muted); }
+.scm-name { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.scm-row.deleted .scm-name { text-decoration: line-through; color: var(--muted); }
+.scm-claude { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.scm-dir { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--subtle); }
+.scm-row-actions { display: none; flex: none; }
+.scm-row:hover .scm-row-actions, .scm-row:focus-within .scm-row-actions { display: inline-flex; }
+.scm-letter { flex: none; width: 14px; text-align: center; font: 600 12px var(--mono); }
+.scm-letter.ok { color: var(--ok); }
+.scm-letter.warn { color: var(--warn); }
+.scm-letter.err { color: var(--err); }
+.scm-letter.info { color: var(--info); }
+
+/* Spend by model: a bar split by model, then a row each (the app's chart colours, fixed order). */
+.spend { display: flex; flex-direction: column; gap: var(--s-2); }
+.spend-bar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; }
+.spend-bar > span { min-width: 3px; }
+.spend-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.spend-rows li { display: flex; align-items: center; gap: var(--s-2); }
+.spend-swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.spend-pct { width: 36px; text-align: right; }
+.spend.compact .spend-rows { font-size: 12px; }
+.spend-helpers { margin-top: var(--s-1); }
+.spend-totals { display: flex; gap: var(--s-6); margin-bottom: var(--s-3); }
+.spend-big { font-size: 20px; font-weight: 600; line-height: 1.2; }
+.spend-days { display: flex; align-items: flex-end; gap: 3px; height: 40px; margin-bottom: var(--s-3); }
+.spend-day { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.spend-day > span { width: 100%; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .7; }
+.spend-day:last-child > span { opacity: 1; }
+.spend-projects { list-style: none; margin: var(--s-3) 0 0; padding: var(--s-2) 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.spend-projects li { display: flex; gap: var(--s-2); }
+.usage-spend { border-top: 1px solid var(--border); margin-top: var(--s-2); padding-top: var(--s-2); }
+.usage-spend-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: var(--s-2); }
+
+/* The UX reviewer's findings on one screenshot: the picture beside a heading, then a row each. */
+.ux-review { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
+.ux-review-head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--border); }
+.ux-review-shot { flex: none; width: 96px; height: 60px; padding: 0; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; background: none; cursor: zoom-in; }
+.ux-review-shot img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.ux-review-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.ux-review-list { list-style: none; margin: 0; padding: 0; }
+.ux-review-list > li + li { border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+.ux-review-row { all: unset; box-sizing: border-box; display: flex; align-items: baseline; gap: var(--s-2); width: 100%; padding: var(--s-2) var(--s-3); font-size: 13px; cursor: pointer; }
+.ux-review-row:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.ux-review-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ux-review-row .codicon { color: var(--subtle); align-self: center; }
+.ux-review-row .sev { width: 44px; }
+.ux-review-detail { padding: 0 var(--s-3) var(--s-3) calc(var(--s-3) + 52px); }
+.ux-review-detail p { margin: 0 0 var(--s-1); }
+/* A UX finding's screenshot, opened full size on click. */
+.finding-shot { display: block; padding: 0; margin: 0 0 var(--s-2); border: 1px solid var(--border); border-radius: var(--r-md); background: none; overflow: hidden; cursor: zoom-in; max-width: 360px; }
+.finding-shot img { display: block; width: 100%; max-height: 200px; object-fit: cover; object-position: top; }
 @media (prefers-reduced-motion: reduce) { .loader-steps > span.now { animation: none; } }
 @keyframes loader-slide { from { left: -30%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .loader-bar.unknown > span { animation: none; left: 0; width: 100%; opacity: .5; } .loader-bar > span { transition: none; } }
