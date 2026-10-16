@@ -6,6 +6,7 @@ import { IconButton } from '../components/ui'
 import { Select, type SelectOption } from '../components/Select'
 import { renderMarkdown, timeAgo } from '../lib'
 import { tr } from '../../../shared/i18n'
+import { getAppearance } from '../appearance'
 
 // A ticket key you set, per project and branch, so it's still there when the session is reopened.
 const overrideKey = (cwd: string, branch?: string) => `glassbox.ticketKey.${cwd.replace(/\\/g, '/').toLowerCase()}#${branch ?? ''}`
@@ -37,7 +38,7 @@ const ago = (iso?: string) => {
   return Number.isNaN(t) ? '' : timeAgo(t)
 }
 
-type Load = { state: 'idle' } | { state: 'loading' } | { state: 'error'; error: string } | { state: 'ready'; ticket: Ticket }
+type Load = { state: 'idle' } | { state: 'unloaded' } | { state: 'loading' } | { state: 'error'; error: string } | { state: 'ready'; ticket: Ticket }
 
 /** The Jira ticket this session targets: from the branch name, or a key you set for this tab. */
 export function TicketPanel() {
@@ -66,16 +67,19 @@ export function TicketPanel() {
   )
 
   const fetchTicket = useCallback(
-    async (k: string, force = false, quiet = false) => {
-      if (!quiet && !seen.has(k)) setLoad({ state: 'loading' })
-      const r = await window.glassbox.ticket.get(tab.cwd, k, force)
+    // Jira answers through a small Claude agent (tokens), so opening the panel shows the saved copy
+    // only; Load and Refresh ask Jira.
+    async (k: string, force = false, quiet = false, cachedOnly = false) => {
+      if (!quiet && !seen.has(k) && !cachedOnly) setLoad({ state: 'loading' })
+      const r = await window.glassbox.ticket.get(tab.cwd, k, force, cachedOnly)
       if (current.current !== k) return
       if (r.ticket) {
         seen.set(k, r.ticket)
         setLoad({ state: 'ready', ticket: r.ticket })
-        // A saved copy: the fresh one is loading in the background, so pick it up when it lands.
-        if (r.stale && !quiet) setTimeout(() => current.current === k && void fetchTicket(k, false, true), 20_000)
-      } else setLoad({ state: 'error', error: r.error })
+        // Kept fresh by itself only when that's turned on (Settings, Automation).
+        if (r.stale && !force && getAppearance().automation.autoTicket) void fetchTicket(k, true, true)
+      } else if ('notLoaded' in r) setLoad({ state: 'unloaded' })
+      else setLoad({ state: 'error', error: r.error! })
     },
     [tab.cwd]
   )
@@ -84,8 +88,10 @@ export function TicketPanel() {
     (force = true) => {
       if (!key) return
       setMoveError(null)
-      void fetchTicket(key, force)
-      void fetchTransitions(key)
+      setTransitions(null)
+      const auto = getAppearance().automation.autoTicket
+      void fetchTicket(key, force, false, !force && !auto)
+      if (auto) void fetchTransitions(key)
     },
     [key, fetchTicket, fetchTransitions]
   )
@@ -155,6 +161,15 @@ export function TicketPanel() {
         </div>
       )}
 
+      {load.state === 'unloaded' && (
+        <div className="ticket-empty">
+          <p className="muted small">{tr('ticketPanel.notLoaded')}</p>
+          <button className="btn primary" onClick={() => refresh(true)}>
+            {tr('ticketPanel.load', { key })}
+          </button>
+        </div>
+      )}
+
       {load.state === 'error' && (
         <div className="ticket-error" role="alert">
           <span>{load.error}</span>
@@ -178,6 +193,7 @@ export function TicketPanel() {
           moving={moving}
           moveError={moveError}
           onMove={move}
+          onLoadStatuses={() => key && void fetchTransitions(key)}
           onCommented={() => void fetchTicket(key, true, true)}
           cwd={tab.cwd}
         />
@@ -218,6 +234,7 @@ function TicketBody({
   moving,
   moveError,
   onMove,
+  onLoadStatuses,
   onCommented,
   cwd
 }: {
@@ -226,6 +243,8 @@ function TicketBody({
   moving: string | null
   moveError: string | null
   onMove: (t: TicketTransition) => void
+  /** The statuses it can move to come from Jira too (tokens), so they're fetched when you go to change it. */
+  onLoadStatuses: () => void
   onCommented: () => void
   cwd: string
 }) {
@@ -241,6 +260,14 @@ function TicketBody({
       <dl className="ticket-meta">
         <dt>{tr('ticketPanel.status')}</dt>
         <dd>
+          {transitions === null && !moving ? (
+            <span className="ticket-status-row">
+              <span>{ticket.status}</span>
+              <button className="link small" onClick={onLoadStatuses}>
+                {tr('ticketPanel.changeStatusLoad')}
+              </button>
+            </span>
+          ) : (
           <Select
             value=""
             options={options}
@@ -252,6 +279,7 @@ function TicketBody({
               if (t) onMove(t)
             }}
           />
+          )}
           {moveError && (
             <span className="ticket-error" role="alert">
               {moveError}

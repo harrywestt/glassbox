@@ -12,7 +12,7 @@ import { query } from './claude'
  */
 
 export type HeatModule = { id: string; name: string; path: string; files: number; reads: number; edits: number; searches: number; top: string[]; context?: boolean }
-export type MapGroups = { groups: { name: string; why?: string; modules: string[] }[]; hidden: string[]; at: number; error?: string }
+export type MapGroups = { groups: { name: string; why?: string; modules: string[] }[]; hidden: string[]; at: number; error?: string; notGrouped?: boolean }
 
 const dir = async () => join((await import('electron')).app.getPath('userData'), 'map-groups')
 const keyOf = (root: string, mods: HeatModule[]) =>
@@ -22,7 +22,8 @@ const keyOf = (root: string, mods: HeatModule[]) =>
     .slice(0, 20)
 const running = new Map<string, Promise<MapGroups>>()
 
-export async function groupSessionMap(root: string, mods: HeatModule[], force = false): Promise<MapGroups> {
+/** `generate` false: only a grouping already made for this activity (grouping is a model call, made when you ask). */
+export async function groupSessionMap(root: string, mods: HeatModule[], force = false, generate = false): Promise<MapGroups> {
   if (!mods.length) return { groups: [], hidden: [], at: Date.now() }
   const key = keyOf(root, mods)
   const file = join(await dir(), key + '.json')
@@ -35,6 +36,7 @@ export async function groupSessionMap(root: string, mods: HeatModule[], force = 
   }
   const inflight = running.get(key)
   if (inflight) return inflight
+  if (!generate) return { groups: [], hidden: [], at: Date.now(), notGrouped: true }
   const job = (async (): Promise<MapGroups> => {
     const ids = new Set(mods.map((m) => m.id))
     const list = mods

@@ -140,12 +140,14 @@ export function ReviewPanel({ compact }: { compact?: boolean } = {}) {
           </Section>
         )}
 
-        {/* Always on hand, whatever has run so far. */}
+        {/* Always on hand in the Review view, whatever has run so far (not in the Changes stack). */}
+        {!compact && (
         <div className="row-actions review-checks">
           <button className="chip-btn" disabled={!canSend} onClick={() => runSide({ kind: 'checks', title: tr('reviewPanel.runChecks'), prompt: "Run this project's tests, lint or typecheck, and build, and report each result with the failures that matter. Don't change any files.", tools: [...READ_TOOLS, ...SHELL_TOOLS] })}>
             <Icon name="play" /> {tr('reviewPanel.runChecks')}
           </button>
         </div>
+        )}
       </div>
     </div>
   )

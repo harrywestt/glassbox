@@ -5,6 +5,7 @@ import { basename, dirname, join, posix } from 'node:path'
 import { gitListFiles } from './git'
 import { listProjectFiles } from './files'
 import { organise } from './mapLayout'
+import { automation } from './automation'
 import { clientCalls, matchCalls, serverRoutes, type ClientCall, type ServerRoute } from './httpRoutes'
 import { ARCH_VERSION, LAYER_ORDER, moduleOf, type ArchEdge, type ArchLink, type ArchLayer, type ArchModule, type ArchRole, type Architecture } from '../shared/architecture'
 
@@ -704,13 +705,13 @@ async function rootOf(cwd: string) {
   return slashed((await gitRoot(cwd)) ?? slashed(cwd || ''))
 }
 
-function rebuild(root: string): Promise<Architecture> {
+function rebuild(root: string, generate = false): Promise<Architecture> {
   const key = root.toLowerCase()
   const running = building.get(key)
-  if (running) return running
+  if (running && !generate) return running
   const p = (async () => {
     // Categories named by Claude for this project (once, in the background), over the detected map.
-    const arch = await organise(await build(root), () => void rebuild(root).then(() => onChanged(root)))
+    const arch = await organise(await build(root), () => void rebuild(root).then(() => onChanged(root)), generate || automation().autoMap)
     // While Claude is still naming the categories, keep the detected map in memory only; the
     // named one replaces it (and is saved) when it lands.
     cache.set(key, arch)
@@ -719,6 +720,14 @@ function rebuild(root: string): Promise<Architecture> {
   })().finally(() => building.delete(key))
   building.set(key, p)
   return p
+}
+
+/** You asked Claude to name the map's categories: it runs in the background and the map refreshes when they land. */
+export async function nameArchitecture(cwd: string): Promise<void> {
+  const root = await rootOf(cwd)
+  const arch = await rebuild(root, true)
+  onChanged(root)
+  void arch
 }
 
 export async function getArchitecture(cwd: string, force?: boolean): Promise<Architecture> {

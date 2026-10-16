@@ -54,6 +54,7 @@ import { MapTab } from '../work/MapTab'
 import { RippleTab } from '../work/RippleTab'
 import { FlowTab } from '../work/FlowTab'
 import { tr } from '../../../shared/i18n'
+import { loadEffort } from '../session-ui/ModelPicker'
 
 /** Places a component can ask to show. Each maps to a side tab, or to a work-area tab. */
 export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' | 'decisions' | 'guardrails' | 'services' | 'explorer' | 'context' | 'changes' | 'agents' | 'diagrams' | 'sketches' | 'connectors' | 'skills' | 'showcase' | 'raw' | 'git' | 'preview' | 'ticket' | 'live' | 'ripple' | 'flows'
@@ -538,6 +539,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
     void window.glassbox.session.setRequirements(tab.id, reqRef.current)
     void window.glassbox.session.setGuardrails(tab.id, guardrails)
     void window.glassbox.session.setAutoCommit(tab.id, loadAutoCommit())
+    void window.glassbox.session.setEffort(tab.id, loadEffort())
   }, [ready, tab.id, guardrails])
 
   // Questions block progress until you answer, so they pull focus.
@@ -885,7 +887,7 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
       // The pull request, then the files, then what the review found in them, then the branch's commits.
       return (
         <PanelActionsContext.Provider value="stacked">
-          <div className="panel stack">
+          <div className="panel stack changes-stack">
             {s.git?.isRepo && <PrCard />}
             {/* As VS Code's Source Control: commit, staged changes, changes. Then the whole branch against main, folded away. */}
             {s.git?.isRepo && <SourceControl />}
@@ -1128,10 +1130,10 @@ function SharedFolderBanner() {
     }
   }
   return (
-    <div className="shared-strip" role="status" title={tr('sessionView.sharedNote')}>
-      <span className="shared-word">{tr('sessionView.sharedWord')}</span>
-      <span className="ellipsis shared-text">
-        {withNames} <span className="muted">{error ?? tr('sessionView.sharedShort')}</span>
+    <div className={error ? 'shared-strip failed' : 'shared-strip'} role="status">
+      <Icon name="warning" className="shared-icon" />
+      <span className="ellipsis shared-text" title={tr('sessionView.sharedNote')}>
+        <span className="shared-who">{withNames}</span> <span className="muted">{error ?? tr('sessionView.sharedShort')}</span>
       </span>
       <span className="grow" />
       {fresh &&
@@ -1149,15 +1151,15 @@ function SharedFolderBanner() {
               aria-label={tr('sessionView.branchForCopy')}
               title={tr('sessionView.branchForCopy')}
             />
-            <button className="btn primary" disabled={busy || !name.trim()} onClick={() => void makeCopy()}>
+            <button className="btn primary shared-btn" disabled={busy || !name.trim()} onClick={() => void makeCopy()}>
               {busy ? tr('sessionView.makingCopy') : tr('sessionView.makeCopy')}
             </button>
-            <button className="btn" disabled={busy} onClick={() => setNaming(false)}>
+            <button className="link small" disabled={busy} onClick={() => setNaming(false)}>
               {tr('sessionView.cancelCopy')}
             </button>
           </span>
         ) : (
-          <button className="btn" onClick={() => setNaming(true)} title={tr('sessionView.giveOwnCopyTip')}>
+          <button className="link small shared-action" onClick={() => setNaming(true)} title={tr('sessionView.giveOwnCopyTip')}>
             {tr('sessionView.giveOwnCopy')}
           </button>
         ))}

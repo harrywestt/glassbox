@@ -53,6 +53,8 @@ export type Architecture = {
   source: 'file' | 'detected'
   /** Claude is naming this project's categories in the background; ask again shortly for its names. */
   organising?: boolean
+  /** The categories haven't been named for the map as it is now; Claude can name them on request. */
+  canName?: boolean
   error?: string
 }
 

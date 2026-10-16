@@ -238,7 +238,7 @@ export interface SessionState {
   /** Auto model: whether it's on, and what it picked for the last message (and why). */
   autoModel?: { on: boolean; tier?: 'haiku' | 'sonnet' | 'opus'; model?: string; reason?: string }
   /** The models this account can use, for the model picker. */
-  models?: { value: string; resolvedModel?: string; displayName: string; description: string }[]
+  models?: { value: string; resolvedModel?: string; displayName: string; description: string; supportedEffortLevels?: import('../../shared/events').Effort[] }[]
   mode: string
   /** Access mode you chose (plan mode returns to it). */
   access?: string
@@ -267,6 +267,8 @@ export interface SessionState {
   /** Commits Glassbox made of Claude's changes this session, and whether it's doing so. */
   commits: GlassboxCommit[]
   autoCommit: boolean
+  /** The effort you picked (none: the model's default) and what the session says it runs at. */
+  effort?: { chosen?: import('../../shared/events').Effort; applied?: import('../../shared/events').Effort | null }
   alerts: Alert[]
   /** `at`: when set_current_task last said this, to weigh it against Claude's to-do list. */
   task?: { summary: string; steps?: TaskStep[]; at?: number }
@@ -370,7 +372,7 @@ export const newSession = (): SessionState => ({
   sideTasks: {},
   reviewer: { busy: false, pending: 0, reviewedEdits: 0 },
   commits: [],
-  autoCommit: true,
+  autoCommit: false,
   alerts: [],
   drafts: {},
   usage: { contextTokens: 0, outputTokens: 0, costUsd: 0, turns: 0 },
@@ -609,6 +611,8 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       const item: TimelineItem = { kind: 'service-error', service: event.service, text: event.text, at: event.at, after: last ? { path: last.path, at: last.at } : undefined }
       return { ...state, timeline: [...state.timeline, item] }
     }
+    case 'effort':
+      return { ...state, effort: { chosen: event.chosen, applied: 'applied' in event ? event.applied : state.effort?.applied } }
     case 'autocommit':
       return { ...state, autoCommit: event.enabled }
     case 'reviewer-state':

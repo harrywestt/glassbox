@@ -239,8 +239,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e))
         }
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_snapshot',
@@ -251,8 +250,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         if (typeof c === 'string') return fail(c)
         await settle(c.wc, 3000)
         return ok((await inTime(c.wc.executeJavaScript(SNAPSHOT(find ?? '', limit ?? 4000)), PAGE_MS)) + newProblems(c.wc.id))
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_click',
@@ -269,8 +267,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         c.wc.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 })
         await settle(c.wc, 8000)
         return ok(`Clicked [${ref}] "${at.name}". ${where(c.wc)}`)
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_type',
@@ -288,8 +285,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
           await settle(c.wc, 8000)
         }
         return ok(`Typed into [${ref}]${submit ? ' and pressed Enter' : ''}. ${where(c.wc)}`)
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_press',
@@ -301,8 +297,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         press(c.wc, key)
         await settle(c.wc, 4000)
         return ok(`Pressed ${key}. ${where(c.wc)}`)
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_eval',
@@ -324,8 +319,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
           if (e instanceof TimedOut) return slow('The script', ms)
           return fail(`The script failed: ${e instanceof Error ? e.message : String(e)}`)
         }
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_screenshot',
@@ -356,8 +350,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         const jpeg = forClaude.toJPEG(72)
         hooks.shot?.({ path: file, url: c.wc.getURL(), title: c.wc.getTitle(), review: !!review, note })
         return { content: [{ type: 'image' as const, data: jpeg.toString('base64'), mimeType: 'image/jpeg' }, { type: 'text' as const, text: `Saved to ${file}. ${where(c.wc)}` }] }
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_record',
@@ -377,8 +370,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e))
         }
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_logs',
@@ -393,8 +385,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
         return ok(logsText(c.wc.id, { show: show ?? 'problems', all, find }))
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_viewport',
@@ -408,8 +399,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         await new Promise((r) => setTimeout(r, 400))
         const w = (await inTime(c.wc.executeJavaScript('innerWidth'), PAGE_MS).catch(() => null)) as number | null
         return ok(`${width ? `Showing at ${w ?? width}px wide` : `Back to the full view (${w ?? '?'}px wide)`}. ${where(c.wc)}`)
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_close',
@@ -419,8 +409,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         if (!tabs?.length && !others) return fail('Say which tabs to close (tabs), or pass others to close all but the one showing.')
         const r = await bridge.close(tabs ?? [], !!others)
         return ok(`Closed ${r.closed} tab${r.closed === 1 ? '' : 's'}; ${r.left} open.`)
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_tabs',
@@ -429,8 +418,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
       async () => {
         const list = await bridge.tabs()
         return ok(list.length ? list.map((t) => `${t.tab}${t.active ? ' (showing)' : ''}: ${t.title ?? ''} ${t.url}`).join('\n') : 'No tabs open.')
-      },
-      { alwaysLoad: true }
+      }
     ),
     tool(
       'browser_wait',
@@ -445,8 +433,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
           await new Promise((r) => setTimeout(r, 300))
         }
         return text ? fail(`"${text}" didn't appear within ${seconds ?? 15}s. ${where(c.wc)}`) : ok(`Waited. ${where(c.wc)}`)
-      },
-      { alwaysLoad: true }
+      }
     )
   ]
 }

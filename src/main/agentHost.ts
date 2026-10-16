@@ -27,6 +27,7 @@ import { type UserQuestion,
   type SideStep,
   type ReviewModel
 } from '../shared/events'
+import type { Effort } from '../shared/events'
 import { showcaseDir, skillDeckDir } from './showcase'
 import { loadExtras, saveExtras, type SessionExtras } from './sessionExtras'
 import { cachedScan, importTargets, warmScan } from './architecture'
@@ -41,10 +42,8 @@ import { UxReviewer } from './uxReviewer'
 import { automation } from './automation'
 
 /** Commands that usually run for minutes: watching deploys and CI, builds, full test runs, installs, migrations. */
-const LONG_COMMAND = /\b(gh run watch|gh pr checks --watch|kubectl rollout|helm (upgrade|install)|terraform (plan|apply)|docker (build|compose up)|az (deployment|webapp)|aws (cloudformation|deploy)|vercel( deploy)?|netlify deploy|fly deploy|deploy|npm run (build|test|deploy)|pnpm (build|test)|yarn (build|test)|dotnet (build|test|publish)|mvn|gradle|cargo (build|test)|go test|pytest|npm (ci|install)|pip install|migrat\w*|backfill)\b/i
 
 /** A message asking how something works (it gets a diagram as well as words). */
-const EXPLAIN = /\b(how does|how do (?:the|these|they)|explain|walk me through|architecture|data ?flow|what happens when|diagram|flow of)\b/i
 const OBSERVED_HOOKS: HookEvent[] = ['SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact', 'Notification', 'InstructionsLoaded']
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell'])
@@ -224,7 +223,10 @@ function transcriptTimes(sessionId: string): Map<string, number> {
 // CLAUDE_CODE_ENABLE_TODO_TOOLS: Claude keeps a to-do list (TaskCreate/TaskUpdate) that Glassbox shows
 // as Tasks; without it, SDK sessions on newer models have no list tools at all.
 // MCP_TOOL_TIMEOUT: a connector call (Jira, a browser tool…) that hangs gives up after 15 minutes rather than holding the session for ever.
-const SESSION_ENV = { ...process.env, CLAUDE_CODE_ARTIFACT: '1', BROWSER: 'none', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1', MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT ?? String(15 * 60_000) }
+// ENABLE_TOOL_SEARCH: every MCP tool (Glassbox's own included) loads on demand rather than with each request.
+const EXPLAIN = /\b(how does|how do (?:the|these|they)|explain|walk me through|architecture|data ?flow|what happens when|diagram|flow of)\b/i
+const LONG_COMMAND = /\b(gh run watch|gh pr checks --watch|kubectl rollout|helm (upgrade|install)|terraform (plan|apply)|docker (build|compose up)|az (deployment|webapp)|aws (cloudformation|deploy)|vercel( deploy)?|netlify deploy|fly deploy|deploy|npm run (build|test|deploy)|pnpm (build|test)|yarn (build|test)|dotnet (build|test|publish)|mvn|gradle|cargo (build|test)|go test|pytest|npm (ci|install)|pip install|migrat\w*|backfill)\b/i
+const SESSION_ENV = { ...process.env, ENABLE_TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH ?? 'true', CLAUDE_CODE_ARTIFACT: '1', BROWSER: 'none', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1', MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT ?? String(15 * 60_000) }
 
 const isClaudeOwnFile = (full: string) => CLAUDE_OWN_DIRS.some((d) => norm(full).startsWith(d + '/'))
 
@@ -250,16 +252,17 @@ export class AgentHost {
   private currentTask?: string
   private reviewer: Reviewer
   /** Commit Claude's changes at the end of each turn. */
-  private autoCommitOn = true
+  // Off unless you turn it on: its commit messages are written by a model.
+  private autoCommitOn = false
+  private turnShown = new Set<string>()
+  private turnNudged = new Set<string>()
+  private turnTasks = 0
   /** Files Claude edited this turn, and this session (for Commit now). */
   private turnEdits = new Set<string>()
   /** Glassbox views Claude used this turn (show_diagram, show_progress…), and reminders already given. */
   /** Loaders above the message box (show_progress), kept across the session's restarts. */
   private loaders: Loaders
-  private turnShown = new Set<string>()
-  private turnNudged = new Set<string>()
   /** Tasks Claude has added this turn (TaskCreate, one call each). */
-  private turnTasks = 0
   private sessionEdits = new Set<string>()
   /** What the transcript won't remember (shell edits, cost), saved beside it for a resume. */
   private sid?: string
@@ -367,6 +370,7 @@ export class AgentHost {
       ...Object.fromEntries(OBSERVED_HOOKS.map((event) => [event, [{ hooks: [this.onHook] }]])),
       UserPromptSubmit: [{ hooks: [this.onPromptSubmit] }],
       PreToolUse: [{ hooks: [this.onPreToolUse] }],
+      // The nudges below do nothing unless they're turned on (Settings, Automation).
       PostToolUse: [
         { matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell', hooks: [this.onFileChange] },
         { matcher: 'TodoWrite|TaskCreate|mcp__glassbox__set_current_task', hooks: [this.onTaskList] },
@@ -417,14 +421,16 @@ export class AgentHost {
         env: this.isAuto() ? { ...SESSION_ENV, CLAUDE_CODE_SUBAGENT_MODEL: process.env.CLAUDE_CODE_SUBAGENT_MODEL ?? 'sonnet' } : SESSION_ENV,
         systemPrompt: { type: 'preset', preset: 'claude_code', append: GLASSBOX_INSTRUCTIONS + SERVICES_INSTRUCTIONS },
         includePartialMessages: true,
-        // A predicted next prompt after each turn (as in the CLI), offered in the message box.
-        promptSuggestions: true,
+        // Each is an extra model call per turn, so each is a setting (Settings, Automation): the
+        // predicted next prompt is on by default, model-written agent summaries off.
+        promptSuggestions: automation().promptSuggestions ?? true,
         thinking: { type: 'adaptive', display: 'summarized' },
         enableFileCheckpointing: true,
         // Glassbox can stop agents one at a time, so Stop ends only Claude's reply and background agents keep going.
         perTaskStopAffordance: true,
-        // A one-line "what it's doing now" for each agent, for Live's lanes.
-        agentProgressSummaries: true,
+        agentProgressSummaries: automation().agentSummaries ?? false,
+        // The effort you picked (none: the model's default, as in the CLI).
+        ...(this.effort ? { effort: this.effort } : {}),
         stderr: (text) => this.emit({ kind: 'stderr', text })
       }
     })
@@ -885,6 +891,16 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     return this.chosenModel === 'auto' || (this.chosenModel === undefined && automation().autoModel)
   }
 
+  /** The effort you picked for Claude's thinking; undefined keeps the model's default (as the CLI does). */
+  private effort?: Effort
+
+  async setEffort(level: Effort | null) {
+    this.effort = level ?? undefined
+    // A running session switches from its next request; a new one starts with it (see start).
+    await this.q?.applyFlagSettings({ effortLevel: level }).catch(() => {})
+    this.emit({ kind: 'effort', chosen: this.effort })
+  }
+
   /** Switch the model this session uses, from your next message on ('auto' to have it picked per message). */
   async setModel(model: string) {
     this.chosenModel = model
@@ -1021,6 +1037,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     const msg = m as { type: string; subtype?: string; model?: string; tool_use_id?: string; task_id?: string; heartbeat?: boolean; parent_tool_use_id?: string | null; description?: string; tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[]; message?: { content?: unknown } }
     this.watchProgress(msg)
     if (msg.type === 'system' && msg.subtype === 'init' && msg.model) this.sessionModel = msg.model
+    if (msg.type === 'system' && msg.subtype === 'init' && 'effort' in msg) this.emit({ kind: 'effort', chosen: this.effort, applied: (msg as { effort?: Effort | null }).effort ?? null })
     // A task that ended (an agent finished or was stopped) may leave its call without a result.
     if (msg.type === 'system' && msg.subtype === 'task_notification' && msg.tool_use_id) {
       this.openTools.delete(msg.tool_use_id)
@@ -1201,6 +1218,9 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
           if (this.autoCommitOn && this.turnEdits.size) void this.commit([...this.turnEdits])
           else void this.refreshGit()
           this.turnEdits.clear()
+          // A loader only Claude could move, left running as the turn ends, would sit there for ever.
+          // Closed here rather than by sending Claude back for another turn (which costs tokens).
+          this.loaders.stopUnwatched(tr('mainLoaders.turnEnded'))
           this.turnShown.clear()
           this.turnNudged.clear()
           this.turnTasks = 0
@@ -1227,8 +1247,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
   private onPromptSubmit: HookCallback = async (input) => {
     void gitInfo(this.cwd).then((g) => (this.turnBranch = g.branch))
     const prompt = input.hook_event_name === 'UserPromptSubmit' ? String(input.prompt ?? '') : ''
-    // A question about how things work gets a picture as well as words.
-    const explain = EXPLAIN.test(prompt) ? 'Glassbox: this asks how something works. Answer with a show_diagram (or show_flow for a request path) alongside your text, and open_tab it.' : ''
+    // With nudges on, a question about how things work gets a picture as well as words.
+    const explain = automation().nudges && EXPLAIN.test(prompt) ? 'Glassbox: this asks how something works. Answer with a show_diagram (or show_flow for a request path) alongside your text, and open_tab it.' : ''
     const additionalContext = [requirementsContext(this.requirements), explain].filter(Boolean).join('\n\n')
     return additionalContext ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext } } : {}
   }
@@ -1238,7 +1258,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
    * install, a migration, anything in the background): once a turn, a reminder to show its progress.
    */
   private onLongCommand: HookCallback = async (input) => {
-    if (input.hook_event_name !== 'PostToolUse' || this.turnShown.has('show_progress') || this.turnNudged.has('progress')) return {}
+    if (!automation().nudges || input.hook_event_name !== 'PostToolUse' || this.turnShown.has('show_progress') || this.turnNudged.has('progress')) return {}
     const i = (input.tool_input ?? {}) as { command?: string; run_in_background?: boolean }
     const command = String(i.command ?? '')
     if (!i.run_in_background && !LONG_COMMAND.test(command)) return {}
@@ -1253,7 +1273,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   /** Claude laid out several steps: a reminder (once a turn) to show them as a loader. */
   private onTaskList: HookCallback = async (input) => {
-    if (input.hook_event_name !== 'PostToolUse' || this.turnShown.has('show_progress') || this.turnNudged.has('progress')) return {}
+    if (!automation().nudges || input.hook_event_name !== 'PostToolUse' || this.turnShown.has('show_progress') || this.turnNudged.has('progress')) return {}
     const given = input.tool_input as { todos?: { status?: string }[]; steps?: { status?: string }[] } | undefined
     const open = (list?: { status?: string }[]) => (list ?? []).filter((t) => t.status !== 'completed' && t.status !== 'done').length
     const steps = input.tool_name === 'TodoWrite' ? open(given?.todos) : input.tool_name === 'TaskCreate' ? ++this.turnTasks : open(given?.steps)
@@ -1272,7 +1292,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
    * of it: one nudge to draw it before the summary (it can decline when a picture adds nothing).
    */
   private onStop: HookCallback = async (input) => {
-    if (input.hook_event_name !== 'Stop' || input.stop_hook_active) return {}
+    if (!automation().nudges || input.hook_event_name !== 'Stop' || input.stop_hook_active) return {}
     // A loader only Claude can move, left running as the turn ends, would sit there for ever.
     const left = this.loaders.unwatched()
     if (left.length && !this.turnNudged.has('loaders')) {
@@ -1376,6 +1396,16 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   private onPreToolUse: HookCallback = async (input, toolUseId) => {
     if (input.hook_event_name !== 'PreToolUse') return {}
+    // A fork agent starts with a copy of this whole conversation, on the session's model: with a long
+    // session that's the most expensive agent there is. Fresh agents with a full brief, unless allowed.
+    if ((input.tool_name === 'Agent' || input.tool_name === 'Task') && String((input.tool_input as { subagent_type?: string } | undefined)?.subagent_type ?? '') === 'fork' && !automation().agentForks)
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: "Glassbox: fork agents are turned off in this app, because each one copies the whole conversation. Start a fresh agent instead (general-purpose or a fitting type) and give it a self-contained prompt with everything it needs: the goal, the relevant files and what you already know."
+        }
+      }
     const callId = (toolUseId ?? input.tool_use_id) as string | undefined
     if (callId) {
       this.started = [...this.started.slice(-199), callId]
