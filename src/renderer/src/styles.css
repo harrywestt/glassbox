@@ -1197,6 +1197,64 @@ button.session-tile.tone-err { border-color: color-mix(in srgb, var(--err) 40%, 
 .gh-repo-count { min-width: 24px; }
 .gh-code { font-family: var(--mono); font-size: 12px; color: var(--fg); background: var(--elevated); padding: 1px var(--s-1); border-radius: var(--r-sm); }
 
+/* The Changes stack, as VS Code's Source Control view: every section under the same slim, upper-case
+   heading (count badge, its buttons on hover), flush rows, hairlines between sections, no cards. */
+.changes-stack > .panel { border-top: 0; }
+.changes-stack > .panel + .panel { border-top: 0; }
+.changes-stack .panel-scroll { padding: 0; gap: 0; }
+.changes-stack .section { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: none; box-shadow: none; }
+.changes-stack .section > .section-head { display: flex; align-items: center; height: 26px; margin: 0; padding: 0 var(--s-2) 0 var(--s-1); }
+.changes-stack .section-toggle { gap: 4px; min-width: 0; }
+.changes-stack .section-title { font: 600 12.5px/1 var(--font); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.changes-stack .section-head .icon-btn { width: 22px; height: 22px; visibility: hidden; }
+.changes-stack .section-head:hover .icon-btn, .changes-stack .section-head:focus-within .icon-btn { visibility: visible; }
+.changes-stack .section > :not(.section-head) { margin-left: var(--s-3); margin-right: var(--s-3); }
+.changes-stack .section > :last-child:not(.section-head) { margin-bottom: var(--s-2); }
+.changes-stack .section > .commit-list, .changes-stack .section > .file-list { margin-left: 0; margin-right: 0; }
+.changes-stack > .panel > .panel-scroll > .card:not(.section) { margin: var(--s-2) var(--s-3); }
+.changes-stack .changes-filters { margin-top: var(--s-1); }
+.commit-row.compact { align-items: center; gap: var(--s-2); height: 24px; padding: 0 var(--s-2) 0 22px; border-radius: 0; font-size: 13px; }
+.commit-row.compact:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.commit-row.compact .commit-dot { margin-top: 0; width: 7px; height: 7px; }
+.commit-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commit-when { flex: none; font-size: 12px; color: var(--subtle); }
+.commit-row.compact .icon-btn { width: 22px; height: 22px; }
+
+/* Settings: a page of its own, sections down the side and a list of rows for each */
+.settings { width: min(940px, 94vw); height: min(680px, 88vh); display: grid; grid-template-columns: 220px minmax(0, 1fr); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: 0 24px 64px rgba(0, 0, 0, .35); overflow: hidden; animation: pop-in .14s var(--ease); }
+.settings-nav { display: flex; flex-direction: column; gap: 2px; padding: var(--s-4) var(--s-2) var(--s-3); background: var(--surface); border-right: 1px solid var(--border); min-height: 0; }
+.settings-nav-title { font-size: 15px; font-weight: 650; padding: 0 var(--s-2) var(--s-3); color: var(--strong); }
+.settings-nav > button { display: flex; align-items: center; gap: var(--s-2); height: 32px; padding: 0 var(--s-2); border: 0; background: none; border-radius: var(--r-md); font: 500 13px/1 var(--font); color: var(--muted); text-align: left; }
+.settings-nav > button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg); }
+.settings-nav > button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--fg); }
+.settings-nav > button.on .codicon { color: var(--accent); }
+.settings-nav > button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.settings-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.settings-nav > .settings-reset { font-size: 12px; font-weight: 400; height: 28px; justify-content: flex-start; }
+.settings-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.settings-head { display: flex; align-items: flex-start; gap: var(--s-3); padding: var(--s-5) var(--s-5) var(--s-3) var(--s-6); }
+.settings-head > div { flex: 1; min-width: 0; }
+.settings-head h2 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -.01em; color: var(--strong); }
+.settings-head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; max-width: 60ch; }
+.settings-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-2) var(--s-6) var(--s-6); }
+.set-row { display: flex; align-items: center; gap: var(--s-5); padding: 14px 0; border-bottom: 1px solid var(--border); }
+.set-row.sub { padding-left: var(--s-5); padding-top: 10px; padding-bottom: 10px; }
+.set-row.sub .set-label { font-size: 12.5px; color: var(--muted); }
+.set-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.set-label { display: flex; align-items: center; gap: var(--s-2); font-size: 13.5px; font-weight: 500; color: var(--fg); }
+.set-note { font-size: 12.5px; color: var(--muted); line-height: 1.45; max-width: 58ch; }
+.set-control { flex: none; display: flex; align-items: center; }
+.set-tokens { font-size: 11px; font-weight: 500; padding: 1px 6px; border-radius: 9px; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.set-group-label { margin: var(--s-5) 0 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.set-callout { display: flex; gap: var(--s-2); align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; line-height: 1.5; color: var(--fg); }
+.set-callout .codicon { color: var(--info); margin-top: 2px; }
+.set-preview { margin-top: var(--s-5); }
+.set-preview-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: var(--s-2); }
+.set-preview > .markdown { padding: var(--s-4); border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); line-height: 1.6; }
+.set-preview table { margin-bottom: 0; }
+.dash-settings { gap: var(--s-1); }
+@media (max-width: 720px) { .settings { grid-template-columns: 1fr; } .settings-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); } .settings-nav-title, .settings-nav > .grow { display: none; } }
+
 /* Appearance settings */
 .appearance .setting { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s-2) var(--s-4); padding: var(--s-2) 0; border-top: 1px solid var(--border); }
 .appearance .setting:first-of-type { border-top: none; }
@@ -1614,11 +1672,17 @@ button.agent-run:hover:not(:disabled) { background: none; text-decoration: under
 .work-tabs > .icon-btn { align-self: center; }
 
 /* Two sessions in one folder: said plainly, with the way to separate them. */
-.shared-strip { flex: none; display: flex; align-items: center; gap: var(--s-3); height: 40px; padding: 0 var(--s-2) 0 var(--s-4); border-bottom: 1px solid var(--border); background: var(--surface); font-size: 13px; min-width: 0; }
-.shared-word { flex: none; font-weight: 600; color: var(--warn); }
+.shared-strip { flex: none; display: flex; align-items: center; gap: var(--s-2); min-height: 30px; padding: 0 var(--s-1) 0 var(--s-4); border-bottom: 1px solid color-mix(in srgb, var(--warn) 22%, var(--border)); background: color-mix(in srgb, var(--warn) 6%, var(--surface)); font-size: 12.5px; min-width: 0; }
+.shared-strip.failed { background: color-mix(in srgb, var(--err) 7%, var(--surface)); }
+.shared-icon { flex: none; font-size: 14px; color: var(--warn); }
 .shared-text { min-width: 0; }
-.shared-move { display: flex; align-items: center; gap: var(--s-2); flex: none; animation: shared-move-in 140ms ease-out; }
-.shared-move input { width: 220px; height: var(--h-ctl); padding: 0 var(--s-2); font-size: 12px; }
+.shared-who { color: var(--fg); }
+.shared-action { flex: none; padding: 0 var(--s-1); }
+.shared-strip .icon-btn { width: 24px; height: 24px; }
+.shared-word { flex: none; font-weight: 600; color: var(--warn); }
+.shared-move { display: flex; align-items: center; gap: var(--s-2); flex: none; padding: 3px 0; animation: shared-move-in 140ms ease-out; }
+.shared-move input { width: 200px; height: 24px; padding: 0 var(--s-2); font-size: 12px; }
+.shared-btn { height: 24px; padding: 0 var(--s-2); font-size: 12px; }
 @keyframes shared-move-in { from { opacity: 0; transform: translateX(6px); } }
 @media (prefers-reduced-motion: reduce) { .shared-move { animation: none; } }
 .launch-shared { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: var(--s-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font-size: 13px; line-height: 1.45; }
@@ -1662,7 +1726,7 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .scm-empty { padding: 0 var(--s-3) var(--s-2); }
 .scm-group-head { display: flex; align-items: center; height: 26px; padding: 0 var(--s-2) 0 var(--s-1); }
 .scm-group-head:hover .scm-actions, .scm-group-head:focus-within .scm-actions { visibility: visible; }
-.scm-group-toggle { all: unset; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); cursor: pointer; }
+.scm-group-toggle { all: unset; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font: 600 12.5px/1 var(--font); color: var(--fg); cursor: pointer; }
 .scm-group-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .scm-group.folded .section-chevron { transform: rotate(-90deg); }
 .scm-actions { display: inline-flex; visibility: hidden; }
@@ -1680,7 +1744,7 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .scm-dir { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--subtle); }
 .scm-row-actions { display: none; flex: none; }
 .scm-row:hover .scm-row-actions, .scm-row:focus-within .scm-row-actions { display: inline-flex; }
-.scm-letter { flex: none; width: 14px; text-align: center; font: 600 12px var(--mono); }
+.scm-letter { flex: none; width: 14px; text-align: center; font: 600 12px var(--font); }
 .scm-letter.ok { color: var(--ok); }
 .scm-letter.warn { color: var(--warn); }
 .scm-letter.err { color: var(--err); }
@@ -2011,6 +2075,14 @@ button.update-chip.ready:hover:not(:disabled) { color: var(--fg); background: va
 .model-menu-label { display: flex; align-items: center; gap: var(--s-2); width: 100%; font-size: 13px; }
 .model-menu-label .codicon { margin-left: auto; color: var(--accent); }
 .model-menu-note { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.ticket-status-row { display: inline-flex; align-items: baseline; gap: var(--s-2); }
+.map-group-btn { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.map-explain-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: var(--s-2); }
+.menu.effort-menu { width: 300px; }
+.model-effort { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2); border-top: 1px solid var(--border); margin-top: var(--s-1); }
+.model-effort-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); font-size: 13px; }
+.model-effort-levels { display: flex; width: 100%; }
+.model-effort-levels button { flex: 1; padding: 0 4px; }
 .model-menu-foot { padding: var(--s-2) var(--s-2) var(--s-1); border-top: 1px solid var(--border); margin-top: var(--s-1); }
 
 /* A usage limit stopped Claude: when it resets, and carrying on then. */

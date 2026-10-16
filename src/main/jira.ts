@@ -299,15 +299,17 @@ function toTicket(text: string, key: string): Ticket {
 const fail = (err: unknown): { error: string } => ({ error: err instanceof Error ? err.message : String(err) })
 const normKey = (key: string) => key.trim().toUpperCase()
 
-export async function getTicket(cwd: string, rawKey: string, force = false): Promise<TicketResult> {
+/**
+ * Fetching from Jira goes through a small Claude agent (the claude.ai Atlassian connector), so it
+ * spends tokens: a saved copy is shown as it is, and Jira is only asked when you press Load or
+ * Refresh (`cachedOnly` false with nothing saved, or `force`).
+ */
+export async function getTicket(cwd: string, rawKey: string, force = false, cachedOnly = false): Promise<TicketResult> {
   const key = normKey(rawKey)
   await loadDisk()
   const hit = cache.get(key)
-  if (!force && hit) {
-    // Fresh enough, or older but shown straight away while a fresh copy loads for next time.
-    if (Date.now() - hit.at >= CACHE_MS && !inflight.has(key)) void getTicket(cwd, rawKey, true)
-    return { ticket: hit.ticket, stale: Date.now() - hit.at >= CACHE_MS }
-  }
+  if (!force && hit) return { ticket: hit.ticket, stale: Date.now() - hit.at >= CACHE_MS }
+  if (cachedOnly && !force) return { notLoaded: true }
   const running = inflight.get(key)
   if (running) return running
   const p = (async (): Promise<TicketResult> => {

@@ -2,6 +2,30 @@ import { useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { Icon } from '../components/ui'
 import { tr } from '../../../shared/i18n'
+import type { Effort } from '../../../shared/events'
+
+const EFFORT_KEY = 'glassbox.effort'
+const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
+/** The effort picked for every session (none: each model's default, as in the CLI). */
+export function loadEffort(): Effort | null {
+  try {
+    const v = localStorage.getItem(EFFORT_KEY) as Effort | null
+    return v && EFFORTS.includes(v) ? v : null
+  } catch {
+    return null
+  }
+}
+
+/** Saves the effort new sessions start with (null: each model's default). */
+export function saveEffort(level: Effort | null) {
+  try {
+    if (level) localStorage.setItem(EFFORT_KEY, level)
+    else localStorage.removeItem(EFFORT_KEY)
+  } catch {
+    /* this session only */
+  }
+}
 
 /** "claude-opus-5-5[1m]" → "opus-5-5": the part to compare, without the date, the 1M marker or the family prefix. */
 const core = (id: string) => id.toLowerCase().replace(/\[.*?\]/g, '').replace(/^claude-/, '').replace(/-\d{8}$/, '')
@@ -43,7 +67,8 @@ export function ModelPicker() {
   return (
     <div className="model-picker">
       <button className={open ? 'chip-btn on' : 'chip-btn'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={title}>
-        <Icon name={busy ? 'loading' : 'sparkle'} className={busy ? 'codicon-modifier-spin' : undefined} /> {name} <Icon name="chevron-up" />
+        <Icon name={busy ? 'loading' : 'sparkle'} className={busy ? 'codicon-modifier-spin' : undefined} /> {name}
+ <Icon name="chevron-up" />
       </button>
       {open && (
         <>
@@ -67,6 +92,49 @@ export function ModelPicker() {
               </button>
             ))}
             <div className="model-menu-foot muted small">{tr('modelPicker.foot')}</div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * How hard Claude thinks, beside the model: a level for this session (and new ones), or each
+ * model's default as in the CLI. Higher levels think longer and use more tokens.
+ */
+export function EffortPicker() {
+  const { tab, s } = useSession()
+  const [open, setOpen] = useState(false)
+  const effort = s.effort?.chosen ?? null
+  const name = (l: Effort | null) => (l ? tr(`modelPicker.effort.${l}`) : tr('modelPicker.effort.default'))
+  const pick = (level: Effort | null) => {
+    setOpen(false)
+    saveEffort(level)
+    void window.glassbox.session.setEffort(tab.id, level)
+  }
+  const applied = s.effort?.applied
+  const label = effort ? tr('modelPicker.effortChip', { level: tr(`modelPicker.effortName.${effort}`) }) : applied ? tr('modelPicker.effortChip', { level: tr(`modelPicker.effortName.${applied}`) }) : name(null)
+  return (
+    <div className="model-picker">
+      <button className={open ? 'chip-btn on' : 'chip-btn'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={tr('modelPicker.effortTitle', { level: label })}>
+        <Icon name="dashboard" /> {label} <Icon name="chevron-up" />
+      </button>
+      {open && (
+        <>
+          <div className="menu-scrim" onMouseDown={() => setOpen(false)} />
+          <div className="menu model-menu effort-menu" role="menu">
+            <div className="menu-heading">{tr('modelPicker.effortHeading')}</div>
+            {([null, 'low', 'medium', 'high', 'xhigh', 'max'] as (Effort | null)[]).map((l) => (
+              <button key={l ?? 'default'} role="menuitemradio" aria-checked={effort === l} className={effort === l ? 'menu-item current' : 'menu-item'} onClick={() => pick(l)}>
+                <span className="model-menu-label">
+                  {l ? tr(`modelPicker.effortName.${l}`) : tr('modelPicker.effortName.default')}
+                  {effort === l && <Icon name="check" />}
+                </span>
+                <span className="model-menu-note">{l ? tr(`modelPicker.effortTip.${l}`) : tr('modelPicker.effortDefaultTip')}</span>
+              </button>
+            ))}
+            <div className="model-menu-foot muted small">{tr('modelPicker.effortFoot')}</div>
           </div>
         </>
       )}

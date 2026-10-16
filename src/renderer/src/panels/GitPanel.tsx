@@ -7,15 +7,11 @@ import type { BranchPr } from '../../../main/launcher'
 import { timeAgo } from '../lib'
 import { tr } from '../../../shared/i18n'
 
-const AUTO_KEY = 'glassbox.autoCommit'
+import { getAppearance } from '../appearance'
 
-/** Whether Glassbox commits Claude's changes at the end of each turn (on unless turned off). */
+/** Whether new sessions commit Claude's changes at the end of each turn (Settings, Automation; off by default: a model writes the commit messages). */
 export function loadAutoCommit(): boolean {
-  try {
-    return localStorage.getItem(AUTO_KEY) !== 'off'
-  } catch {
-    return true
-  }
+  return getAppearance().automation.autoCommit
 }
 
 /**
@@ -41,14 +37,8 @@ export function GitPanel({ withPr = true }: { withPr?: boolean } = {}) {
   }, [tab.cwd, repo])
   useEffect(() => void load(), [load, s.git?.head, s.git?.dirty, s.commits.length])
 
-  const setAuto = (on: boolean) => {
-    try {
-      localStorage.setItem(AUTO_KEY, on ? 'on' : 'off')
-    } catch {
-      /* not remembered */
-    }
-    void window.glassbox.session.setAutoCommit(tab.id, on)
-  }
+  // This session only; the default for new sessions is in Settings, Automation.
+  const setAuto = (on: boolean) => void window.glassbox.session.setAutoCommit(tab.id, on)
 
   const commitNow = async () => {
     setBusy(true)
@@ -77,16 +67,19 @@ export function GitPanel({ withPr = true }: { withPr?: boolean } = {}) {
 
   return (
     <div className="panel">
-      <PanelHeader title={tr('gitPanel.title')} />
+      {withPr && <PanelHeader title={tr('gitPanel.title')} />}
       <div className="panel-scroll">
         {withPr && <PrCard />}
+        {(withPr || error || lastError) && (
         <section className="card">
+          {withPr && (
           <label className="setting-inline">
             <span className="grow" title={tr('gitPanel.autoCommitTitle')}>
               <strong className="small">{tr('gitPanel.autoCommit')}</strong>
             </span>
             <Toggle checked={s.autoCommit} onChange={setAuto} />
           </label>
+          )}
           {lastError && lastError.kind === 'commits' && (
             <div className={lastError.error ? 'note note-error' : 'note'}>
               <Icon name={lastError.error ? 'error' : 'info'} /> {lastError.error ?? lastError.skipped}
@@ -107,15 +100,27 @@ export function GitPanel({ withPr = true }: { withPr?: boolean } = {}) {
           )}
           {error && <div className="note note-error">{error}</div>}
         </section>
+        )}
 
-        <Section id="git-commits" title={s.git?.branch ? tr('gitPanel.onBranch', { branch: s.git.branch }) : tr('gitPanel.onThisBranch')} meta={<span className="muted small">{log ? tr('gitPanel.commitsSinceBranched', { count: log.commits.length }) : ''}</span>}>
+        <Section
+          id="git-commits"
+          title={withPr ? (s.git?.branch ? tr('gitPanel.onBranch', { branch: s.git.branch }) : tr('gitPanel.onThisBranch')) : tr('gitPanel.commits')}
+          tip={s.git?.branch ? tr('gitPanel.commitsTip', { branch: s.git.branch }) : undefined}
+          meta={withPr ? <span className="muted small">{log ? tr('gitPanel.commitsSinceBranched', { count: log.commits.length }) : ''}</span> : log ? <span className="scm-count">{log.commits.length}</span> : null}
+        >
           {log && log.commits.length === 0 && <div className="muted small">{tr('gitPanel.noCommits')}</div>}
           <div className="commit-list">
             {log?.commits.map((c) => {
               const ours = !!mine[c.sha]
               return (
-                <div key={c.sha} className="commit-row" onClick={() => openCommit(c.sha, c.short)} title={`${c.subject}\n${c.author}, ${c.when}\n${tr('gitPanel.clickToSee')}`}>
+                <div key={c.sha} className={withPr ? 'commit-row' : 'commit-row compact'} onClick={() => openCommit(c.sha, c.short)} title={`${c.subject}\n${c.short}, ${c.author}, ${c.when}${ours ? tr('gitPanel.byGlassbox') : ''}${!c.pushed ? tr('gitPanel.notPushed') : ''}\n${tr('gitPanel.clickToSee')}`}>
                   <span className={c.pushed ? 'commit-dot pushed' : 'commit-dot'} title={c.pushed ? tr('gitPanel.pushed') : tr('gitPanel.notPushedYet')} />
+                  {!withPr ? (
+                    <>
+                      <span className="commit-subject">{c.subject}</span>
+                      <span className="commit-when">{c.when}</span>
+                    </>
+                  ) : (
                   <span className="commit-main">
                     <span className="ellipsis">{c.subject}</span>
                     <span className="muted small">
@@ -125,6 +130,7 @@ export function GitPanel({ withPr = true }: { withPr?: boolean } = {}) {
                       {!c.pushed && tr('gitPanel.notPushed')}
                     </span>
                   </span>
+                  )}
                   {ours && c === head && !c.pushed && (
                     <button className="icon-btn" title={tr('gitPanel.undoCommit')} onClick={(e) => (e.stopPropagation(), void undo(c.sha))}>
                       <Icon name="discard" />

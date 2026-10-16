@@ -153,12 +153,12 @@ export function ChangesPanel() {
         id="changes-branch"
         defaultFolded
         title={base ? tr('changesPanel.onBranchVs', { base }) : tr('changesPanel.onBranch')}
+        tip={tr('changesPanel.branchTip', { count: counted.length, adds, dels })}
         meta={
-          <span className="small changes-count">
-            {tr('changesPanel.files', { count: counted.length })}
-            {diff && <> <span className="ok">+{adds}</span> <span className="err">−{dels}</span></>}
+          <>
+            {diff && <span className="scm-count">{counted.length}</span>}
             {loading && diff && <span className="changes-refreshing" title={tr('changesPanel.refreshing')} aria-label={tr('changesPanel.refreshing')} />}
-          </span>
+          </>
         }
         actions={
           <>

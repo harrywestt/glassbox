@@ -14,6 +14,7 @@ import type { MapAnswer } from '../../../main/mapAsk'
 import { useSettledSession, searchHits, taskOf } from '../session'
 import { Icon, IconButton, Segmented } from '../components/ui'
 import { tr } from '../../../shared/i18n'
+import { useAppearance } from '../appearance'
 import './MapTab.css'
 
 const LABEL_W = 112
@@ -373,17 +374,32 @@ export function MapTab() {
   // Ask Claude to group it once a turn has finished (not on every step while it works).
   const heatSig = heat.map((m) => `${m.id}:${m.reads}:${m.edits}:${m.searches}`).sort().join('|')
   const [grouping, setGrouping] = useState<{ sig: string; groups: MapGroups } | null>(() => groupedFor.get(tab.id) ?? null)
+  // Naming the map's categories (asked for with the button): busy until the named map arrives.
+  const [naming, setNaming] = useState(false)
+  useEffect(() => setNaming(false), [arch?.canName])
+  const nameGroups = () => {
+    if (!arch) return
+    setNaming(true)
+    void window.glassbox.architecture.name(arch.root).catch(() => setNaming(false))
+  }
   const [regroupN, setRegroupN] = useState(0)
   const [busyGrouping, setBusyGrouping] = useState(false)
+  // Settings, Automation: the map groups this conversation by itself after each turn.
+  const autoMap = useAppearance().automation.autoMap
+  // Grouping is a model call: a grouping already made for this activity shows by itself; a new one
+  // only when you press Group (or Regroup).
   useEffect(() => {
     if (!arch || mode !== 'conv' || heat.length < 2 || s.status === 'running') return
     if (grouping?.sig === heatSig && !regroupN) return
     let live = true
-    setBusyGrouping(true)
+    const asked = regroupN > 0
+    const generate = asked || autoMap
+    if (generate) setBusyGrouping(true)
     const t = setTimeout(() => {
-      void window.glassbox.architecture.group(arch.root, heat, regroupN > 0).then((g) => {
+      void window.glassbox.architecture.group(arch.root, heat, asked && !!grouping, generate).then((g) => {
         if (!live) return
         setBusyGrouping(false)
+        if (asked) setRegroupN(0)
         if (g.error || !g.groups.length) return
         const next = { sig: heatSig, groups: g }
         groupedFor.set(tab.id, next)
@@ -395,7 +411,7 @@ export function MapTab() {
       live = false
       clearTimeout(t)
     }
-  }, [arch, mode, heatSig, s.status, regroupN])
+  }, [arch, mode, heatSig, s.status, regroupN, autoMap])
   const groups = mode === 'conv' && grouping && grouping.groups.groups.length ? grouping.groups : null
 
   const shown = useMemo(() => {
@@ -747,6 +763,16 @@ export function MapTab() {
             if (e.key === 'Escape') setQuery('')
           }}
         />
+      )}
+      {mode === 'conv' && !groups && !busyGrouping && heat.length >= 2 && s.status !== 'running' && (
+        <button className="link small map-group-btn" onClick={() => setRegroupN((n) => n + 1)} title={tr('mapTab.bar.groupTitle')}>
+          <Icon name="sparkle" /> {tr('mapTab.bar.group')}
+        </button>
+      )}
+      {arch.canName && (
+        <button className="link small map-group-btn" disabled={naming} onClick={nameGroups} title={tr('mapTab.bar.nameTitle')}>
+          <Icon name={naming ? 'loading' : 'sparkle'} className={naming ? 'codicon-modifier-spin' : undefined} /> {naming ? tr('mapTab.bar.naming') : tr('mapTab.bar.name')}
+        </button>
       )}
       {mode === 'conv' && (groups || busyGrouping) && (
         <span className="map-grouped" title={groups ? tr('mapTab.bar.groupedTitle') : undefined}>
@@ -1283,25 +1309,35 @@ function Inspector({
   }, [boundsFocus])
 
   // Why each connection exists: written in the background by Claude, then kept until the code changes.
+  // Written by Claude only when you ask (a model call), then kept until the code changes.
   const [why, setWhy] = useState<Record<string, string> | null>(null)
   const [whyError, setWhyError] = useState<string | null>(null)
+  const [unexplained, setUnexplained] = useState(false)
+  const [explainN, setExplainN] = useState(0)
+  const autoExplain = useAppearance().automation.autoMap
   useEffect(() => {
     setWhy(null)
     setWhyError(null)
+    setUnexplained(false)
+    setExplainN(0)
+  }, [cwd, box.id])
+  useEffect(() => {
     if (!conns.length || ghost) return
     let stale = false
     window.glassbox.architecture
-      .explain(cwd, box.id)
+      .explain(cwd, box.id, explainN > 0 || autoExplain)
       .then((r) => {
         if (stale) return
         setWhy(r.why)
+        setUnexplained(!!r.notExplained)
         if (r.error) setWhyError(r.error)
       })
       .catch((e) => !stale && setWhyError(String(e)))
     return () => {
       stale = true
     }
-  }, [cwd, box.id, conns.length])
+  }, [cwd, box.id, conns.length, explainN, autoExplain])
+  const explaining = (explainN > 0 || autoExplain) && why === null && !whyError
 
   const abs = (rel: string) => `${arch.root}/${rel}`
   const row = (c: Connection) => {
@@ -1324,7 +1360,7 @@ function Inspector({
     return (
       <div key={c.id} className="map-conn" onMouseEnter={() => onHover(c.other)} onMouseLeave={() => onHover(null)}>
         <div className="map-conn-name">{nameOf(c.other)}</div>
-        {why === null && !whyError ? <div className="map-conn-why skeleton-bar" /> : sentence ? <div className="map-conn-why">{sentence}</div> : null}
+        {explaining ? <div className="map-conn-why skeleton-bar" /> : sentence ? <div className="map-conn-why">{sentence}</div> : null}
         <div className="map-conn-links">
           {shownTargets.map((g, i) => {
             const names = [...g.names]
@@ -1427,6 +1463,11 @@ function Inspector({
               <div className="map-inspect-label">{tr('mapTab.inspect.usedBy')}</div>
               {usedBy.map(row)}
             </div>
+          )}
+          {unexplained && !explaining && (uses.length > 0 || usedBy.length > 0) && (
+            <button className="link small map-explain-btn" onClick={() => { setWhy(null); setExplainN((n) => n + 1) }} title={tr('mapTab.inspect.explainTitle')}>
+              <Icon name="sparkle" /> {tr('mapTab.inspect.explain')}
+            </button>
           )}
           {whyError && <div className="map-inspect-note">{tr('mapTab.inspect.whyError', { error: whyError })}</div>}
         </>

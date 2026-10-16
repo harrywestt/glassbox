@@ -8,7 +8,7 @@ import { useVoice } from '../voice'
 import { Loaders } from './Loaders'
 import { QuestionsCard } from './QuestionsCard'
 import { StopButton } from './StopButton'
-import { ModelPicker } from './ModelPicker'
+import { EffortPicker, ModelPicker } from './ModelPicker'
 import { LimitCard } from './LimitCard'
 import { stoppableTasks } from '../tally'
 import { tr } from '../../../shared/i18n'
@@ -387,6 +387,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
             <Icon name="checklist" /> {tr('composer.planFirst')}
           </button>
           <ModelPicker />
+          <EffortPicker />
           {s.mode === 'plan' && (
             <span className="muted small">
               {tr('composer.planning')}{' '}

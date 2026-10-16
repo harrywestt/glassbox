@@ -111,8 +111,9 @@ async function ask(arch: Architecture, id: string, groups: Group[]): Promise<Rec
   }
 }
 
-export function explainModule(cwd: string, id: string): Promise<ModuleExplain> {
-  const key = `${cwd.toLowerCase()}\u0000${id}`
+/** `generate` false: only explanations already written for the code as it is (writing them is a model call, made when you ask). */
+export function explainModule(cwd: string, id: string, generate = false): Promise<ModuleExplain> {
+  const key = `${cwd.toLowerCase()}\u0000${id}\u0000${generate ? 1 : 0}`
   const inflight = running.get(key)
   if (inflight) return inflight
   const p = (async (): Promise<ModuleExplain> => {
@@ -124,6 +125,7 @@ export function explainModule(cwd: string, id: string): Promise<ModuleExplain> {
       const store = await loadStore(arch.root)
       const hit = store[id]
       if (hit && hit.signature === signature) return { why: hit.why }
+      if (!generate) return { why: {}, notExplained: true }
       const why = await ask(arch, id, groups)
       if (Object.keys(why).length) {
         try {

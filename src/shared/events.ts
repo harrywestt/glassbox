@@ -126,6 +126,8 @@ export type SessionEvent =
   /** On resume: what the transcript doesn't hold (files shell commands changed, the running cost). */
   | { kind: 'restore'; costUsd: number; shellEdits: { toolId: string; files: string[]; agentId: string | null; at: number }[] }
   | { kind: 'autocommit'; enabled: boolean }
+  /** How hard Claude thinks: the level you picked (none: the model's default) and what the session reports it runs at. */
+  | { kind: 'effort'; chosen?: Effort; applied?: Effort | null }
   | { kind: 'reviewer-state'; busy: boolean; pending: number; error?: string }
   /** `id`: an alert about one ongoing thing ("stuck"): a newer one replaces it, and alert-clear takes it away. */
   | { kind: 'alert'; level: 'info' | 'warn' | 'error'; text: string; id?: string }
@@ -177,6 +179,8 @@ export type SpendSummary = {
   byProject: { cwd: string; total: number }[]
   helpers: Record<string, number>
 }
+
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export type FileEntry = { path: string; isDir: boolean }
 
@@ -282,7 +286,7 @@ export type TicketComment = { id?: string; author: string; /** ISO timestamp. */
 export type TicketTransition = { id: string; name: string; /** Status the transition moves to. */ to?: string }
 
 /** `stale`: a saved copy, shown at once while a fresh one loads (ask again shortly for it). */
-export type TicketResult = { ticket: Ticket; error?: undefined; stale?: boolean } | { ticket?: undefined; error: string }
+export type TicketResult = { ticket: Ticket; error?: undefined; stale?: boolean } | { ticket?: undefined; error: string } | { ticket?: undefined; error?: undefined; notLoaded: true }
 export type TicketTransitionsResult = { transitions: TicketTransition[]; error?: undefined } | { transitions?: undefined; error: string }
 export type TicketActionResult = { ok: true; error?: undefined } | { ok?: false; error: string }
 
@@ -310,7 +314,7 @@ export type ArchDiff = { added: ArchDiffEdge[]; removed: ArchDiffEdge[]; breache
 export type ProjectDecision = { id: string; kind: 'decision' | 'assumption'; title: string; detail?: string; files?: string[]; at: number; sid?: string; session?: string }
 
 /** Why each of a map module's connections exists, keyed "out:<module>" / "in:<module>". */
-export type ModuleExplain = { why: Record<string, string>; error?: string }
+export type ModuleExplain = { why: Record<string, string>; error?: string; notExplained?: boolean }
 
 /** A newer Glassbox: downloading (Windows), ready to restart into (Windows), or out to download (Mac). */
 /** `idle`: not an installed copy (no updates); `current`: up to date as of `checkedAt`. */
@@ -334,8 +338,23 @@ export type Automation = {
   holdEdits: HoldPolicy
   /** New sessions pick the model for each message (Opus, Sonnet or Haiku) rather than using one for everything. */
   autoModel: boolean
+  /** A predicted next prompt after each turn, offered in the message box (a small model call per turn). */
+  promptSuggestions: boolean
+  /** A model-written one-line status for each agent, for Live's lanes. */
+  agentSummaries: boolean
+  /** Remind Claude to show its work: a diagram for "how does…" questions and for wide changes, progress for long commands. */
+  nudges: boolean
+  /** The map names its categories, groups this conversation and explains connections by itself. */
+  autoMap: boolean
+  /** The Ticket panel loads the ticket from Jira when it opens, and keeps it fresh. */
+  autoTicket: boolean
+  /** New sessions commit Claude's changes at the end of each turn, with a model-written message. */
+  autoCommit: boolean
+  /** Claude may start "fork" agents, which get a copy of the whole conversation (and the session's model). */
+  agentForks: boolean
 }
 
 export type HoldPolicy = 'ask' | 'all' | 'offplan'
 
-export const AUTOMATION_DEFAULTS: Automation = { quickAnswers: true, watchdog: true, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask', autoModel: true }
+// Anything that would spend tokens without being asked starts off (quick answers and the watchdog's nudges are model calls).
+export const AUTOMATION_DEFAULTS: Automation = { promptSuggestions: true, agentSummaries: false, nudges: false, autoMap: false, autoTicket: false, autoCommit: false, agentForks: false, quickAnswers: false, watchdog: false, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask', autoModel: true }

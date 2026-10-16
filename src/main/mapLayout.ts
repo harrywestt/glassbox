@@ -32,7 +32,7 @@ async function load(root: string): Promise<Layout | null> {
  * the background (at most once at a time per project) and say so, so the UI refreshes when it's done.
  * `onDone` runs when a new layout has been saved.
  */
-export async function organise(arch: Architecture, onDone: () => void): Promise<Architecture> {
+export async function organise(arch: Architecture, onDone: () => void, generate = false): Promise<Architecture> {
   if (arch.source !== 'detected' || arch.modules.length < 3) return arch
   try {
     await dir()
@@ -42,6 +42,9 @@ export async function organise(arch: Architecture, onDone: () => void): Promise<
   const sig = signatureOf(arch)
   const saved = await load(arch.root)
   if (saved && saved.signature === sig) return applyLayout(arch, saved)
+  // Naming them is a model call, so it only happens when you ask (the map's "Name groups" button).
+  const base = saved ? applyLayout(arch, saved) : arch
+  if (!generate) return { ...base, canName: true }
   if (!running.has(arch.root)) {
     const job = nameCategories(arch, sig)
       .then(async (layout) => {
@@ -55,7 +58,7 @@ export async function organise(arch: Architecture, onDone: () => void): Promise<
     running.set(arch.root, job)
   }
   // Until Claude's names arrive, keep the categories a stored layout gave last time where they still apply.
-  return { ...(saved ? applyLayout(arch, saved) : arch), organising: true }
+  return { ...base, organising: true }
 }
 
 function applyLayout(arch: Architecture, layout: Layout): Architecture {

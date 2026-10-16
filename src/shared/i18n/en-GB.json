@@ -206,11 +206,10 @@
     "fromYou": "From you"
   },
   "automationCard": {
-    "title": "Automation",
     "quickAnswers": "Quick answers",
-    "quickAnswersNote": "When Claude is tied up waiting on an agent, answer your message at once from a copy of the conversation.",
+    "quickAnswersNote": "When Claude is tied up waiting on an agent, answer your message at once from a copy of the conversation. Each answer is an extra model call.",
     "watchdog": "Watch for stuck work",
-    "watchdogNote": "Ask Claude to check on background work that’s gone quiet, and stop an agent that makes no progress.",
+    "watchdogNote": "Ask Claude to check on background work that’s gone quiet, and stop an agent that makes no progress. Each check-in is an extra turn for Claude.",
     "nudgeAfter": "Ask Claude to check after",
     "stopAfter": "Stop a stuck agent after",
     "minutes": "{n} min",
@@ -377,8 +376,9 @@
     "title": "Changes",
     "showArchitecture": "Show how the change affects the architecture",
     "hideArchitecture": "Hide the architecture changes",
-    "onBranchVs": "On this branch, compared with {base}",
-    "onBranch": "On this branch"
+    "onBranchVs": "Branch vs {base}",
+    "onBranch": "On this branch",
+    "branchTip": "Everything on this branch that differs from it: {count} files, +{adds} −{dels}"
   },
   "code": {
     "commentOnSelectionTip": "Select lines in the file, then comment on them",
@@ -921,7 +921,9 @@
     "updated": "updated {ago}",
     "noPr": "No pull request for {branch} yet.",
     "noPrThisBranch": "No pull request for this branch yet.",
-    "askClaudeToOpen": "Ask Claude to open one"
+    "askClaudeToOpen": "Ask Claude to open one",
+    "commits": "Commits",
+    "commitsTip": "Commits on {branch} since it branched"
   },
   "guardrailsPanel": {
     "title": "Guardrails",
@@ -1201,7 +1203,8 @@
     "answering": "{url} is answering",
     "waitingFor": "Waiting for {file} to appear",
     "interrupted": "Stopped when Claude was interrupted",
-    "sessionStopped": "Stopped when the session closed"
+    "sessionStopped": "Stopped when the session closed",
+    "turnEnded": "Claude finished without updating this"
   },
   "mainMapAsk": {
     "noAnswer": "Claude didn’t return an answer. Try asking a different way."
@@ -1352,7 +1355,12 @@
       "convSummary_one": "{count} module in this conversation, and {context} connected to it",
       "convSummary_other": "{count} modules in this conversation, and {context} connected to them",
       "convSummaryHidden_one": "{count} module in this conversation, and {context} connected to it ({more} more connected, hidden)",
-      "convSummaryHidden_other": "{count} modules in this conversation, and {context} connected to them ({more} more connected, hidden)"
+      "convSummaryHidden_other": "{count} modules in this conversation, and {context} connected to them ({more} more connected, hidden)",
+      "group": "Group with Claude",
+      "groupTitle": "Have Claude group what this session touched by what it's for, leaving out generated code and other noise. Uses a small amount of tokens.",
+      "name": "Name groups with Claude",
+      "nameTitle": "Have Claude name the map's categories for this project. Uses a small amount of tokens.",
+      "naming": "Naming…"
     },
     "feature": {
       "askAgainTitle": "Ask again: “{q}”",
@@ -1485,7 +1493,9 @@
       "ripple": "What a change would affect",
       "askTestsTitle": "Start a message asking Claude for tests here",
       "askTests": "Ask for tests",
-      "bounds": "What Claude may do here"
+      "bounds": "What Claude may do here",
+      "explain": "Explain these connections",
+      "explainTitle": "Have Claude write a sentence on what each connection is for. Uses a small amount of tokens; kept until the code changes."
     },
     "replay": {
       "pause": "Pause",
@@ -1523,7 +1533,36 @@
       "haiku": "Haiku",
       "sonnet": "Sonnet",
       "opus": "Opus"
-    }
+    },
+    "effortHeading": "Effort",
+    "effortDefaultTip": "Use each model's own default effort, as Claude Code does",
+    "effort": {
+      "default": "Default effort",
+      "low": "Low",
+      "medium": "Med",
+      "high": "High",
+      "xhigh": "X-high",
+      "max": "Max"
+    },
+    "effortTip": {
+      "low": "Quick answers, little thinking. Fewest tokens.",
+      "medium": "Some thinking. Noticeably fewer tokens than High.",
+      "high": "Deep thinking on hard steps.",
+      "xhigh": "Deeper still. Uses many more tokens.",
+      "max": "As much thinking as the model allows. The most tokens by far."
+    },
+    "effortAuto": "{level}",
+    "effortTitle": "Effort: {level}. Click to change how hard Claude thinks.",
+    "effortFoot": "For this session and new ones. Applies from your next message.",
+    "effortName": {
+      "default": "Default",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "xhigh": "Extra high",
+      "max": "Max"
+    },
+    "effortChip": "{level} effort"
   },
   "money": {
     "noRate": "{original} (no GBP exchange rate available yet)",
@@ -2071,7 +2110,7 @@
     "yourTurn": "Your turn",
     "sharedWord": "Shared folder",
     "sharedWith": "Also open in {names}.",
-    "sharedShort": "Changes mix, and switching branch here switches both.",
+    "sharedShort": "Changes and branch switches here affect both.",
     "giveOwnCopyTip": "Move this session to its own copy of the repo (a git worktree on a new branch), so the two stop mixing",
     "makeCopy": "Make copy",
     "cancelCopy": "Cancel",
@@ -2365,7 +2404,10 @@
     "commentsCount": "Comments ({n})",
     "addComment": "Add a comment",
     "posting": "Posting…",
-    "post": "Post"
+    "post": "Post",
+    "notLoaded": "Not loaded yet. Glassbox reads Jira through a small Claude agent, so it only does that when you ask.",
+    "load": "Load {key} from Jira",
+    "changeStatusLoad": "Change…"
   },
   "timeline": {
     "showOnlyThisAgent": "Show only this agent",
@@ -2875,5 +2917,55 @@
       "warning": "Warning",
       "caution": "Caution"
     }
+  },
+  "settings": {
+    "title": "Settings",
+    "openTip": "Settings (Ctrl+,)",
+    "close": "Close (Esc)",
+    "section": {
+      "appearance": "Appearance",
+      "conversation": "Conversation",
+      "notifications": "Notifications",
+      "models": "Models and effort",
+      "background": "Background Claude",
+      "editing": "Editing",
+      "voice": "Voice"
+    },
+    "blurb": {
+      "appearance": "How Glassbox looks on this machine.",
+      "conversation": "How Claude’s replies read.",
+      "notifications": "How Glassbox gets your attention when Claude needs you.",
+      "models": "Which model works on each message, and how hard it thinks. Each session can change these from its model menu.",
+      "background": "Things Glassbox can have Claude do without you asking. Each one uses tokens, so all but suggestions start off.",
+      "editing": "When Claude’s edits wait for you before they land.",
+      "voice": "Dictation runs on this machine and uses no tokens."
+    },
+    "usesTokens": "Uses tokens",
+    "usesTokensTip": "Turning this on has Claude do work you didn’t ask for, which counts towards your plan’s limits.",
+    "backgroundOn_one": "{count} background feature on",
+    "backgroundOn_other": "{count} background features on",
+    "interfaceSizeNote": "Everything except the conversation text, which has its own size.",
+    "preview": "Preview",
+    "notificationsNote": "When Claude finishes, asks a question or needs approval and Glassbox isn’t in front.",
+    "awayDigestNote": "A short summary of what happened while you were in another app.",
+    "effort": "Effort for new sessions",
+    "effortNote": "Higher effort thinks longer and uses more tokens. Default uses each model’s own level, as Claude Code does.",
+    "backgroundIntro": "Your conversation with Claude always uses tokens. Everything below is extra: work Glassbox has Claude do without being asked. Session settings apply to sessions started after you change them.",
+    "inSessions": "In sessions",
+    "inViews": "In views",
+    "promptSuggestions": "Suggest your next message",
+    "promptSuggestionsNote": "After each reply, offer a likely next message in the message box. A small model call per turn.",
+    "nudges": "Remind Claude to show its work",
+    "nudgesNote": "Ask for a diagram on “how does…” questions and wide changes, and for progress on long commands. Can add a turn.",
+    "agentSummaries": "Agent status lines in Live",
+    "agentSummariesNote": "A model-written “what it’s doing now” for each agent Claude starts.",
+    "autoCommit": "Commit after each turn",
+    "autoCommitNote": "Commit Claude’s changes when it finishes, with a model-written message. Each session can switch it in Git.",
+    "autoMap": "Let the map write for itself",
+    "autoMapNote": "Name the map’s groups, group this conversation after each turn and explain connections when you select a module, without pressing the buttons.",
+    "autoTicket": "Load tickets automatically",
+    "autoTicketNote": "Read the ticket from Jira when the Ticket panel opens, and keep it fresh. Each read is a small Claude agent.",
+    "agentForks": "Let agents copy the conversation",
+    "agentForksNote": "Allow “fork” agents, which start with the whole conversation and run on the session’s model. Off: Claude starts fresh agents with a written brief, which is far cheaper in long sessions."
   }
 }

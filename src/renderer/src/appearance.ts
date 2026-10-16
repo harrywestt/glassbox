@@ -45,7 +45,17 @@ function load(): Appearance {
     // Older builds stored only the theme, under its own key.
     const legacyTheme = localStorage.getItem('glassbox.theme') as ThemePreference | null
     const merged = { ...DEFAULTS, ...(legacyTheme ? { theme: legacyTheme } : {}), ...(saved ?? {}) }
-    return { ...merged, automation: { ...AUTOMATION_DEFAULTS, ...(saved?.automation ?? {}) } }
+    const automation = { ...AUTOMATION_DEFAULTS, ...(saved?.automation ?? {}) }
+    // Once, for settings saved before the token rule: quick answers and the watchdog's nudges are
+    // model calls nobody asked for, so they start off (turn them back on in Settings).
+    if (saved?.automation && !localStorage.getItem('glassbox.tokenRule')) {
+      automation.quickAnswers = false
+      automation.watchdog = false
+      automation.autoCommit = localStorage.getItem('glassbox.autoCommit') === 'on'
+      localStorage.setItem('glassbox.tokenRule', '1')
+      localStorage.setItem(KEY, JSON.stringify({ ...saved, automation }))
+    }
+    return { ...merged, automation }
   } catch {
     return DEFAULTS
   }

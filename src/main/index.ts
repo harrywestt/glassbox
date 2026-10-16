@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { Updater } from './updater'
 import { setAutomation } from './automation'
-import type { Automation } from '../shared/events'
+import type { Automation, Effort } from '../shared/events'
 import { abortAllQueries } from './claude'
 import { askMap, type MapAskModule } from './mapAsk'
 import { createHash } from 'node:crypto'
@@ -24,7 +24,7 @@ import { UsageService } from './usage'
 import { getGitHubSummary } from './github'
 import { createPrWorktree, getBranchPr, getPr, listOpenPrs } from './launcher'
 import { findDependents } from './deps'
-import { getArchitecture, onArchitectureChanged, refreshArchitecture } from './architecture'
+import { getArchitecture, nameArchitecture, onArchitectureChanged, refreshArchitecture } from './architecture'
 import { getAccounts, signIn } from './accounts'
 import { getStandup } from './standup'
 import { architectureDiff } from './archDiff'
@@ -443,6 +443,7 @@ ipcMain.handle('session:continueAfterReset', (_e, tabId: string, on: boolean) =>
 ipcMain.handle('session:withdraw', (_e, tabId: string, uuid: string) => host(tabId).withdraw(uuid))
 ipcMain.handle('session:hold', (_e, tabId: string, toolUseId: string) => host(tabId).hold(toolUseId))
 ipcMain.handle('session:releaseHold', (_e, tabId: string, toolUseId: string, allow: boolean, reason?: string) => host(tabId).releaseHold(toolUseId, allow, reason))
+ipcMain.handle('session:setEffort', (_e, tabId: string, level: Effort | null) => host(tabId).setEffort(level))
 ipcMain.handle('session:setModel', (_e, tabId: string, model: string) => host(tabId).setModel(model))
 ipcMain.handle('session:stopTask', (_e, tabId: string, taskId: string) => host(tabId).stopTask(taskId))
 ipcMain.handle('session:close', (_e, tabId: string) => {
@@ -458,10 +459,11 @@ ipcMain.handle('watch:share', (_e, tabId: string, title: string, cwd: string) =>
 ipcMain.handle('watch:unshare', (_e, tabId: string) => watch.unshare(tabId))
 ipcMain.handle('deps:find', (_e, cwd: string, files: string[]) => findDependents(cwd, files))
 onArchitectureChanged((root) => toRenderer('glassbox:architecture', root))
-ipcMain.handle('architecture:explain', (_e, cwd: string, id: string) => explainModule(cwd, id))
+ipcMain.handle('architecture:explain', (_e, cwd: string, id: string, generate?: boolean) => explainModule(cwd, id, generate))
+ipcMain.handle('architecture:name', (_e, cwd: string) => nameArchitecture(cwd))
 // The map's "This conversation" view, grouped by Claude from the session's heatmap.
 ipcMain.handle('architecture:ask', (_e, root: string, question: string, mods: MapAskModule[], force?: boolean) => askMap(root, question, mods, force))
-ipcMain.handle('architecture:group', (_e, root: string, mods: HeatModule[], force?: boolean) => groupSessionMap(root, mods, force))
+ipcMain.handle('architecture:group', (_e, root: string, mods: HeatModule[], force?: boolean, generate?: boolean) => groupSessionMap(root, mods, force, generate))
 ipcMain.handle('architecture:get', (_e, cwd: string, force?: boolean) => getArchitecture(cwd, force))
 ipcMain.handle('architecture:diff', (_e, cwd: string, ref: string, mode: DiffMode, apiOnly?: string[]) => architectureDiff(cwd, ref, mode, apiOnly))
 ipcMain.handle('decisions:list', (_e, cwd: string) => listDecisions(cwd))
@@ -538,7 +540,7 @@ ipcMain.handle('admin:dismiss', () => dismissAdminPrompt())
 ipcMain.handle('edit:undo', (_e, cwd: string, tool: string, input: Record<string, unknown>, createdFile: boolean) => undoEdit(cwd, tool, input, createdFile))
 ipcMain.handle('radar:deps', (_e, deps: { name: string; version: string; ecosystem: string }[]) => checkDependencies(deps))
 ipcMain.handle('share:handoff', (_e, cwd: string, brief: string) => handoffMessage(cwd, brief))
-ipcMain.handle('ticket:get', (_e, cwd: string, key: string, force?: boolean) => getTicket(cwd, key, force))
+ipcMain.handle('ticket:get', (_e, cwd: string, key: string, force?: boolean, cachedOnly?: boolean) => getTicket(cwd, key, force, cachedOnly))
 ipcMain.handle('ticket:transitions', (_e, cwd: string, key: string) => getTransitions(cwd, key))
 ipcMain.handle('ticket:transition', (_e, cwd: string, key: string, id: string) => transitionTicket(cwd, key, id))
 ipcMain.handle('ticket:comment', (_e, cwd: string, key: string, body: string) => commentOnTicket(cwd, key, body))

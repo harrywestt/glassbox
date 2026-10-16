@@ -1,7 +1,7 @@
 import { AccountsButton } from './AccountsButton'
 import { setPinned, usePinned } from '../pins'
 import { StandupButton } from './StandupButton'
-import { AutomationCard } from './AutomationCard'
+import { SettingsDialog } from './SettingsDialog'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useActions } from '../App'
 import type { SessionState } from '../session'
@@ -10,7 +10,6 @@ import { baseName, formatTokens, timeAgo, timeUntil } from '../lib'
 import { Empty, Icon, IconButton, Meter, Skeleton, SkeletonRows } from '../components/ui'
 import type { LocalUsageDay, SDKSessionInfo, UsageSnapshot } from '../../../shared/events'
 import type { GitHubSummary } from '../../../shared/github'
-import { AppearanceCard } from './AppearanceCard'
 import { AdminChip } from './AdminCard'
 import { SessionsOverview } from './SessionsOverview'
 import { GitHubSection } from './GitHubSection'
@@ -85,6 +84,19 @@ function DashboardView({ tabs, sessions: liveSessions, visible, active }: Props 
     return () => clearInterval(t)
   }, [visible, refresh])
 
+  // Settings open from the gear here, or Ctrl+, anywhere.
+  const [settings, setSettings] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault()
+        setSettings(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <div className="dashboard">
       <div className="dash-inner">
@@ -103,7 +115,11 @@ function DashboardView({ tabs, sessions: liveSessions, visible, active }: Props 
           <AdminChip />
           {usage && <span className="muted small">{tr('dashboard.updated', { ago: timeAgo(usage.fetchedAt) })}</span>}
           <IconButton icon={loading ? 'loading' : 'refresh'} title={tr('dashboard.refresh')} onClick={() => void refresh(true)} />
+          <button className="btn dash-settings" onClick={() => setSettings(true)} title={tr('settings.openTip')}>
+            <Icon name="settings-gear" /> {tr('settings.title')}
+          </button>
         </header>
+        {settings && <SettingsDialog onClose={() => setSettings(false)} />}
 
         {usageError && <div className="note note-error">{usageError}</div>}
 
@@ -174,8 +190,6 @@ function DashboardView({ tabs, sessions: liveSessions, visible, active }: Props 
               {days ? <UsageChart days={days} /> : <div className="chart-skeleton" aria-busy="true" aria-label={tr('dashboard.loading')}>{Array.from({ length: 14 }, (_, i) => <span key={i} className="skeleton-bar" style={{ height: `${28 + ((i * 37) % 60)}%` }} />)}</div>}
             </section>
 
-            <AppearanceCard />
-            <AutomationCard />
 
           </div>
 

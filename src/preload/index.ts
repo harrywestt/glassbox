@@ -51,6 +51,7 @@ const api = {
     commitNow: (tabId: string): Promise<void> => invoke('session:commitNow', tabId),
     interrupt: (tabId: string): Promise<void> => invoke('session:interrupt', tabId),
     setModel: (tabId: string, model: string): Promise<void> => invoke('session:setModel', tabId, model),
+    setEffort: (tabId: string, level: import('../shared/events').Effort | null): Promise<void> => invoke('session:setEffort', tabId, level),
     /** Take back a message Claude hasn't read yet (false if it already has). */
     withdraw: (tabId: string, uuid: string): Promise<boolean> => invoke('session:withdraw', tabId, uuid),
     /** Hold an edit Claude is still writing (false if it has already landed). */
@@ -148,7 +149,7 @@ const api = {
   undoEdit: (cwd: string, tool: string, input: Record<string, unknown>, createdFile: boolean): Promise<{ deleted?: boolean }> => invoke('edit:undo', cwd, tool, input, createdFile),
   radar: (deps: { name: string; version: string; ecosystem: string }[]): Promise<{ name: string; version: string; ecosystem: string; license?: string; vulns: { id: string; summary?: string }[]; error?: string }[]> => invoke('radar:deps', deps),
   ticket: {
-    get: (cwd: string, key: string, force?: boolean): Promise<TicketResult> => invoke('ticket:get', cwd, key, force),
+    get: (cwd: string, key: string, force?: boolean, cachedOnly?: boolean): Promise<TicketResult> => invoke('ticket:get', cwd, key, force, cachedOnly),
     transitions: (cwd: string, key: string): Promise<TicketTransitionsResult> => invoke('ticket:transitions', cwd, key),
     transition: (cwd: string, key: string, id: string): Promise<TicketActionResult> => invoke('ticket:transition', cwd, key, id),
     comment: (cwd: string, key: string, body: string): Promise<TicketActionResult> => invoke('ticket:comment', cwd, key, body)
@@ -180,9 +181,11 @@ const api = {
   architecture: {
     get: (cwd: string, force?: boolean): Promise<Architecture> => invoke('architecture:get', cwd, force),
     /** Why each of a module's connections exists (Haiku, in the background; cached until the code changes). */
-    explain: (cwd: string, id: string): Promise<ModuleExplain> => invoke('architecture:explain', cwd, id),
+    explain: (cwd: string, id: string, generate?: boolean): Promise<ModuleExplain> => invoke('architecture:explain', cwd, id, generate),
+    /** Has Claude name the map's categories (a model call; only when asked). */
+    name: (cwd: string): Promise<void> => invoke('architecture:name', cwd),
     /** Group this session's modules (from its heatmap) the way an engineer would want to see the work. */
-    group: (root: string, mods: HeatModule[], force?: boolean): Promise<MapGroups> => invoke('architecture:group', root, mods, force),
+    group: (root: string, mods: HeatModule[], force?: boolean, generate?: boolean): Promise<MapGroups> => invoke('architecture:group', root, mods, force, generate),
     /** "Show me a feature": the modules and files involved, in the order the work flows (read-only). */
     ask: (root: string, question: string, mods: MapAskModule[], force?: boolean): Promise<MapAnswer> => invoke('architecture:ask', root, question, mods, force),
     /** Connections between modules the working tree adds or removes against a base; apiOnly flags imports past an api-only module's entry. */
