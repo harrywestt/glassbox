@@ -1197,23 +1197,24 @@ button.session-tile.tone-err { border-color: color-mix(in srgb, var(--err) 40%, 
 .gh-repo-count { min-width: 24px; }
 .gh-code { font-family: var(--mono); font-size: 12px; color: var(--fg); background: var(--elevated); padding: 1px var(--s-1); border-radius: var(--r-sm); }
 
-/* The Changes stack, as VS Code's Source Control view: every section under the same slim, upper-case
-   heading (count badge, its buttons on hover), flush rows, hairlines between sections, no cards. */
+/* The Changes stack: sections like every other panel's (13px headings with a chevron, 16px in,
+   hairlines between), with its lists running edge to edge so a row's hover fills the width. Rows
+   start under the heading's text. */
 .changes-stack > .panel { border-top: 0; }
 .changes-stack > .panel + .panel { border-top: 0; }
-.changes-stack .panel-scroll { padding: 0; gap: 0; }
-.changes-stack .section { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: none; box-shadow: none; }
-.changes-stack .section > .section-head { display: flex; align-items: center; height: 26px; margin: 0; padding: 0 var(--s-2) 0 var(--s-1); }
-.changes-stack .section-toggle { gap: 4px; min-width: 0; }
-.changes-stack .section-title { font: 600 12.5px/1 var(--font); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.changes-stack .section-head .icon-btn { width: 22px; height: 22px; visibility: hidden; }
+.changes-stack .panel-scroll { padding: 0; }
+.changes-stack .section.folded { padding-bottom: var(--s-4); }
+.changes-stack .section-head .icon-btn { visibility: hidden; }
 .changes-stack .section-head:hover .icon-btn, .changes-stack .section-head:focus-within .icon-btn { visibility: visible; }
-.changes-stack .section > :not(.section-head) { margin-left: var(--s-3); margin-right: var(--s-3); }
-.changes-stack .section > :last-child:not(.section-head) { margin-bottom: var(--s-2); }
-.changes-stack .section > .commit-list, .changes-stack .section > .file-list { margin-left: 0; margin-right: 0; }
-.changes-stack > .panel > .panel-scroll > .card:not(.section) { margin: var(--s-2) var(--s-3); }
-.changes-stack .changes-filters { margin-top: var(--s-1); }
-.commit-row.compact { align-items: center; gap: var(--s-2); height: 24px; padding: 0 var(--s-2) 0 22px; border-radius: 0; font-size: 13px; }
+.changes-stack .section > .commit-list, .changes-stack .section > .file-list { margin: 0 calc(-1 * var(--s-4)); }
+.changes-stack > .panel > .panel-scroll > .card:not(.section) { margin: 0; }
+.changes-stack .scm-count { margin-left: 0; }
+.scm-group { padding: var(--s-4) 0 var(--s-2); border-bottom: 1px solid var(--border); }
+.scm-group:last-child { border-bottom: 0; }
+.scm-group.folded { padding-bottom: var(--s-4); }
+.scm-group.folded .scm-group-head { margin-bottom: 0; }
+.scm .scm-commit + .scm-empty { padding: 0 var(--s-4) var(--s-3); }
+.commit-row.compact { align-items: center; gap: var(--s-2); height: 24px; padding: 0 var(--s-4) 0 calc(var(--s-4) + 22px); border-radius: 0; font-size: 13px; }
 .commit-row.compact:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .commit-row.compact .commit-dot { margin-top: 0; width: 7px; height: 7px; }
 .commit-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1718,22 +1719,22 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .loader-watching { margin-left: var(--s-2); color: var(--subtle); }
 /* Source Control, as VS Code lays it out: the commit box, then Staged Changes and Changes, a row per
    file (name, folder, actions on hover, status letter). */
-.scm { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); padding-bottom: var(--s-1); }
-.scm-commit { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); }
+.scm { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }
+.scm-commit { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-4); }
 .scm-message { width: 100%; min-height: 32px; resize: vertical; font: 13px/1.45 var(--font); padding: 6px var(--s-2); }
 .scm-commit-btn { width: 100%; justify-content: center; gap: var(--s-1); }
 .scm-error { margin: 0 var(--s-3) var(--s-2); }
 .scm-empty { padding: 0 var(--s-3) var(--s-2); }
-.scm-group-head { display: flex; align-items: center; height: 26px; padding: 0 var(--s-2) 0 var(--s-1); }
+.scm-group-head { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-4); margin-bottom: var(--s-2); }
 .scm-group-head:hover .scm-actions, .scm-group-head:focus-within .scm-actions { visibility: visible; }
-.scm-group-toggle { all: unset; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font: 600 12.5px/1 var(--font); color: var(--fg); cursor: pointer; }
+.scm-group-toggle { all: unset; flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s-2); font: 600 13px/1.3 var(--font); color: var(--fg); cursor: pointer; }
 .scm-group-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .scm-group.folded .section-chevron { transform: rotate(-90deg); }
 .scm-actions { display: inline-flex; visibility: hidden; }
 .scm-actions .icon-btn, .scm-row-actions .icon-btn { width: 22px; height: 22px; }
 .scm-count { min-width: 18px; height: 18px; padding: 0 5px; margin-left: var(--s-1); border-radius: 9px; background: color-mix(in srgb, var(--fg) 12%, transparent); color: var(--fg); font-size: 11px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .scm-files { display: flex; flex-direction: column; }
-.scm-row { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 var(--s-2) 0 22px; font-size: 13px; cursor: pointer; outline: none; }
+.scm-row { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 var(--s-4) 0 calc(var(--s-4) + 22px); font-size: 13px; cursor: pointer; outline: none; }
 .scm-row:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .scm-row:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
 .scm-row.selected { background: var(--selection); }

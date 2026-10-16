@@ -1113,7 +1113,10 @@
       "seven_day_opus": "weekly Opus limit",
       "seven_day_sonnet": "weekly Sonnet limit",
       "other": "usage limit"
-    }
+    },
+    "tooLongReason": "the conversation is too long for the smaller models",
+    "tooLongSwitched": "This conversation no longer fits the smaller model’s window, so Auto moved it to Opus (1M). Send your message again.",
+    "tooLongPick": "This conversation no longer fits this model’s window. Pick Opus (1M context) from the model menu, or /clear to start fresh."
   },
   "mainArchDiff": {
     "notRepo": "Not a git repository"
