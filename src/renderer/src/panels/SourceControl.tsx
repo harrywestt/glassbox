@@ -173,9 +173,9 @@ function Group({ id, title, count, actions, children }: { id: string; title: str
         <button className="scm-group-toggle" aria-expanded={!folded} onClick={toggle}>
           <Icon name="chevron-down" className="section-chevron" />
           <span>{title}</span>
+          <span className="scm-count">{count}</span>
         </button>
         <span className="scm-actions">{actions}</span>
-        <span className="scm-count">{count}</span>
       </div>
       {!folded && children}
     </div>

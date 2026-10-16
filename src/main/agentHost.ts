@@ -812,7 +812,10 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
   async refreshContext() {
     if (!this.q) return
     try {
-      this.emit({ kind: 'context', usage: await this.q.getContextUsage({ detail: 'full' }) })
+      const usage = await this.q.getContextUsage({ detail: 'full' })
+      // The conversation's real size, a resumed transcript included (Auto picks a model that fits it).
+      if (usage?.totalTokens) this.contextTokens = usage.totalTokens
+      this.emit({ kind: 'context', usage })
     } catch (err) {
       this.emit({ kind: 'stderr', text: `getContextUsage failed: ${String(err)}\n` })
     }
@@ -955,6 +958,9 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
     // Glassbox's own notes to Claude and slash commands carry on with whatever model is in use.
     // A message sent mid-turn waits for the turn to end: switching now would change model part way through it.
     if (!this.isAuto() || !this.q || this.busy || text.startsWith('[Glassbox') || text.trim().startsWith('/')) return
+    // A session just resumed hasn't made a request yet, so its size isn't known from one: ask, or a
+    // long transcript would be sent to a model whose window it doesn't fit.
+    if (!this.contextTokens) await this.refreshContext()
     const pick = pickTier({ text, plan, kind: this.kind, contextTokens: this.contextTokens, current: this.autoTier, firstMessage: first, wideSonnet: this.modelValues.includes('sonnet[1m]') })
     const model = modelFor(pick.tier, this.modelValues, this.contextTokens)
     if (model !== this.autoModel) {
@@ -967,6 +973,33 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       }
     }
     this.emit({ kind: 'model-auto', on: true, tier: pick.tier, model, reason: pick.reason })
+  }
+
+  /**
+   * The conversation no longer fits the model's window, even compacted ("Prompt is too long"). On
+   * Auto, move to the model's 1M-context version so your next message goes through; otherwise say
+   * which model to switch to.
+   */
+  private async fitWindow(msg: { is_error?: boolean; result?: string; errors?: string[] }) {
+    const text = [msg.result ?? '', ...(msg.errors ?? [])].join(' ')
+    if (!msg.is_error || !/prompt is too long|context.{0,20}(too long|exceed)/i.test(text)) return
+    const current = this.autoModel ?? this.sessionModel ?? ''
+    if (/\[1m\]/i.test(current)) return
+    const wide = ['opus[1m]', 'sonnet[1m]'].find((m) => this.modelValues.includes(m))
+    if (!wide) return
+    if (this.isAuto() && this.q) {
+      try {
+        await this.q.setModel(wide)
+        this.autoModel = wide
+        this.autoTier = wide.startsWith('opus') ? 'opus' : 'sonnet'
+        this.emit({ kind: 'model-auto', on: true, tier: this.autoTier, model: wide, reason: tr('mainAgentHost.tooLongReason') })
+        this.emit({ kind: 'alert', level: 'warn', text: tr('mainAgentHost.tooLongSwitched') })
+      } catch {
+        /* the alert below still says what to do */
+      }
+      return
+    }
+    this.emit({ kind: 'alert', level: 'warn', text: tr('mainAgentHost.tooLongPick') })
   }
 
   async setMode(mode: PermissionMode) {
@@ -1208,6 +1241,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
         this.emit({ kind: 'sdk', msg })
         if ('session_id' in msg && typeof msg.session_id === 'string') this.sid = msg.session_id
         if (msg.type === 'result') {
+          void this.fitWindow(msg)
           // The query's cost starts again at 0 after a resume; the saved total carries on from before.
           this.extras.costUsd = this.costBase + (msg.total_cost_usd ?? 0)
           this.spentMain(msg)
