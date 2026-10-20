@@ -1851,7 +1851,7 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
    reading width, with its sections listed beside it when there's room; the decision fixed below. */
 .plan-tab { flex: 1; min-height: 0; height: 100%; display: flex; flex-direction: column; background: var(--bg); container-type: inline-size; }
 .plan-tab-empty { margin: auto; max-width: 420px; padding: var(--s-5); text-align: center; }
-.plan-bar { flex: none; display: flex; align-items: center; gap: var(--s-2); height: 40px; padding: 0 var(--s-2) 0 var(--s-4); border-bottom: 1px solid var(--border); font-size: 13px; min-width: 0; }
+.plan-bar { flex: none; display: flex; align-items: center; gap: var(--s-2); height: 40px; padding: 0 var(--s-2) 0 var(--s-5); border-bottom: 1px solid var(--border); font-size: 13px; min-width: 0; }
 .plan-bar > .codicon { color: var(--muted); }
 .plan-bar strong { font-weight: 600; flex: none; }
 .plan-status { flex: none; font-weight: 600; color: var(--muted); }
@@ -1859,24 +1859,25 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .plan-status-approved { color: var(--ok); }
 .plan-map { flex: none; gap: var(--s-1); }
 .plan-scroll { flex: 1; min-height: 0; overflow-y: auto; scroll-padding-top: var(--s-5); }
-.plan-layout { display: grid; grid-template-columns: minmax(0, 720px); justify-content: center; gap: var(--s-6); padding: var(--s-6) var(--s-5) 64px; }
-@container (min-width: 1080px) {
-  .plan-layout.with-outline { grid-template-columns: 180px minmax(0, 720px); padding-right: calc(180px + var(--s-6) + var(--s-5)); }
+.plan-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); padding: var(--s-5) var(--s-5) 64px; }
+/* The section rail beside it when there's room; the plan takes the rest, up to the conversation width setting. */
+@container (min-width: 1000px) {
+  .plan-layout.with-outline { grid-template-columns: 168px minmax(0, 1fr); }
 }
 .plan-outline { display: none; }
-@container (min-width: 1080px) {
+@container (min-width: 1000px) {
   .plan-outline { position: sticky; top: var(--s-5); align-self: start; display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
 }
 .plan-outline button { all: unset; box-sizing: border-box; padding: 4px var(--s-2); border-left: 2px solid var(--border); color: var(--muted); font-size: 12.5px; line-height: 1.4; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan-outline button:hover { color: var(--fg); }
 .plan-outline button.on { color: var(--fg); border-left-color: var(--accent); }
 .plan-outline button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
-.plan-doc { font-size: 14px; line-height: 1.7; min-width: 0; }
+.plan-doc { font-size: var(--chat-size, 15px); line-height: 1.65; min-width: 0; width: 100%; max-width: var(--reading-width, none); margin: 0 auto; }
 .plan-doc > :first-child { margin-top: 0; }
-.plan-doc h1 { font-size: 22px; line-height: 1.3; margin: 0 0 var(--s-2); letter-spacing: -.01em; }
-.plan-doc h2 { font-size: 15px; margin: var(--s-5) 0 var(--s-2); padding-top: var(--s-4); border-top: 1px solid var(--border); }
+.plan-doc h1 { font-size: 1.45em; line-height: 1.3; margin: 0 0 var(--s-2); letter-spacing: -.01em; }
+.plan-doc h2 { font-size: 1.1em; margin: var(--s-6) 0 var(--s-2); }
 .plan-doc h1 + h2, .plan-doc > h2:first-child { border-top: 0; padding-top: 0; }
-.plan-doc h3 { font-size: 13.5px; margin: var(--s-4) 0 var(--s-1); }
+.plan-doc h3 { font-size: 1em; margin: var(--s-4) 0 var(--s-1); }
 .plan-doc li + li { margin-top: 4px; }
 .plan-doc table { width: 100%; display: table; }
 /* Plan blocks: sketches, files, diffs, callouts and open questions between the plan's prose. */
@@ -1889,6 +1890,13 @@ button.loaders-head:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .plan-missing { padding: 10px 12px; border-style: dashed; }
 .plan-sketch { background: var(--bg); }
 .plan-sketch-frame { position: relative; overflow: hidden; background: var(--bg); }
+.plan-sketch-open { all: unset; display: block; width: 100%; cursor: zoom-in; }
+.plan-sketch-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.plan-sketch figcaption .icon-btn { width: 24px; height: 24px; }
+.plan-sketch-zoom { z-index: 45; }
+.plan-sketch-zoom-bar { flex: none; display: flex; align-items: center; gap: var(--s-2); height: 40px; padding: 0 var(--s-2) 0 var(--s-5); border-bottom: 1px solid var(--border); font-size: 13px; }
+.plan-sketch-zoom-bar > .codicon { color: var(--accent); }
+.plan-sketch-zoom > .panzoom, .plan-sketch-zoom > :last-child { flex: 1; min-height: 0; }
 .plan-sketch-frame iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; pointer-events: none; }
 .plan-sketch figcaption { display: flex; align-items: center; gap: var(--s-2); padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface); font-size: 12.5px; line-height: 1.4; }
 .plan-sketch figcaption > .codicon { color: var(--accent); }
@@ -1914,19 +1922,81 @@ button.plan-file-name:hover { color: var(--accent); text-decoration: underline; 
 .plan-more { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); cursor: pointer; }
 .plan-more:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 4%, transparent); }
 .plan-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.plan-question { padding: 10px 12px; }
+.plan-question { margin: 0; padding: 12px 14px 14px; border: 0; min-width: 0; }
 .plan-question + .plan-question { border-top: 1px solid var(--border); }
-.plan-question-text { font-size: 13.5px; font-weight: 500; margin-bottom: 8px; line-height: 1.45; }
-.plan-options { display: flex; flex-wrap: wrap; gap: 6px; }
-.plan-option { height: auto; min-height: 28px; padding: 4px 10px; border-radius: var(--r-md); font: 13px/1.35 var(--font); text-align: left; white-space: normal; gap: 6px; }
-.plan-option.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--fg); }
-.plan-option:disabled { opacity: 1; cursor: default; }
-.plan-recommended { font-size: 11px; color: var(--accent); font-weight: 500; }
-.plan-option-own { flex: 1; min-width: 160px; height: 28px; font-size: 13px; }
-.plan-option-own.on { border-color: var(--accent); }
+.plan-question-text { display: flex; gap: var(--s-2); align-items: baseline; padding: 0; margin-bottom: 10px; font-size: 1em; font-weight: 600; line-height: 1.45; color: var(--fg); }
+.plan-question-n { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-size: 11px; font-weight: 700; }
+.plan-choices { display: flex; flex-direction: column; gap: 6px; padding-left: 28px; }
+.plan-choice { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); font-size: .95em; line-height: 1.4; cursor: pointer; }
+.plan-choice:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.plan-choice.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg)); }
+.plan-choice input[type="radio"] { flex: none; margin: 0; accent-color: var(--accent); width: 15px; height: 15px; }
+.plan-choice-text { flex: 1; min-width: 0; }
+.plan-choice.other .plan-choice-text { flex: none; }
+.plan-choice-own { flex: 1; min-width: 120px; height: 28px; font-size: .95em; }
+.plan-recommended { flex: none; font-size: 11px; font-weight: 600; color: var(--accent); }
+/* After the decision: the choices stay to read, not to change. */
+.plan-question.locked .plan-choice { cursor: default; }
+.plan-question.locked .plan-choice:not(.on) { opacity: .6; }
 
+/* The bar's summary: what the plan touches, risks and open questions, each a jump to its block. */
+.plan-facts { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.plan-fact { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: var(--r-md); font-size: 12px; color: var(--muted); cursor: pointer; }
+.plan-fact:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.plan-fact:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.plan-fact .codicon { font-size: 14px; }
+.plan-fact.warn, .plan-fact.warn .codicon { color: var(--warn); }
+.plan-outline button.block { font-size: 12px; color: var(--subtle); }
+.plan-outline button.block.on, .plan-outline button.block:hover { color: var(--fg); }
+/* Numbered steps as a step list: a numbered disc each, the text beside it. */
+.plan-doc .plan-md > ol { list-style: none; counter-reset: plan-step; padding-left: 0; }
+.plan-doc .plan-md > ol > li { counter-increment: plan-step; position: relative; padding-left: 36px; margin: 10px 0; }
+.plan-doc .plan-md > ol > li::before { content: counter(plan-step); position: absolute; left: 0; top: .05em; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; font: 600 12px/1 var(--font); color: var(--muted); }
+.plan-doc .plan-block { margin: var(--s-4) 0 var(--s-5); }
+/* Reviewing: skip toggles on steps, notes on selected text, picks in sketches. */
+.plan-step-skip { all: unset; margin-left: var(--s-2); padding: 0 6px; border-radius: var(--r-sm); font-size: 11.5px; color: var(--subtle); cursor: pointer; opacity: 0; transition: opacity .12s var(--ease); }
+.plan-doc li:hover > .plan-step-skip, .plan-step-skip:focus-visible, li.skipped > .plan-step-skip { opacity: 1; }
+.plan-step-skip:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.plan-step-skip:focus-visible { outline: 2px solid var(--accent); }
+.plan-doc li.skipped { color: var(--subtle); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--fg) 35%, transparent); }
+.plan-doc li.skipped > .plan-step-skip { text-decoration: none; color: var(--accent); }
+.plan-doc .plan-md > ol > li.skipped::before { opacity: .45; }
+/* Building: steps tick off as Claude's to-dos do. */
+.plan-doc .plan-md > ol > li[data-status="done"]::before { content: '✓'; background: var(--ok); border-color: var(--ok); color: #fff; }
+.plan-doc .plan-md > ol > li[data-status="active"]::before { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.plan-doc .plan-md > ol > li[data-status="done"] { color: var(--muted); }
+.plan-progress { color: var(--accent); font-weight: 500; }
+.plan-file.built .plan-file-name { color: var(--ok); }
+.plan-file-done { color: var(--ok); font-size: 14px; justify-self: end; }
+.plan-file { grid-template-columns: 16px auto minmax(0, 1fr) auto; }
+/* What changed since the last version. */
+.plan-changed { display: block; position: relative; }
+.plan-changed::before { content: ''; position: absolute; left: -14px; top: 2px; bottom: 2px; width: 3px; border-radius: 2px; background: var(--ok); }
+.plan-removed { margin: 0 0 var(--s-4); padding: 8px 12px; border: 1px dashed color-mix(in srgb, var(--err) 40%, var(--border)); border-radius: var(--r-md); font-size: .92em; color: var(--muted); }
+.plan-removed summary { cursor: pointer; color: var(--err); font-weight: 500; }
+.plan-removed .plan-md { display: block; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--err) 45%, transparent); margin-top: 6px; }
+.plan-fact.on { color: var(--fg); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* A note on part of the plan. */
+.plan-note-pop { position: absolute; z-index: 6; width: 340px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-pop); animation: pop-in .12s var(--ease); }
+.plan-note-quote { font-size: 12px; color: var(--muted); }
+.plan-note-row { display: flex; gap: 6px; }
+.plan-note-row input { flex: 1; min-width: 0; }
+.plan-notes { list-style: none; margin: 0 0 var(--s-2); padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
+.plan-notes li { display: flex; align-items: center; gap: var(--s-2); padding: 4px 4px 4px 10px; border-radius: var(--r-md); background: var(--bg); font-size: 12.5px; }
+.plan-note-on { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.plan-review { display: inline-flex; align-items: baseline; gap: 4px var(--s-3); flex-wrap: wrap; min-width: 0; }
+.plan-sketch-frame.pickable { cursor: pointer; }
+.plan-picked { color: var(--accent); font-weight: 500; }
+.plan-kept { flex: none; display: flex; align-items: center; gap: var(--s-2); padding: 4px var(--s-2) 4px var(--s-5); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--ok) 7%, var(--surface)); font-size: 12.5px; }
+.plan-kept > .codicon { color: var(--ok); }
+.plan-kept.error { background: color-mix(in srgb, var(--err) 7%, var(--surface)); }
+.plan-kept.error > .codicon { color: var(--err); }
+.plan-decide-row .select-btn, .plan-decide-row .select { max-width: 170px; }
+@media (prefers-reduced-motion: reduce) { .plan-note-pop { animation: none; } .plan-step-skip { transition: none; } }
 .plan-decide { flex: none; border-top: 1px solid var(--border); background: var(--surface); padding: var(--s-3) var(--s-5); }
-.plan-decide-inner { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s-2); animation: plan-decide-in 160ms ease-out; }
+/* Code in a plan at the conversation's code size. */
+.plan-doc pre code, .plan-diff pre { font-size: var(--chat-code-size, 13px); }
+.plan-decide-inner { max-width: var(--reading-width, none); margin: 0 auto; display: flex; flex-direction: column; gap: var(--s-2); animation: plan-decide-in 160ms ease-out; }
 .plan-decide-row { display: flex; align-items: center; gap: var(--s-2); }
 .plan-decide textarea { width: 100%; resize: vertical; min-height: 64px; }
 @keyframes plan-decide-in { from { opacity: 0; } }

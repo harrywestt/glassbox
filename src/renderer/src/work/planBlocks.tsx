@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { useSketchUrl } from './SketchTab'
-import { Icon } from '../components/ui'
+import { Icon, IconButton } from '../components/ui'
+import { PanZoom } from '../components/PanZoom'
 import { baseName } from '../lib'
 import { tr } from '../../../shared/i18n'
 
@@ -116,20 +117,32 @@ export function planAsMarkdown(text: string): string {
 }
 
 /** A sketch, inline in the plan at the column's width; click it to open it in Sketches (to pick or comment). */
-export function SketchBlock({ id, version, caption }: { id: string; version?: number; caption?: string }) {
+export function SketchBlock({ id, version, caption, picked, onPick }: { id: string; version?: number; caption?: string; /** The option you picked in it, if it offers some. */ picked?: string; onPick?: (label: string) => void }) {
   const { s, showPanel } = useSession()
   const sketch = s.sketches?.[id]
   if (!sketch) return <div className="plan-block plan-missing muted small">{tr('planBlocks.noSketch', { id })}</div>
   const v = sketch.versions[Math.min(sketch.versions.length, Math.max(1, version ?? sketch.versions.length)) - 1]
+  const [zoomed, setZoomed] = useState(false)
+  // A sketch with options to choose between is clicked to pick; the zoom button still zooms.
+  const pickable = !!onPick && /data-pick=/.test(v.html)
   return (
-    <figure className="plan-block plan-sketch">
-      <SketchFrame version={v} />
+    <figure className="plan-block plan-sketch" data-kind="sketch" data-outline={sketch.title}>
+      {pickable ? (
+        <SketchFrame version={v} onPick={onPick} />
+      ) : (
+        <button className="plan-sketch-open" onClick={() => setZoomed(true)} title={tr('planBlocks.zoomTip')} aria-label={tr('planBlocks.zoomTip')}>
+          <SketchFrame version={v} />
+        </button>
+      )}
+      {zoomed && <ZoomedSketch title={sketch.title} version={v} onClose={() => setZoomed(false)} />}
       <figcaption>
         <Icon name="edit" />
         <span className="grow">
           <strong>{sketch.title}</strong>
           {caption && <span className="muted"> {caption}</span>}
+          {pickable && (picked ? <span className="plan-picked"> · {tr('planBlocks.picked', { option: picked })}</span> : <span className="muted"> · {tr('planBlocks.pickHint')}</span>)}
         </span>
+        <IconButton icon="zoom-in" title={tr('planBlocks.zoomTip')} onClick={() => setZoomed(true)} />
         <button className="link small" onClick={() => showPanel('sketches')}>
           {tr('planBlocks.openSketch')}
         </button>
@@ -138,7 +151,7 @@ export function SketchBlock({ id, version, caption }: { id: string; version?: nu
   )
 }
 
-function SketchFrame({ version }: { version: Parameters<typeof useSketchUrl>[0] }) {
+function SketchFrame({ version, onPick }: { version: Parameters<typeof useSketchUrl>[0]; onPick?: (label: string) => void }) {
   const { url } = useSketchUrl(version)
   const box = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -154,17 +167,61 @@ function SketchFrame({ version }: { version: Parameters<typeof useSketchUrl>[0] 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.source !== frame.current?.contentWindow) return
-      const m = e.data as { glassboxSketch?: boolean; type?: string; h?: number }
+      const m = e.data as { glassboxSketch?: boolean; type?: string; h?: number; label?: string }
       if (m?.glassboxSketch && m.type === 'size' && m.h) setHeight(Math.max(120, Math.min(4000, m.h)))
+      if (m?.glassboxSketch && m.type === 'pick' && m.label) pickRef.current?.(m.label)
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [])
+  const pickRef = useRef(onPick)
+  pickRef.current = onPick
   // Drawn at its own width and scaled to the column, so a 1200px layout reads as it would on screen.
   const scale = width ? Math.min(1, width / version.width) : 1
+  // A click on the picture is passed to the page at its own scale, where an option picks itself.
+  const tap = (e: React.MouseEvent) => {
+    if (!onPick || !box.current) return
+    const r = box.current.getBoundingClientRect()
+    frame.current?.contentWindow?.postMessage({ glassboxSketch: true, type: 'tap', x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale, mode: 'hand' }, '*')
+  }
   return (
-    <div className="plan-sketch-frame" ref={box} style={{ height: height * scale }}>
+    <div className={onPick ? 'plan-sketch-frame pickable' : 'plan-sketch-frame'} ref={box} style={{ height: height * scale }} onClick={tap}>
       {url && <iframe ref={frame} src={url} title={tr('planBlocks.sketch')} sandbox="allow-scripts" tabIndex={-1} style={{ width: version.width, height, transform: `scale(${scale})` }} />}
+    </div>
+  )
+}
+
+/** A sketch from the plan, filling the window: drag to pan, scroll or pinch to zoom, Esc to close. */
+function ZoomedSketch({ title, version, onClose }: { title: string; version: Parameters<typeof useSketchUrl>[0]; onClose: () => void }) {
+  const { url } = useSketchUrl(version)
+  const frame = useRef<HTMLIFrameElement>(null)
+  const [height, setHeight] = useState<number | null>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== frame.current?.contentWindow) return
+      const m = e.data as { glassboxSketch?: boolean; type?: string; h?: number }
+      if (m?.glassboxSketch && m.type === 'size' && m.h) setHeight(Math.max(120, Math.min(6000, m.h)))
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('message', onMessage)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('message', onMessage)
+    }
+  }, [onClose])
+  return (
+    <div className="diagram-full plan-sketch-zoom" role="dialog" aria-label={title}>
+      <div className="plan-sketch-zoom-bar">
+        <Icon name="edit" />
+        <strong className="grow ellipsis">{title}</strong>
+        <IconButton icon="close" title={tr('planBlocks.closeZoom')} onClick={onClose} />
+      </div>
+      {url && (
+        <PanZoom contentKey={`${url}:${height === null ? 0 : 1}`} size={{ w: version.width, h: height ?? 800 }} fitWidth hint={tr('planBlocks.zoomHint')}>
+          <iframe ref={frame} className="sketch-frame" title={title} src={url} sandbox="allow-scripts" width={version.width} height={height ?? 800} style={{ pointerEvents: 'none' }} />
+        </PanZoom>
+      )}
     </div>
   )
 }
@@ -172,7 +229,7 @@ function SketchFrame({ version }: { version: Parameters<typeof useSketchUrl>[0] 
 const OP_LABEL = { add: 'planBlocks.opAdd', change: 'planBlocks.opChange', remove: 'planBlocks.opRemove' } as const
 
 /** The files the plan touches, by folder: what's added, changed and removed, and why. */
-export function FilesBlock({ rows }: { rows: FileRow[] }) {
+export function FilesBlock({ rows, done }: { rows: FileRow[]; /** Files edited since the plan was approved (lower case, forward slashes, relative). */ done?: Set<string> }) {
   const { tab, openFile } = useSession()
   const dirs = new Map<string, FileRow[]>()
   for (const r of rows) {
@@ -181,7 +238,7 @@ export function FilesBlock({ rows }: { rows: FileRow[] }) {
   }
   const counts = { add: rows.filter((r) => r.op === 'add').length, change: rows.filter((r) => r.op === 'change').length, remove: rows.filter((r) => r.op === 'remove').length }
   return (
-    <div className="plan-block plan-files">
+    <div className="plan-block plan-files" data-kind="files" data-outline={tr('planBlocks.outlineFiles')}>
       <div className="plan-block-head">
         <Icon name="files" />
         <span className="grow">{tr('planBlocks.files', { count: rows.length })}</span>
@@ -193,7 +250,7 @@ export function FilesBlock({ rows }: { rows: FileRow[] }) {
         <div key={dir} className="plan-files-dir">
           {dir && <div className="plan-files-dirname">{dir}/</div>}
           {list.map((r) => (
-            <div key={r.path} className={`plan-file op-${r.op}`}>
+            <div key={r.path} className={`plan-file op-${r.op}${done?.has(r.path.replace(/\\/g, '/').replace(/^\.?\//, '').toLowerCase()) ? ' built' : ''}`}>
               <span className={`plan-op op-${r.op}`} title={tr(OP_LABEL[r.op])}>{r.op === 'add' ? '+' : r.op === 'remove' ? '−' : '~'}</span>
               {r.op === 'add' ? (
                 <span className="plan-file-name">{baseName(r.path)}</span>
@@ -203,6 +260,7 @@ export function FilesBlock({ rows }: { rows: FileRow[] }) {
                 </button>
               )}
               {r.why && <span className="plan-file-why">{r.why}</span>}
+              {done?.has(r.path.replace(/\\/g, '/').replace(/^\.?\//, '').toLowerCase()) && <Icon name="pass-filled" className="plan-file-done" title={tr('planBlocks.fileDone')} />}
             </div>
           ))}
         </div>
@@ -248,7 +306,7 @@ const CALLOUT = { risk: { icon: 'warning', cls: 'md-alert-warning' }, decision: 
 export function CalloutBlock({ type, html }: { type: 'risk' | 'decision' | 'note'; html: string }) {
   const c = CALLOUT[type]
   return (
-    <div className={`plan-block md-alert ${c.cls}`}>
+    <div className={`plan-block md-alert ${c.cls}`} data-kind={type}>
       <div className="md-alert-title">
         <Icon name={c.icon} /> {tr(`planBlocks.callout.${type}`)}
       </div>
@@ -259,36 +317,50 @@ export function CalloutBlock({ type, html }: { type: 'risk' | 'decision' | 'note
 
 export type Answers = Record<string, string>
 
-/** Open questions, each with Claude's recommendation picked to start with; your answers go with your decision. */
+/**
+ * Open questions, as a form: each a set of choices with Claude's recommendation selected to start
+ * with, and Other for your own answer. Your choices go with your decision (Approve or Request changes).
+ */
 export function QuestionsBlock({ items, answers, onAnswer, editable }: { items: Question[]; answers: Answers; onAnswer: (q: string, a: string) => void; editable: boolean }) {
+  const name = useRef(`plan-q-${Math.random().toString(36).slice(2, 8)}`)
   return (
-    <div className="plan-block plan-questions">
+    <div className="plan-block plan-questions" data-kind="questions" data-outline={tr('planBlocks.outlineQuestions')}>
       <div className="plan-block-head">
         <Icon name="question" />
         <span className="grow">{tr('planBlocks.questions', { count: items.length })}</span>
         {editable && <span className="muted small">{tr('planBlocks.questionsHint')}</span>}
       </div>
       {items.map((q, qi) => {
-        const chosen = answers[q.text] ?? q.options[0] ?? ''
-        const custom = !!chosen && !q.options.includes(chosen)
+        const given = answers[q.text]
+        const chosen = given ?? q.options[0] ?? ''
+        const other = given !== undefined && !q.options.includes(given)
+        const group = `${name.current}-${qi}`
         return (
-          <div key={qi} className="plan-question">
-            <div className="plan-question-text">{q.text}</div>
-            <div className="plan-options" role="radiogroup" aria-label={q.text}>
+          <div key={qi} className={editable ? 'plan-question' : 'plan-question locked'} role="radiogroup" aria-labelledby={`${group}-q`}>
+            <div className="plan-question-text" id={`${group}-q`}>
+              <span className="plan-question-n">{qi + 1}</span>
+              {q.text}
+            </div>
+            <div className="plan-choices">
               {q.options.map((o, oi) => (
-                <button key={oi} role="radio" aria-checked={chosen === o} disabled={!editable} className={chosen === o ? 'plan-option on' : 'plan-option'} onClick={() => onAnswer(q.text, o)}>
-                  {o}
+                <label key={oi} className={!other && chosen === o ? 'plan-choice on' : 'plan-choice'}>
+                  <input type="radio" disabled={!editable} name={group} checked={!other && chosen === o} onChange={() => onAnswer(q.text, o)} />
+                  <span className="plan-choice-text">{o}</span>
                   {oi === 0 && <span className="plan-recommended">{tr('planBlocks.recommended')}</span>}
-                </button>
+                </label>
               ))}
-              {editable && (
+              <label className={other || !q.options.length ? 'plan-choice other on' : 'plan-choice other'}>
+                <input type="radio" disabled={!editable} name={group} checked={other || !q.options.length} onChange={() => onAnswer(q.text, given && other ? given : ' ')} />
+                <span className="plan-choice-text">{tr('planBlocks.other')}</span>
                 <input
-                  className={custom ? 'plan-option-own on' : 'plan-option-own'}
-                  placeholder={q.options.length ? tr('planBlocks.somethingElse') : tr('planBlocks.yourAnswer')}
-                  value={custom ? chosen : ''}
-                  onChange={(e) => onAnswer(q.text, e.target.value)}
+                  disabled={!editable}
+                  className="plan-choice-own"
+                  placeholder={tr('planBlocks.yourAnswer')}
+                  value={other ? given.trim() === '' ? '' : given : ''}
+                  onFocus={() => !other && onAnswer(q.text, given && other ? given : ' ')}
+                  onChange={(e) => onAnswer(q.text, e.target.value || ' ')}
                 />
-              )}
+              </label>
             </div>
           </div>
         )
@@ -309,4 +381,40 @@ export function answersText(segments: Segment[], answers: Answers): string {
     }
   }
   return lines.length ? `Answers to the plan's open questions:\n${lines.join('\n')}` : ''
+}
+
+/** A Markdown section split into its blocks (paragraphs, lists, headings), for comparing two versions of a plan. */
+export function mdBlocks(text: string): string[] {
+  return text
+    .replace(/\r\n/g, '\n')
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean)
+}
+const norm = (b: string) => b.replace(/\s+/g, ' ').trim().toLowerCase()
+
+/** What the plan before this one had that this one doesn't, and which of this one's blocks are new or reworded. */
+export function planChanges(before: string, now: string): { removed: string[]; isNew: (block: string) => boolean } {
+  const all = (t: string) => parsePlan(t).flatMap((sg) => (sg.kind === 'md' ? mdBlocks(sg.text) : []))
+  const was = new Set(all(before).map(norm))
+  const is = new Set(all(now).map(norm))
+  return { removed: all(before).filter((b) => !is.has(norm(b))), isNew: (b) => !was.has(norm(b)) }
+}
+
+const words = (t: string) => new Set(t.toLowerCase().match(/[a-z0-9]{4,}/g) ?? [])
+
+/** How far the build has got with a step: the to-do it best matches (by shared words), if any is close. */
+export function stepStatus(step: string, todos: { label: string; status: 'pending' | 'active' | 'done' }[]): 'pending' | 'active' | 'done' | null {
+  const w = words(step)
+  if (!w.size) return null
+  let best: { score: number; status: 'pending' | 'active' | 'done' } | null = null
+  for (const t of todos) {
+    const tw = words(t.label)
+    if (!tw.size) continue
+    let shared = 0
+    for (const x of w) if (tw.has(x)) shared++
+    const score = shared / Math.min(w.size, tw.size)
+    if (!best || score > best.score) best = { score, status: t.status }
+  }
+  return best && best.score >= 0.4 ? best.status : null
 }

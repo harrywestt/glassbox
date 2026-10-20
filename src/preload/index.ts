@@ -207,6 +207,11 @@ const api = {
   spend: {
     summary: (): Promise<import('../shared/events').SpendSummary> => invoke('spend:summary')
   },
+  /** Keeping a plan: saved into the project, or added to the branch's pull request. */
+  plan: {
+    save: (cwd: string, title: string, markdown: string): Promise<string> => invoke('plan:save', cwd, title, markdown),
+    toPr: (cwd: string, markdown: string): Promise<{ url?: string; error?: string }> => invoke('plan:toPr', cwd, markdown)
+  },
   /** The project's own colours, read from its stylesheets (for drawing sketches in them). */
   projectStyle: (cwd: string): Promise<import('../main/projectStyle').ProjectStyle> => invoke('sketch:projectStyle', cwd),
   /** Where a sketch's HTML is served (sketch://, sandboxed). */

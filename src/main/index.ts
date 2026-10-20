@@ -47,6 +47,7 @@ import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
 import { sketchPage, sketchUrl } from './sketch'
 import { spendSummary } from './spend'
+import { addPlanToPr, savePlan } from './planShare'
 import { projectStyle } from './projectStyle'
 import { adminState, dismissAdminPrompt, elevateAtStartupIfWanted, setRunAsAdmin } from './admin'
 import type { AccessMode, DiffMode, GuardRule, SideTaskSpec, PermissionDecision, Requirements, ReviewModel, SendOptions, ServicesEvent, SessionEvent, TabEvent } from '../shared/events'
@@ -487,6 +488,8 @@ ipcMain.handle('browser:record', async (_e, wcId: number, action: 'start' | 'sto
 })
 ipcMain.handle('recorder:encoded', (_e, id: string, data: ArrayBuffer | null) => recordingEncoded(id, data))
 ipcMain.handle('spend:summary', () => spendSummary())
+ipcMain.handle('plan:save', (_e, cwd: string, title: string, markdown: string) => savePlan(cwd, title, markdown))
+ipcMain.handle('plan:toPr', (_e, cwd: string, markdown: string) => addPlanToPr(cwd, markdown))
 ipcMain.handle('sketch:projectStyle', (_e, cwd: string) => projectStyle(cwd))
 ipcMain.handle('sketch:url', (_e, html: string) => sketchUrl(String(html)))
 ipcMain.handle('erd:get', (_e, cwd: string) => getErd(cwd))
