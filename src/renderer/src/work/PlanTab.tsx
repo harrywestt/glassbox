@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PermissionDecision } from '../../../shared/events'
 import type { SessionState } from '../session'
 import { useSession } from '../views/SessionView'
 import { renderMarkdown } from '../lib'
-import { Icon, IconButton } from '../components/ui'
+import { Empty, Icon, IconButton } from '../components/ui'
 import { tr } from '../../../shared/i18n'
+import { useThemeTokens } from '../App'
+import { enhance } from '../markdownDoc'
+import { answersText, CalloutBlock, DiffBlock, FilesBlock, parsePlan, planAsMarkdown, QuestionsBlock, SketchBlock, type Answers } from './planBlocks'
 
 export type PlanShown = { text: string; status?: NonNullable<SessionState['plan']>['status'] }
 
@@ -30,18 +33,28 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
   // The plan's shape, when Claude drew it on the map for this plan (since your last message).
   const since = [...s.timeline].reverse().find((i) => i.kind === 'user')?.at ?? 0
   const shape = waiting && s.planMap && s.planMap.at >= since ? s.planMap : undefined
-  const html = useMemo(() => renderMarkdown(text), [text])
+  // The plan's blocks (sketches, files, diffs, callouts, open questions) between its Markdown.
+  const segments = useMemo(() => parsePlan(text), [text])
+  const theme = useThemeTokens()
+  const [answers, setAnswers] = useState<Answers>({})
+  useEffect(() => setAnswers({}), [text])
+  const changedAnswers = segments.some((sg) => sg.kind === 'questions' && sg.items.some((q) => answers[q.text]?.trim() && answers[q.text].trim() !== q.options[0]))
   const doc = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const [outline, setOutline] = useState<{ id: string; text: string }[]>([])
   const [current, setCurrent] = useState<string | null>(null)
+
+  // Diagrams drawn, code coloured, callouts and task lists, as in the Markdown viewer.
+  useLayoutEffect(() => {
+    if (doc.current) enhance(doc.current, theme, { copy: tr('markdownView.copyCode'), copied: tr('markdownView.copied'), alert: (k) => tr(`markdownView.alert.${k}`) })
+  }, [segments, theme])
 
   // The plan's sections, for the outline: each heading gets an id to jump to.
   useEffect(() => {
     const heads = [...(doc.current?.querySelectorAll('h2') ?? [])]
     heads.forEach((h, i) => (h.id = `plan-${i}`))
     setOutline(heads.map((h) => ({ id: h.id, text: h.textContent ?? '' })))
-  }, [html])
+  }, [segments])
 
   // The section you're reading, marked in the outline.
   useEffect(() => {
@@ -67,11 +80,14 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
   const approve = () => {
     actions.planStatus(tab.id, 'approved')
     void respond('allow')
+    // Answers that differ from Claude's recommendations go straight after, so it builds with them.
+    if (changedAnswers) void actions.send(tab.id, answersText(segments, answers), tr('planTab.answersSent'))
   }
   const sendFeedback = () => {
-    if (!feedback.trim()) return
+    if (!feedback.trim() && !changedAnswers) return
     actions.planStatus(tab.id, 'changes-requested')
-    void respond('deny', `The user reviewed your plan and wants changes before you start:\n\n${feedback.trim()}\n\nRevise the plan and present it again.`)
+    const answered = changedAnswers ? `\n\n${answersText(segments, answers)}` : ''
+    void respond('deny', `The user reviewed your plan and wants changes before you start:\n\n${feedback.trim()}${answered}\n\nRevise the plan and present it again.`)
     setAsking(false)
     setFeedback('')
   }
@@ -79,7 +95,7 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
   if (!text)
     return (
       <div className="plan-tab">
-        <div className="plan-tab-empty muted">{tr('planTab.empty')}</div>
+        <Empty center icon="checklist" title={tr('planTab.emptyTitle')}>{tr('planTab.empty')}</Empty>
       </div>
     )
 
@@ -96,7 +112,7 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
             <Icon name="type-hierarchy" /> {tr('planTab.seeOnMap')}
           </button>
         )}
-        <IconButton icon="copy" title={tr('planTab.copy')} onClick={() => void navigator.clipboard.writeText(text)} />
+        <IconButton icon="copy" title={tr('planTab.copy')} onClick={() => void navigator.clipboard.writeText(planAsMarkdown(text))} />
       </div>
       <div className="plan-scroll" ref={scroller}>
         <div className={outline.length >= 3 ? 'plan-layout with-outline' : 'plan-layout'}>
@@ -109,7 +125,23 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
               ))}
             </nav>
           )}
-          <article className="plan-doc markdown" ref={doc} dangerouslySetInnerHTML={{ __html: html }} />
+          <article className="plan-doc markdown" ref={doc}>
+            {segments.map((sg, i) =>
+              sg.kind === 'md' ? (
+                <div key={i} className="plan-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(sg.text, tab.cwd) }} />
+              ) : sg.kind === 'sketch' ? (
+                <SketchBlock key={i} id={sg.id} version={sg.version} caption={sg.caption} />
+              ) : sg.kind === 'files' ? (
+                <FilesBlock key={i} rows={sg.rows} />
+              ) : sg.kind === 'diff' ? (
+                <DiffBlock key={i} file={sg.file} body={sg.body} />
+              ) : sg.kind === 'callout' ? (
+                <CalloutBlock key={i} type={sg.type} html={renderMarkdown(sg.body, tab.cwd)} />
+              ) : (
+                <QuestionsBlock key={i} items={sg.items} answers={answers} onAnswer={(q, a) => setAnswers((prev) => ({ ...prev, [q]: a }))} editable={!!waiting} />
+              )
+            )}
+          </article>
         </div>
       </div>
       {waiting && (
@@ -132,7 +164,7 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
                   <span className="muted small">{tr('planTab.feedbackHint')}</span>
                   <span className="grow" />
                   <button onClick={() => setAsking(false)}>{tr('planTab.back')}</button>
-                  <button className="primary" disabled={!feedback.trim()} onClick={sendFeedback}>
+                  <button className="primary" disabled={!feedback.trim() && !changedAnswers} onClick={sendFeedback}>
                     {tr('planTab.sendFeedback')}
                   </button>
                 </div>

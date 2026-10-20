@@ -13,7 +13,17 @@ const MAX_MS = 10 * 60_000
 const FPS = 12
 const MAX_WIDTH = 1600
 
-type Active = { id: string; wcId: number; started: number; timer: NodeJS.Timeout; limit: NodeJS.Timeout; latest?: Electron.NativeImage; sent?: Electron.NativeImage; done?: (path: string | null) => void }
+type Active = { id: string; wcId: number; started: number; timer: NodeJS.Timeout; limit: NodeJS.Timeout; latest?: Electron.NativeImage; sent?: Electron.NativeImage; done?: (path: string | null) => void; win: BrowserWindow; sig?: Buffer }
+
+/** Something Claude did in a recorded tab: a click (where, as a share of the page's view) or a caption. */
+export type RecordMark = { label: string; fx?: number; fy?: number }
+
+/** Shows an action in the tab's recording, if it's being recorded: a ripple where it clicked and a caption. */
+export function markRecording(wcId: number, mark: RecordMark) {
+  const a = active.get(wcId)
+  if (!a || a.win.isDestroyed()) return
+  a.win.webContents.send('glassbox:recorder', { kind: 'mark', id: a.id, ...mark })
+}
 
 export const capturesDir = () => {
   const d = join(app.getPath('userData'), 'captures')
@@ -40,11 +50,17 @@ export function startRecording(win: BrowserWindow | undefined, wcId: number): { 
   const a: Active = {
     id,
     wcId,
+    win,
     started: Date.now(),
     // Frames go to the window at a steady rate (the newest one, when it changed).
     timer: setInterval(() => {
       if (!a.latest || a.latest === a.sent || win.isDestroyed()) return
       a.sent = a.latest
+      // A frame that looks the same as the last (a blinking caret, a spinner's tick) isn't news: the
+      // recording can pause through it rather than keep every second Claude spends thinking.
+      const sig = a.latest.resize({ width: 48, quality: 'good' }).toBitmap()
+      if (a.sig && sig.length === a.sig.length && meanDiff(sig, a.sig) < 1.2) return
+      a.sig = sig
       const img = a.latest.getSize().width > MAX_WIDTH ? a.latest.resize({ width: MAX_WIDTH }) : a.latest
       win.webContents.send('glassbox:recorder', { kind: 'frame', id, jpeg: img.toJPEG(82) })
     }, 1000 / FPS),
@@ -96,4 +112,11 @@ export function recordingEncoded(id: string, data: ArrayBuffer | null): string |
   }
   a.done?.(path)
   return path
+}
+
+/** The average difference between two small bitmaps, per channel (0 to 255). */
+function meanDiff(a: Buffer, b: Buffer): number {
+  let sum = 0
+  for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i])
+  return sum / a.length
 }

@@ -4,7 +4,8 @@ import { useThemeTokens } from '../App'
 import { THEMES, type ThemeTokens } from '../theme'
 import { ACCENTS, accentFor, useAppearance } from '../appearance'
 import { textOn } from '../colour'
-import type { Sketch } from '../session'
+import type { Sketch, SketchVersion } from '../session'
+import type { ProjectStyle, StyleVars } from '../../../main/projectStyle'
 import { Empty, Icon, IconButton } from '../components/ui'
 import { PanZoom } from '../components/PanZoom'
 import { Select } from '../components/Select'
@@ -26,6 +27,74 @@ function schemeFor(app: ThemeTokens, userAccent: string, scheme?: 'dark' | 'ligh
   if (!preset && base === app.base) return app
   const colour = preset ? preset[base] : accentFor({ accent: userAccent } as Parameters<typeof accentFor>[0], base)
   return { ...tokens, accent: colour, accentFg: preset ? tokens.accentFg : textOn(colour) }
+}
+
+/** The project's own colours (read from its stylesheets once per folder), for sketches drawn in them. */
+const styles = new Map<string, Promise<ProjectStyle>>()
+export function useProjectStyle(cwd: string): ProjectStyle | null {
+  const [style, setStyle] = useState<ProjectStyle | null>(null)
+  useEffect(() => {
+    let p = styles.get(cwd)
+    if (!p) styles.set(cwd, (p = window.glassbox.projectStyle(cwd).catch(() => ({}))))
+    let live = true
+    void p.then((v) => live && setStyle(v))
+    return () => {
+      live = false
+    }
+  }, [cwd])
+  return style
+}
+
+/** How light a CSS colour is (0 dark to 1 light), for hex, hsl() and oklch(); null when it can't tell. */
+function lightness(v?: string): number | null {
+  if (!v) return null
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})/i.exec(v)
+  if (hex) {
+    const h = hex[1].length === 3 ? hex[1].replace(/./g, (c) => c + c) : hex[1]
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const hsl = /hsla?\([^,\s]+[,\s]+[\d.]+%[,\s]+([\d.]+)%/i.exec(v)
+  if (hsl) return Number(hsl[1]) / 100
+  const ok = /oklch\(\s*([\d.]+)(%?)/i.exec(v)
+  if (ok) return Number(ok[1]) / (ok[2] ? 100 : 1)
+  return null
+}
+
+/**
+ * The variables a sketch page is drawn with: the project's own colours by default (its dark set
+ * when Glassbox is dark and it has one), filling any gaps from Glassbox's theme of the same
+ * lightness; or Glassbox's look when Claude asked for it.
+ */
+export function sketchVars(app: ThemeTokens, userAccent: string, version: Pick<SketchVersion, 'scheme' | 'accent'>, project: ProjectStyle | null): Record<string, string> {
+  const set: StyleVars | undefined = !version.scheme || version.scheme === 'project' ? (app.base === 'dark' ? (project?.dark ?? project?.light) : (project?.light ?? project?.dark)) : undefined
+  const l = lightness(set?.bg)
+  const base = set && Object.keys(set).length ? (l === null ? app.base : l < 0.5 ? 'dark' : 'light') : null
+  const theme = base ? THEMES[`glassbox-${base}`] : schemeFor(app, userAccent, version.scheme === 'dark' || version.scheme === 'light' ? version.scheme : undefined, version.accent)
+  const t: Record<string, string> = { base: theme.base, bg: theme.bg, surface: theme.surface, surface2: theme.surface2, elevated: theme.elevated, border: theme.border, fg: theme.fg, muted: theme.muted, subtle: theme.subtle, accent: theme.accent, accentFg: theme.accentFg, ok: theme.ok, warn: theme.warn, err: theme.err, info: theme.info }
+  if (set) for (const [k, v] of Object.entries(set)) if (v) t[k] = v
+  if (set?.accent && !set.accentFg && /^#/.test(set.accent)) t.accentFg = textOn(set.accent)
+  return t
+}
+
+/** The address a sketch version is served at, in its colours; null while it's being prepared. */
+export function useSketchUrl(version: SketchVersion): { url: string | null; base: string } {
+  const { tab } = useSession()
+  const app = useThemeTokens()
+  const appearance = useAppearance()
+  const project = useProjectStyle(tab.cwd)
+  const wantsProject = !version.scheme || version.scheme === 'project'
+  const vars = useMemo(() => (wantsProject && !project ? null : sketchVars(app, appearance.accent, version, project)), [app, appearance.accent, version.scheme, version.accent, project, wantsProject])
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!vars) return
+    let live = true
+    void window.glassbox.sketch.url(version.html).then((u) => live && setUrl(`${u}?t=${encodeURIComponent(JSON.stringify(vars))}`))
+    return () => {
+      live = false
+    }
+  }, [version.html, vars])
+  return { url, base: vars?.base ?? app.base }
 }
 
 /** Claude's sketches: rough pages to look at, choose between and comment on, panned and zoomed like a diagram. */
@@ -58,8 +127,7 @@ function SketchView({ sketch, others, onSelect }: { sketch: Sketch; others: Sket
   // A new version from Claude comes to the front.
   useEffect(() => setIndex(count - 1), [count])
   const version = sketch.versions[Math.min(index, count - 1)]
-  const theme = useMemo(() => schemeFor(app, appearance.accent, version.scheme, version.accent), [app, appearance.accent, version.scheme, version.accent])
-  const [url, setUrl] = useState<string | null>(null)
+  const { url, base } = useSketchUrl(version)
   const [height, setHeight] = useState<number | null>(null)
   const [mode, setMode] = useState<Mode>('hand')
   const [pointer, setPointer] = useState(false)
@@ -68,16 +136,8 @@ function SketchView({ sketch, others, onSelect }: { sketch: Sketch; others: Sket
   const frame = useRef<HTMLIFrameElement>(null)
   const noteBox = useRef<HTMLInputElement>(null)
 
-  // The page is served from its own sandboxed address, in the app's colours.
-  useEffect(() => {
-    let live = true
-    setHeight(null)
-    const t = { base: theme.base, bg: theme.bg, surface: theme.surface, surface2: theme.surface2, elevated: theme.elevated, border: theme.border, fg: theme.fg, muted: theme.muted, subtle: theme.subtle, accent: theme.accent, accentFg: theme.accentFg, ok: theme.ok, warn: theme.warn, err: theme.err, info: theme.info }
-    void window.glassbox.sketch.url(version.html).then((u) => live && setUrl(`${u}?t=${encodeURIComponent(JSON.stringify(t))}`))
-    return () => {
-      live = false
-    }
-  }, [version.html, theme])
+  // A different page measures itself afresh.
+  useEffect(() => setHeight(null), [version.html])
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -162,7 +222,7 @@ function SketchView({ sketch, others, onSelect }: { sketch: Sketch; others: Sket
       >
         {url && (
           <PanZoom
-            contentKey={`${sketch.id}:${index}:${theme.base}:${height === null ? 0 : 1}`}
+            contentKey={`${sketch.id}:${index}:${base}:${height === null ? 0 : 1}`}
             size={{ w: version.width, h: height ?? 800 }}
             fitWidth
             className={`sketch-${mode}${pointer && mode !== 'use' ? ' over-target' : ''}`}

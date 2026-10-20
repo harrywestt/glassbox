@@ -67,7 +67,46 @@ function formatMarkdown(text: string, base?: string): string {
       ;(t as { href: string }).href = mediaUrl(absPath(base, decodeURI(href.replace(/^file:\/\/\/?/i, ''))))
     }
   })
-  return DOMPurify.sanitize(cellLists(html), { ALLOWED_URI_REGEXP: URI_OK })
+  return withCopy(callouts(DOMPurify.sanitize(cellLists(html), { ALLOWED_URI_REGEXP: URI_OK })))
+}
+
+const CALLOUT_ICONS: Record<string, string> = { note: 'info', tip: 'lightbulb', important: 'report', warning: 'warning', caution: 'error' }
+
+/** GitHub's "> [!NOTE]" callouts: a coloured box with its kind as the title, not the raw marker. */
+function callouts(html: string): string {
+  if (!html.includes('[!')) return html
+  return html.replace(/<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br>)?\s*/gi, (_m, kind: string) => {
+    const k = kind.toLowerCase()
+    return `<blockquote class="md-alert md-alert-${k}"><div class="md-alert-title"><i class="codicon codicon-${CALLOUT_ICONS[k]}" aria-hidden="true"></i>${tr(`markdownView.alert.${k}`)}</div><p>`
+  })
+}
+
+/** Each code block gets a copy button in its corner (one listener, in copyButtons, does the copying). */
+function withCopy(html: string): string {
+  if (!html.includes('<pre')) return html
+  const label = tr('markdownView.copyCode')
+  return html.replace(/<pre([^>]*)>([\s\S]*?)<\/pre>/g, (_m, attrs: string, body: string) => `<div class="code-wrap"><pre${attrs}>${body}</pre><button type="button" class="code-copy" title="${label}" aria-label="${label}"><i class="codicon codicon-copy" aria-hidden="true"></i></button></div>`)
+}
+
+/** Copies a code block when its button is pressed, anywhere in the app; the icon says it worked. */
+export function copyButtons() {
+  document.addEventListener('click', (e) => {
+    const btn = (e.target as Element | null)?.closest?.('.code-copy') as HTMLButtonElement | null
+    if (!btn) return
+    const pre = btn.parentElement?.querySelector('pre')
+    if (!pre) return
+    e.preventDefault()
+    e.stopPropagation()
+    void navigator.clipboard.writeText(pre.innerText.replace(/\n$/, ''))
+    btn.classList.add('done')
+    btn.innerHTML = '<i class="codicon codicon-check" aria-hidden="true"></i>'
+    btn.title = tr('markdownView.copied')
+    setTimeout(() => {
+      btn.classList.remove('done')
+      btn.innerHTML = '<i class="codicon codicon-copy" aria-hidden="true"></i>'
+      btn.title = tr('markdownView.copyCode')
+    }, 1400)
+  })
 }
 
 /**

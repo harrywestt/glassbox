@@ -47,6 +47,7 @@ import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
 import { sketchPage, sketchUrl } from './sketch'
 import { spendSummary } from './spend'
+import { projectStyle } from './projectStyle'
 import { adminState, dismissAdminPrompt, elevateAtStartupIfWanted, setRunAsAdmin } from './admin'
 import type { AccessMode, DiffMode, GuardRule, SideTaskSpec, PermissionDecision, Requirements, ReviewModel, SendOptions, ServicesEvent, SessionEvent, TabEvent } from '../shared/events'
 import { tr } from '../shared/i18n'
@@ -486,6 +487,7 @@ ipcMain.handle('browser:record', async (_e, wcId: number, action: 'start' | 'sto
 })
 ipcMain.handle('recorder:encoded', (_e, id: string, data: ArrayBuffer | null) => recordingEncoded(id, data))
 ipcMain.handle('spend:summary', () => spendSummary())
+ipcMain.handle('sketch:projectStyle', (_e, cwd: string) => projectStyle(cwd))
 ipcMain.handle('sketch:url', (_e, html: string) => sketchUrl(String(html)))
 ipcMain.handle('erd:get', (_e, cwd: string) => getErd(cwd))
 ipcMain.handle('terminal:open', (_e, scope: string, cwd: string, cols: number, rows: number) => openTerminal(scope, cwd, cols, rows, toRenderer))

@@ -1012,48 +1012,51 @@ function WorkTabs({
   const [picking, setPicking] = useState(false)
   const strip = useScrollStrip<HTMLDivElement>(active)
   const isView = (t: WorkTab): t is WorkTab & { kind: ViewKind } => VIEWS.some((v) => v.kind === t.kind)
+  const tab = (t: WorkTab, i: number) => (
+    <div
+      key={t.id}
+      data-first-opened={i === 2 ? '' : undefined}
+      role="tab"
+      aria-selected={t.id === active}
+      className={t.id === active ? 'work-tab active' : 'work-tab'}
+      onClick={() => onActivate(t.id)}
+      onAuxClick={(e) => e.button === 1 && !isFixed(t, qa) && onClose(t.id)}
+      title={t.kind === 'file' || t.kind === 'diff' ? t.path : t.kind === 'map' ? tr('sessionView.mapLegend') : undefined}
+    >
+      <Icon name={WORK_ICON[t.kind]} />
+      <span className="ellipsis">{workTitle(t)}</span>
+      {t.kind === 'diagrams' && diagramCount > 0 && <span className="count">{diagramCount}</span>}
+      {t.kind === 'sketches' && sketchCount > 0 && <span className="count">{sketchCount}</span>}
+      {t.kind === 'conversation' && yourTurn && t.id !== active && <span className="your-turn-lamp" role="img" aria-label={tr('sessionView.yourTurn')} title={tr('sessionView.yourTurn')} />}
+      {t.kind === 'preview' && claudeBrowsing && (
+        <span className="claude-browsing" title={tr('sessionView.claudeBrowsing')} aria-label={tr('sessionView.claudeBrowsing')}>
+          <Icon name="sparkle" />
+        </span>
+      )}
+      {unseen.has(t.id) && t.id !== active && <span className="unseen-dot" title={tr('sessionView.unseen')} />}
+      {isView(t) && (
+        <button
+          className={kept.includes(t.kind) ? 'work-tab-keep on' : 'work-tab-keep'}
+          title={kept.includes(t.kind) ? tr('sessionView.keptTitle') : tr('sessionView.keepTitle')}
+          aria-pressed={kept.includes(t.kind)}
+          onClick={(e) => (e.stopPropagation(), onKeep(t.kind, !kept.includes(t.kind)))}
+        >
+          <Icon name={kept.includes(t.kind) ? 'pinned' : 'pin'} />
+        </button>
+      )}
+      {!isFixed(t, qa) && !(isView(t) && kept.includes(t.kind)) && (
+        <button className="work-tab-close" title={tr('sessionView.close')} onClick={(e) => (e.stopPropagation(), onClose(t.id))}>
+          <Icon name="close" />
+        </button>
+      )}
+    </div>
+  )
   return (
     <div className="work-tabs" role="tablist">
+      {/* Conversation stays put however many views are open; the rest scroll beside it. */}
+      {tabs.map((t, i) => (t.kind === 'conversation' ? tab(t, i) : null))}
       <div className="work-tab-list" ref={strip}>
-        {tabs.map((t, i) => (
-          <div
-            key={t.id}
-            data-first-opened={i === 2 ? '' : undefined}
-            role="tab"
-            aria-selected={t.id === active}
-            className={t.id === active ? 'work-tab active' : 'work-tab'}
-            onClick={() => onActivate(t.id)}
-            onAuxClick={(e) => e.button === 1 && !isFixed(t, qa) && onClose(t.id)}
-            title={t.kind === 'file' || t.kind === 'diff' ? t.path : t.kind === 'map' ? tr('sessionView.mapLegend') : undefined}
-          >
-            <Icon name={WORK_ICON[t.kind]} />
-            <span className="ellipsis">{workTitle(t)}</span>
-            {t.kind === 'diagrams' && diagramCount > 0 && <span className="count">{diagramCount}</span>}
-            {t.kind === 'sketches' && sketchCount > 0 && <span className="count">{sketchCount}</span>}
-            {t.kind === 'conversation' && yourTurn && t.id !== active && <span className="your-turn-lamp" role="img" aria-label={tr('sessionView.yourTurn')} title={tr('sessionView.yourTurn')} />}
-            {t.kind === 'preview' && claudeBrowsing && (
-              <span className="claude-browsing" title={tr('sessionView.claudeBrowsing')} aria-label={tr('sessionView.claudeBrowsing')}>
-                <Icon name="sparkle" />
-              </span>
-            )}
-            {unseen.has(t.id) && t.id !== active && <span className="unseen-dot" title={tr('sessionView.unseen')} />}
-            {isView(t) && (
-              <button
-                className={kept.includes(t.kind) ? 'work-tab-keep on' : 'work-tab-keep'}
-                title={kept.includes(t.kind) ? tr('sessionView.keptTitle') : tr('sessionView.keepTitle')}
-                aria-pressed={kept.includes(t.kind)}
-                onClick={(e) => (e.stopPropagation(), onKeep(t.kind, !kept.includes(t.kind)))}
-              >
-                <Icon name={kept.includes(t.kind) ? 'pinned' : 'pin'} />
-              </button>
-            )}
-            {!isFixed(t, qa) && !(isView(t) && kept.includes(t.kind)) && (
-              <button className="work-tab-close" title={tr('sessionView.close')} onClick={(e) => (e.stopPropagation(), onClose(t.id))}>
-                <Icon name="close" />
-              </button>
-            )}
-          </div>
-        ))}
+        {tabs.map((t, i) => (t.kind === 'conversation' ? null : tab(t, i)))}
       </div>
       <span className="spacer" />
       <IconButton icon="screen-full" title={tr('sessionView.fullScreenTitle')} onClick={onFullScreen} />

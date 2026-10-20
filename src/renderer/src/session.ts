@@ -205,7 +205,8 @@ function rememberDismissed(ids: string[]) {
 }
 export type FileTouch = { path: string; tool: string; toolId: string; agentId: string | null; at: number; turn: number }
 export type Diagram = { id: string; title: string; mermaid: string; at: number }
-export type SketchVersion = { html: string; width: number; note?: string; scheme?: 'dark' | 'light'; accent?: string; at: number }
+/** scheme: none or 'project' for the project's own colours (when it has them); 'match', 'dark' or 'light' for Glassbox's. */
+export type SketchVersion = { html: string; width: number; note?: string; scheme?: 'project' | 'match' | 'dark' | 'light'; accent?: string; at: number }
 /** A rough page Claude drew (show_sketch); each call with the same id adds a version. */
 export type Sketch = { id: string; title: string; versions: SketchVersion[]; at: number }
 
@@ -216,7 +217,7 @@ function addSketch(all: Record<string, Sketch>, s: { id: string; title?: unknown
   const title = String(s.title ?? prev?.title ?? s.id)
   const last = prev?.versions[prev.versions.length - 1]
   const width = typeof s.width === 'number' && s.width >= 320 ? Math.min(2400, s.width) : 1200
-  const scheme: SketchVersion['scheme'] = s.scheme === 'dark' || s.scheme === 'light' ? s.scheme : undefined
+  const scheme: SketchVersion['scheme'] = s.scheme === 'dark' || s.scheme === 'light' || s.scheme === 'match' ? s.scheme : undefined
   const accent = typeof s.accent === 'string' && s.accent !== 'match' ? s.accent : undefined
   const same = last && last.html === html && last.width === width && last.scheme === scheme && last.accent === accent
   const versions = same ? prev.versions : [...(prev?.versions ?? []), { html, width, note: typeof s.note === 'string' ? s.note : undefined, scheme, accent, at }]

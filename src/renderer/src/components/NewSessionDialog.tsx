@@ -272,9 +272,11 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
 
         {sharing > 0 && changesFiles && (
           <div className="launch-shared">
-            <div>
-              <span className="shared-word">{tr('sessionView.sharedWord')}</span> {tr('newSessionDialog.sharing', { count: sharing, folder: baseName(cwd) })}{' '}
-              <span className="muted">{tr('newSessionDialog.sharingNote')}</span>
+            <div className="launch-shared-text">
+              <Icon name="warning" />
+              <span>
+                {tr('newSessionDialog.sharing', { count: sharing, folder: baseName(cwd) })} <span className="muted">{tr('newSessionDialog.sharingNote')}</span>
+              </span>
             </div>
             <label className="check">
               <input type="checkbox" checked={ownCopy} onChange={(e) => setOwnCopy(e.target.checked)} /> {f.branch?.trim() ? tr('newSessionDialog.ownCopyOnBranch', { branch: f.branch.trim() }) : tr('newSessionDialog.ownCopy')}

@@ -7,9 +7,11 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import './styles.css'
 import { App } from './App'
+import { copyButtons } from './lib'
 
 // Platform-specific chrome (macOS traffic lights sit on the left of the title bar).
 document.documentElement.dataset.platform = window.glassbox.platform
+copyButtons()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

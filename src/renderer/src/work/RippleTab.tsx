@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { dependentsOf, moduleOf } from '../../../shared/architecture'
 import { useArchitecture, isEditTouch } from '../architecture'
-import { Segmented } from '../components/ui'
+import { Segmented, Empty } from '../components/ui'
 import { tr } from '../../../shared/i18n'
 import './RippleTab.css'
 
@@ -59,7 +59,12 @@ export function RippleTab({ module, path, onPick }: { module?: string; path?: st
   }, [arch, target])
 
   if (!arch) return <div className="ripple-empty">{tr('rippleTab.mapping')}</div>
-  if (!target || !graph) return <div className="ripple-empty">{tr('rippleTab.empty')}</div>
+  if (!target || !graph)
+    return (
+      <div className="ripple-empty-wrap">
+        <Empty center icon="radio-tower" title={tr('rippleTab.emptyTitle')}>{tr('rippleTab.emptyBody')}</Empty>
+      </div>
+    )
   const t = graph.mod(target)
 
   return (

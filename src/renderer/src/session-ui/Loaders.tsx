@@ -62,6 +62,7 @@ function LoaderRow({ l, now, onClose }: { l: LoaderState; now: number; onClose: 
       <div className="loader-main">
         <div className="loader-line">
           <span className="loader-label">{l.label}</span>
+          {l.detail && <span className="loader-detail" title={l.detail}>{l.detail}</span>}
           <span className="loader-meta">
             {l.status === 'running' && l.step && l.steps ? tr('loaders.stepOf', { step: Math.min(l.step, l.steps), steps: l.steps }) : l.percent !== undefined && l.status === 'running' ? tr('loaders.percent', { percent: Math.round(l.percent) }) : ''}
             {l.status === 'running' ? clock(now - l.started) : l.status === 'done' ? tr('loaders.doneIn', { time: clock(l.updated - l.started) }) : tr('loaders.failed')}
@@ -69,7 +70,6 @@ function LoaderRow({ l, now, onClose }: { l: LoaderState; now: number; onClose: 
           </span>
         </div>
         {l.status === 'running' && (l.step && l.steps && l.steps <= 12 ? <Steps step={l.step} steps={l.steps} /> : <Bar percent={l.percent} status={l.status} />)}
-        {l.detail && <div className="loader-detail" title={l.detail}>{l.detail}</div>}
       </div>
       {l.status !== 'running' && <IconButton icon="close" title={tr('loaders.clear')} onClick={onClose} />}
     </div>

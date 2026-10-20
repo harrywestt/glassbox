@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from '../views/SessionView'
-import { Icon, Segmented } from '../components/ui'
+import { Icon, Segmented, Empty } from '../components/ui'
 import type { Flow, FlowHop } from '../session'
 import { tr } from '../../../shared/i18n'
 import './FlowTab.css'
@@ -42,7 +42,7 @@ export function FlowTab() {
   if (!current || !stats) {
     return (
       <div className="flow flow-empty-wrap">
-        <div className="flow-empty">{tr('flowTab.empty')}</div>
+        <Empty center icon="arrow-swap" title={tr('flowTab.emptyTitle')}>{tr('flowTab.emptyBody')}</Empty>
       </div>
     )
   }

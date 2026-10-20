@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '../views/SessionView'
 import { HIDDEN_TOOLS, taskOf, toolSummary, type ToolCall } from '../session'
 import { baseName, dateTime, relPath, renderMarkdown, timeOfDay } from '../lib'
+import { planAsMarkdown } from '../work/planBlocks'
 import { Empty, Icon, PanelHeader, Section } from '../components/ui'
 import { CommentBox } from '../components/CommentBox'
 import { SideTasks } from '../session-ui/SideTasks'
@@ -135,7 +136,7 @@ export function ActivityPanel() {
               </>
             }
           >
-            {showPlan && <div className="markdown small" dangerouslySetInnerHTML={{ __html: renderMarkdown(s.plan.text) }} />}
+            {showPlan && <div className="markdown small" dangerouslySetInnerHTML={{ __html: renderMarkdown(planAsMarkdown(s.plan.text)) }} />}
             {commentOn === ':plan' ? (
               <CommentBox target={{ kind: 'plan' }} onDone={() => setCommentOn(null)} />
             ) : (

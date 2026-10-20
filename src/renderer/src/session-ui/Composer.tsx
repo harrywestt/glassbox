@@ -19,7 +19,21 @@ const MARK_ICON = { read: 'eye', edit: 'edit', avoid: 'lock', ask: 'question', a
 const HOLD_MS = 200
 
 /** `liveOwnsAsks`: Live shows Claude's questions and check-ins centre stage, so the box doesn't repeat them. */
+/** A window too short to give a question card its own block (a laptop, or a large interface size). */
+const SHORT = '(max-height: 880px)'
+function useShortWindow() {
+  const [short, setShort] = useState(() => matchMedia(SHORT).matches)
+  useEffect(() => {
+    const m = matchMedia(SHORT)
+    const on = () => setShort(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [])
+  return short
+}
+
 export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwnsAsks?: boolean } = {}) {
+  const short = useShortWindow()
   const { s, tab, actions, send, composerRef, updateRequirements, markFile, showPanel, planFirst, setPlanFirst, everyday, openAttachment } = useSession()
   const [text, setText] = useState('')
   // Files going with the next message: picked, dropped on the window, or pasted.
@@ -218,7 +232,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
       <LimitCard />
       {!liveOwnsAsks && <QuestionsCard />}
       <Loaders />
-      <AskDock asks={asks} index={askIndex} onIndex={setAskIndex} answering={answering} onAnswering={setAnswering} compact={compact} />
+      <AskDock asks={asks} index={askIndex} onIndex={setAskIndex} answering={answering} onAnswering={setAnswering} compact={compact || short} />
       {hasReq ? (
         <div className="req-chips" title={tr('composer.attachedTitle')}>
           <span className="muted small">

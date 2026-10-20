@@ -41,9 +41,9 @@ export function Meter({ value, tone }: { value: number; tone?: 'ok' | 'warn' | '
 }
 
 /** Nothing to show yet: one plain line, and at most a short second line saying what will appear. */
-export function Empty({ title, children }: { icon?: string; title: string; children?: ReactNode }) {
+export function Empty({ title, children, center }: { icon?: string; title: string; children?: ReactNode; /** In a big view: centred in it. */ center?: boolean }) {
   return (
-    <div className="empty-state">
+    <div className={center ? 'empty-state center' : 'empty-state'}>
       <div className="empty-title">{title}</div>
       {children && <div className="empty-body">{children}</div>}
     </div>

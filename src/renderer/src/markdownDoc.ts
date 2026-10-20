@@ -119,6 +119,11 @@ export function enhance(root: HTMLElement, theme: ThemeTokens, labels: { copy: s
   for (const code of blocks) {
     const pre = code.parentElement as HTMLPreElement
     if (pre.dataset.done) continue
+    const plain = pre.parentElement
+    if (plain?.classList.contains('code-wrap')) {
+      plain.before(pre)
+      plain.remove()
+    }
     pre.dataset.done = '1'
     const lang = (/language-([\w#+.-]+)/.exec(code.className)?.[1] ?? '').toLowerCase()
     const source = code.textContent ?? ''

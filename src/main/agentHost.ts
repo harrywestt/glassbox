@@ -454,9 +454,15 @@ export class AgentHost {
       // Connectors finish connecting in the background; re-poll so statuses settle.
       for (const delay of [0, 4000, 12000]) setTimeout(() => void this.refreshMcp(), delay)
     } catch (err) {
-      if (!this.abort.signal.aborted) this.emit({ kind: 'error', message: tr('mainAgentHost.failedToStart', { error: String(err) }) })
+      if (!this.abort.signal.aborted) {
+        this.startFailed = true
+        this.emit({ kind: 'error', message: startError(String(err)) })
+      }
     }
   }
+
+  /** Set when the session failed to start, so the same failure isn't reported twice. */
+  private startFailed = false
 
   /**
    * Queue a message. `priority: 'now'` folds it into a running turn (used for live review comments);
@@ -1261,7 +1267,8 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
         }
       }
     } catch (err) {
-      if (!this.abort?.signal.aborted) this.emit({ kind: 'error', message: String(err) })
+      if (!this.abort?.signal.aborted && !this.startFailed) this.emit({ kind: 'error', message: String(err) })
+      this.startFailed = false
     } finally {
       if (this.q === q) {
         clearInterval(this.idleTimer)
@@ -1619,4 +1626,15 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       })
       this.emit({ kind: 'permission', id, toolName, input, canAlwaysAllow: !!suggestions?.length })
     })
+}
+
+/** Why a session didn't start, in words: the CLI's own error without its usage text or nested "Error:" prefixes. */
+function startError(raw: string): string {
+  if (/--resume requires a valid session/i.test(raw)) return tr('mainAgentHost.resumeMissing')
+  const clean = raw
+    .replace(/(Error:\s*)+/g, '')
+    .replace(/Claude Code returned an error result:\s*/i, '')
+    .replace(/\s*Usage:[\s\S]*$/i, '')
+    .trim()
+  return tr('mainAgentHost.failedToStart', { error: clean || raw })
 }

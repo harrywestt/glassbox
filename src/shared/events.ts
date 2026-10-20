@@ -22,7 +22,7 @@ export type FlowHop = { from: string; to: string; label: string; kind?: 'new' | 
 export type GlassboxSignal =
   | { type: 'diagram'; id: string; title: string; mermaid: string }
   /** A rough HTML page showing an idea or a problem; the same id again is a new version of it. */
-  | { type: 'sketch'; id: string; title: string; html: string; width?: number; note?: string; /** One of the app's schemes and accents, or the user's. */ scheme?: 'match' | 'dark' | 'light'; accent?: string }
+  | { type: 'sketch'; id: string; title: string; html: string; width?: number; note?: string; /** One of the app's schemes and accents, or the user's. */ scheme?: 'project' | 'match' | 'dark' | 'light'; accent?: string }
   | { type: 'flow'; id: string; title: string; lanes: string[]; before?: FlowHop[]; after: FlowHop[] }
   | { type: 'task'; summary: string; steps?: TaskStep[] }
   | { type: 'pin'; path: string; reason?: string }

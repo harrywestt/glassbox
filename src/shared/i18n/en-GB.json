@@ -784,7 +784,10 @@
     "source": "Source",
     "mention": "Mention this file in your message",
     "openInEditor": "Open in your default editor",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "missing": "{file} isn’t on disk. It may have been deleted or moved, or not written yet.",
+    "noAccess": "Glassbox isn’t allowed to read {file}.",
+    "isFolder": "{file} is a folder, not a file."
   },
   "flowTab": {
     "noBefore": "This flow is new, so there is no before",
@@ -819,7 +822,9 @@
       "same": "The path is the same before and after.",
       "sentence": "{text}.",
       "join": "{rest} and {last}"
-    }
+    },
+    "emptyTitle": "No flows yet",
+    "emptyBody": "Claude shows one when a change alters how a request moves through the system."
   },
   "gitHubSection": {
     "connectTitle": "Connect GitHub to see your pull requests",
@@ -1116,7 +1121,8 @@
     },
     "tooLongReason": "the conversation is too long for the smaller models",
     "tooLongSwitched": "This conversation no longer fits the smaller model’s window, so Auto moved it to Opus (1M). Send your message again.",
-    "tooLongPick": "This conversation no longer fits this model’s window. Pick Opus (1M context) from the model menu, or /clear to start fresh."
+    "tooLongPick": "This conversation no longer fits this model’s window. Pick Opus (1M context) from the model menu, or /clear to start fresh.",
+    "resumeMissing": "This conversation couldn’t be reopened: its transcript wasn’t found. Close this tab and start a new session in the same folder."
   },
   "mainArchDiff": {
     "notRepo": "Not a git repository"
@@ -1207,7 +1213,9 @@
     "waitingFor": "Waiting for {file} to appear",
     "interrupted": "Stopped when Claude was interrupted",
     "sessionStopped": "Stopped when the session closed",
-    "turnEnded": "Claude finished without updating this"
+    "turnEnded": "Claude finished without updating this",
+    "logQuiet": "No new output in {file} for {minutes} minutes, so Glassbox stopped watching it",
+    "urlNeverAnswered": "Nothing answered at {url} after 15 minutes"
   },
   "mainMapAsk": {
     "noAnswer": "Claude didn’t return an answer. Try asking a different way."
@@ -1671,7 +1679,9 @@
     "allowShellHint": "Claude runs shell commands without asking for the rest of this session. Your guardrails still stop or ask about risky ones.",
     "allowShell": "Allow shell for this session",
     "alwaysAllow": "Always allow",
-    "allow": "Allow"
+    "allow": "Allow",
+    "showAll": "Show all {count} lines ({chars} characters)",
+    "showLess": "Show less"
   },
   "pins": {
     "couldNotPin": "Couldn’t pin this session"
@@ -1682,7 +1692,7 @@
       "proposed": "Waiting for you",
       "changesRequested": "Changes requested"
     },
-    "empty": "No plan yet. Use Plan first in the message box and Claude proposes a plan before changing anything.",
+    "empty": "Use Plan first in the message box and Claude proposes a plan before changing anything.",
     "title": "Plan",
     "nothingChangedYet": "Nothing has been changed yet",
     "shape": {
@@ -1702,7 +1712,9 @@
     "approvePlan": "Approve plan",
     "copy": "Copy the plan",
     "outline": "Sections",
-    "feedbackHint": "Ctrl+Enter sends"
+    "feedbackHint": "Ctrl+Enter sends",
+    "answersSent": "Answers to the plan’s open questions",
+    "emptyTitle": "No plan yet"
   },
   "previewTab": {
     "service": "Service",
@@ -1809,7 +1821,8 @@
     "asked": "Asked: {label}",
     "answer": "Answer: {answer}",
     "waiting": "waiting",
-    "failed": "Failed"
+    "failed": "Failed",
+    "emptyBody": "Once Claude has worked in this session, you can step back through what it did."
   },
   "review": {
     "codeLine": "{file} line {line}",
@@ -1904,7 +1917,9 @@
     "noDependents": "Nothing else in the project imports {path}.",
     "thisModule": "this module",
     "askCover": "Ask Claude to cover {n}",
-    "showDependenciesOf": "Show dependencies of"
+    "showDependenciesOf": "Show dependencies of",
+    "emptyTitle": "Nothing changed yet",
+    "emptyBody": "Ripple shows what depends on the code Claude changes, and what’s tested."
   },
   "select": {
     "filter": "Filter",
@@ -2340,7 +2355,8 @@
       "ok": "Done",
       "idle": "Ready",
       "err": "Stopped"
-    }
+    },
+    "waitingBackground": "Waiting in background"
   },
   "terminalTab": {
     "exited": "[The shell exited with code {code}. Press Enter to start a new one.]",
@@ -2567,7 +2583,12 @@
       "sendNow": "Send now",
       "sendNowTitle": "Stop Claude’s current step so it reads this straight away (background agents keep going)",
       "tooLate": "Claude has just started on it."
-    }
+    },
+    "waitingOn": "Waiting in the background:",
+    "waitingMany": "{n} background tasks",
+    "stopBackground": "Stop it",
+    "stopAll": "Stop them",
+    "stopBackgroundTip": "Claude has finished its turn and is waiting for this to end. Stopping it lets Claude carry on now."
   },
   "titleBar": {
     "dashboardTip": "Dashboard (Ctrl+T)",
@@ -2970,5 +2991,35 @@
     "autoTicketNote": "Read the ticket from Jira when the Ticket panel opens, and keep it fresh. Each read is a small Claude agent.",
     "agentForks": "Let agents copy the conversation",
     "agentForksNote": "Allow “fork” agents, which start with the whole conversation and run on the session’s model. Off: Claude starts fresh agents with a written brief, which is far cheaper in long sessions."
+  },
+  "planBlocks": {
+    "sketch": "Sketch",
+    "sketchRef": "Sketch “{id}”",
+    "noSketch": "Sketch “{id}” isn’t in this session.",
+    "openSketch": "Open in Sketches",
+    "files_one": "{count} file",
+    "files_other": "{count} files",
+    "count": {
+      "add": "{count} new",
+      "change": "{count} changed",
+      "remove": "{count} removed"
+    },
+    "opAdd": "New file",
+    "opChange": "Changed",
+    "opRemove": "Removed",
+    "showLess": "Show less",
+    "showAllLines": "Show all {count} lines",
+    "callout": {
+      "risk": "Risk",
+      "decision": "Decision",
+      "note": "Note"
+    },
+    "questions_one": "Open question",
+    "questions_other": "{count} open questions",
+    "questionsHint": "Your answers go with your decision",
+    "recommended": "Recommended",
+    "recommendedShort": "recommended: {option}",
+    "somethingElse": "Something else…",
+    "yourAnswer": "Your answer…"
   }
 }
