@@ -873,7 +873,10 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       return
     }
     if (decision === 'shell') this.shellAllowed = true
-    p.resolve({ behavior: 'allow', updatedInput: p.input, updatedPermissions: decision === 'always' ? p.suggestions : undefined })
+    // A plan approved with your review (answers, skipped steps, notes): it rides in the approved plan
+    // itself, so Claude builds from it straight away rather than finding it in a later message.
+    const input = p.toolName === 'ExitPlanMode' && message?.trim() ? { ...p.input, plan: `${String(p.input.plan ?? '')}\n\n## From the reviewer\n\n${message.trim()}` } : p.input
+    p.resolve({ behavior: 'allow', updatedInput: input, updatedPermissions: decision === 'always' ? p.suggestions : undefined })
     // Others waiting on the same answer (shell commands asked in parallel) go through too.
     if (decision === 'shell')
       for (const [otherId, other] of [...this.pending]) {
