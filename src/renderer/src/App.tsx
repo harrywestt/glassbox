@@ -33,6 +33,8 @@ export type AppActions = {
   stopShell: (id: string) => void
   comment: (tabId: string, target: CommentTarget, text: string) => Promise<void>
   planStatus: (tabId: string, status: 'approved' | 'changes-requested') => void
+  /** Your reply to a waiting plan, shown in the conversation as your message (it reaches Claude with the plan's answer). */
+  notePlanReply: (tabId: string, text: string) => void
   /** Bring up a view in a session (a file, the map on some modules…), with an optional note above it. */
   show: (tabId: string, target: OpenTarget, why?: string) => void
   /** Close questions without answering (Claude isn't told). */
@@ -150,6 +152,7 @@ export function App() {
         await window.glassbox.session.send(tabId, commentPrompt(target, text), { uuid, priority: 'now' })
       },
       planStatus: (tabId, status) => dispatch({ type: 'session', tabId, action: { type: 'plan-status', status } }),
+      notePlanReply: (tabId, text) => dispatch({ type: 'session', tabId, action: { type: 'user-prompt', text, uuid: newId() } }),
       show: (tabId, target, why) => dispatch({ type: 'session', tabId, action: { type: 'show', target, why } }),
       dismissQuestions: (tabId, ids) => dispatch({ type: 'session', tabId, action: { type: 'dismiss-questions', ids } }),
       dismissLoader: (tabId, id) => dispatch({ type: 'session', tabId, action: { type: 'dismiss-loader', id } }),

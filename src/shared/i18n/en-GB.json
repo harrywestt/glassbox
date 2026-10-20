@@ -443,7 +443,8 @@
     "queuedHint": "Sends when Claude finishes this step",
     "send": "Send",
     "stopAndSend": "Stop and send",
-    "stopAndSendTitle": "Stop what Claude is doing now and send this straight away (Ctrl+Enter). Background agents keep going."
+    "stopAndSendTitle": "Stop what Claude is doing now and send this straight away (Ctrl+Enter). Background agents keep going.",
+    "placeholderPlan": "Reply to the plan: ask a question or say what to change (it goes to Claude now)"
   },
   "connectorsPanel": {
     "title": "Connectors",
@@ -1768,7 +1769,11 @@
       "effort": "{level} effort",
       "modelTip": "The model Claude builds this plan with (planning on Opus and building on Sonnet saves tokens)",
       "effortTip": "How hard Claude thinks while it builds"
-    }
+    },
+    "pickPlan": "Plans in this session",
+    "pickVersion": "Versions of this plan",
+    "versions_one": "{count} version",
+    "versions_other": "{count} versions"
   },
   "previewTab": {
     "service": "Service",
