@@ -76,16 +76,16 @@ h1 { font-size: 22px; } h2 { font-size: 17px; } h3 { font-size: 14px; }
 p { margin: 0 0 8px; }
 code, pre, .mono { font-family: 'Cascadia Code', Consolas, ui-monospace, monospace; font-size: 12.5px; }
 button, input, select, textarea { font: inherit; color: inherit; }
-button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border, #d0d4da); background: var(--surface, #f6f7f9); cursor: pointer; }
+button { padding: 6px 12px; border-radius: var(--radius, 8px); border: 1px solid var(--border, #d0d4da); background: var(--surface, #f6f7f9); cursor: pointer; }
 button.primary { background: var(--accent, #2f6fde); border-color: transparent; color: var(--accent-fg, #fff); }
-input, select, textarea { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border, #d0d4da); background: var(--surface2, #fff); }
+input, select, textarea { padding: 6px 8px; border-radius: var(--radius, 8px); border: 1px solid var(--border, #d0d4da); background: var(--surface2, #fff); }
 table { border-collapse: collapse; } th, td { padding: 6px 10px; border-bottom: 1px solid var(--border, #d0d4da); text-align: left; }
 .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .col { display: flex; flex-direction: column; gap: 8px; }
 .grow { flex: 1; min-width: 0; }
 .muted { color: var(--muted, #6b7280); }
 .small { font-size: 12px; }
-.card { padding: 16px; border: 1px solid var(--border, #d0d4da); border-radius: 8px; background: var(--surface, #f6f7f9); }
+.card { padding: 16px; border: 1px solid var(--border, #d0d4da); border-radius: var(--radius, 8px); background: var(--surface, #f6f7f9); }
 .box { display: flex; align-items: center; justify-content: center; min-height: 64px; padding: 12px; border: 1.5px dashed var(--subtle, #9aa1ab); border-radius: 8px; color: var(--muted, #6b7280); font-size: 12px; text-align: center; }
 .note { padding: 6px 10px; border-left: 3px solid var(--info, #3b82f6); background: color-mix(in srgb, var(--info, #3b82f6) 10%, transparent); border-radius: 0 6px 6px 0; font-size: 12.5px; }
 .bad { outline: 2px solid var(--err, #dc2626); outline-offset: 3px; border-radius: 4px; }

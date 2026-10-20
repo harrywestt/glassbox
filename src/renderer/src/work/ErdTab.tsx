@@ -131,7 +131,7 @@ export function ErdTab({ entities: initial, query: initialQuery }: { entities?: 
     if (erd.error) return <div className="erd-empty">{tr('erdTab.readError', { error: erd.error })}</div>
     if (!erd.entities.length)
       return (
-        <Empty icon="database" title={tr('erdTab.noSchema.title')}>
+        <Empty center icon="database" title={tr('erdTab.noSchema.title')}>
           {tr('erdTab.noSchema.body')}
         </Empty>
       )

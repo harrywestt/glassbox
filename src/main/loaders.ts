@@ -27,6 +27,10 @@ export type Watch = { url?: string; file?: string; log?: string; percent_pattern
 
 const POLL_MS = 2000
 const GIVE_UP_MS = 2 * 60 * 60_000
+/** A log that stops growing for this long has finished, or died: either way nothing will move the loader. */
+const LOG_QUIET_MS = 10 * 60_000
+/** A url that hasn't answered in this long isn't coming up (a server that crashed on start). */
+const URL_GIVE_UP_MS = 15 * 60_000
 /** How much of a log's newest output is read each time. */
 const TAIL = 32_000
 
@@ -101,6 +105,7 @@ export class Loaders {
     const logPath = w.log ? full(w.log) : undefined
     let from = logPath && existsSync(logPath) ? statSync(logPath).size : 0
     let best = this.state.get(id)?.percent ?? 0
+    let grew = Date.now()
     let busy = false
     const tick = async () => {
       if (busy) return
@@ -110,6 +115,7 @@ export class Loaders {
         if (w.url) {
           const r = await fetch(w.url, { signal: AbortSignal.timeout(2500) }).catch(() => null)
           if (r && r.status < 500) return this.patch(id, { status: 'done', percent: 100, detail: tr('mainLoaders.answering', { url: w.url }) })
+          if (!w.file && !logPath && Date.now() - began > URL_GIVE_UP_MS) return this.patch(id, { status: 'failed', detail: tr('mainLoaders.urlNeverAnswered', { url: w.url }) })
         }
         if (w.file && existsSync(full(w.file))) return this.patch(id, { status: 'done', percent: 100 })
         if (logPath) {
@@ -120,7 +126,12 @@ export class Loaders {
           const size = statSync(logPath).size
           // The file was replaced or truncated (a new run): read it from the start.
           if (size < from) from = 0
-          if (size === from) return
+          if (size === from) {
+            // Nothing new for a long while: finished without a done line (nearly full) or stopped.
+            if (Date.now() - grew > LOG_QUIET_MS) return this.patch(id, best >= 95 ? { status: 'done', percent: 100 } : { status: 'failed', detail: tr('mainLoaders.logQuiet', { file: basename(logPath), minutes: Math.round(LOG_QUIET_MS / 60_000) }) })
+            return
+          }
+          grew = Date.now()
           const start = Math.max(from, size - TAIL)
           const buf = Buffer.alloc(size - start)
           const fd = openSync(logPath, 'r')

@@ -4,16 +4,15 @@ import { useEffect, useState, type Dispatch } from 'react'
 import type { UpdateState } from '../../../shared/events'
 import { useActions } from '../App'
 import { DASHBOARD, tabTitle, type AppAction, type AppState } from '../tabs'
-import type { ThemePreference } from '../theme'
 import { Icon } from './ui'
 import { useScrollStrip } from './useScrollStrip'
 import { liveVerb, tallyOf } from '../tally'
 import { Logo } from './Logo'
 import { tr } from '../../../shared/i18n'
 
-type Props = { state: AppState; dispatch: Dispatch<AppAction>; themePref: ThemePreference; themeBase: 'dark' | 'light'; onToggleTheme: () => void }
+type Props = { state: AppState; dispatch: Dispatch<AppAction> }
 
-export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme }: Props) {
+export function TitleBar({ state, dispatch }: Props) {
   const actions = useActions()
   const strip = useScrollStrip<HTMLDivElement>(state.active)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -83,9 +82,6 @@ export function TitleBar({ state, dispatch, themePref, themeBase, onToggleTheme 
       </button>
       <div className="titlebar-drag" />
       <UpdateButton />
-      <button className="icon-btn titlebar-btn" title={themeBase === 'dark' ? (themePref === 'system' ? tr('titleBar.switchToLightSystem') : tr('titleBar.switchToLight')) : themePref === 'system' ? tr('titleBar.switchToDarkSystem') : tr('titleBar.switchToDark')} onClick={onToggleTheme}>
-        <Icon name={themeBase === 'dark' ? 'sun' : 'moon'} />
-      </button>
       <div className="window-controls-space" />
     </header>
   )
@@ -127,3 +123,4 @@ function UpdateButton() {
     </button>
   )
 }
+

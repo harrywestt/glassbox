@@ -215,7 +215,7 @@ export function App() {
     <ThemeContext.Provider value={theme.tokens}>
       <ActionsContext.Provider value={actions}>
         <div className="app">
-          <TitleBar state={state} dispatch={dispatch} themePref={theme.pref} onToggleTheme={theme.toggle} themeBase={theme.tokens.base} />
+          <TitleBar state={state} dispatch={dispatch} />
           <div className="app-body">
             <div className="view" hidden={state.active !== DASHBOARD}>
               <Dashboard tabs={state.tabs} sessions={state.sessions} visible={state.active === DASHBOARD} active={state.active} />

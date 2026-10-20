@@ -6,6 +6,7 @@ import { SERVICES_FILE, type ProjectServices } from './services'
 import { BROWSER_TOOL_NAMES, browserTools, type BrowserBridge, type BrowserHooks } from './browserTools'
 import type { UxReviewer } from './uxReviewer'
 import { Loaders } from './loaders'
+import { describeStyle, projectStyle } from './projectStyle'
 
 export const GLASSBOX_TOOLS = [
   'mcp__glassbox__show_diagram',
@@ -39,7 +40,14 @@ export const GLASSBOX_TOOLS = [
 ]
 
 export const GLASSBOX_INSTRUCTIONS = `You are running inside Glassbox, a desktop app that shows the user your session: the conversation, changed files, a map of the project and a Browser.
-Spend tokens only on what the user asked for. Don't add work they didn't ask for: no diagrams, flows, sketches, maps, impact views, showcases or UX reviews unless the user asks for one or the task is about it.
+Spend tokens only on what the user asked for. Don't add work they didn't ask for: no diagrams, flows, maps, impact views, showcases or UX reviews unless the user asks for one or the task is about it.
+Sketches come first for UI: when a task adds or changes UI, show_sketch the proposed screen (and its states, or two or three options to pick from) before you build it, so the user can react. It is drawn in the project's own colours; match the app's real layout and components.
+Plans (ExitPlanMode) are rendered by Glassbox as a document: Markdown plus these blocks, each tag on its own lines. Use them where they help, not by default:
+- <Sketch id="sketch-id" /> embeds a sketch you made with show_sketch; for UI plans put the proposed screens near the top.
+- <Files> with one line per file: "+ path | why" (new), "~ path | what changes", "- path | why removed" </Files>.
+- \`\`\`mermaid for architecture or flow; <Diff file="path"> a short unified diff of the key change </Diff>; <Callout type="risk|decision|note"> one point </Callout>.
+- One <Questions> block at the end, a line each: "- question | recommended answer | alternative". The user answers in place.
+Lead with the outcome, name real files and symbols, keep prose short.
 Glassbox tools (mcp__glassbox__*, loaded through tool search when you need one):
 - To show something the user asked to see: show_diagram (Mermaid), show_flow, show_sketch, show_on_map, show_plan_on_map, show_impact, show_database, open_file, open_diff, open_preview, open_tab.
 - present_file: when you make a file for the user (document, image, video, export), present it rather than saying where it is. Save it in the working folder.
@@ -120,7 +128,7 @@ export function createGlassboxServer(
       tool(
         'show_sketch',
         'Show a rough HTML sketch in the Glassbox Sketches view, to put an idea or a problem in front of the user: layouts to choose between, a screen as it is against as it should be, a rough table, a small interactive prototype. The user pans and zooms it, clicks options, and comments on parts of it; their pick or comment comes back to you as a message. Reusing an id adds a new version (they can step back through versions), so revise rather than making near-duplicates.\n\n' +
-          'Write a self-contained fragment (no doctype needed): inline <style> and <script> are fine; nothing loads from the network, so no external fonts, images or libraries (draw with HTML, CSS or inline SVG). Glassbox\'s colours are set as CSS variables (--bg, --surface, --surface2, --elevated, --border, --fg, --muted, --subtle, --accent, --accent-fg, --ok, --warn, --err, --info) and match the user\'s light or dark theme; plain elements are already styled. Use colour whenever it helps, and prefer Glassbox\'s own: by default a sketch is drawn in the user\'s scheme and accent, and its colours should come from the app: the theme variables, its status colours, and its chart palette --cat-1 to --cat-8 (for categories, in order). Every app colour (accent, ok, warn, err, info, cat-1 to cat-8) has classes .text-<colour> (coloured text), .fill-<colour> (a soft tint with a matching border, e.g. a card or row) and .solid-<colour> (a strong fill, e.g. a button or tag). Only when the user asks for it (a light version, another accent, their brand\'s or product\'s colours) set scheme or accent to another of the app\'s, or use your own CSS colours. Keep it rough and quick: it is a sketch, not the product. Classes ready to use: .row (side by side, wrapping) and .col (stacked), .grow, .card (a panel), .box (a dashed placeholder for "image here", "chart here"), .note (an annotation), .bad and .good (mark a problem or the fix), .label (a small tag), .muted, .small, button.primary.\n\n' +
+          'Write a self-contained fragment (no doctype needed): inline <style> and <script> are fine; nothing loads from the network, so no external fonts, images or libraries (draw with HTML, CSS or inline SVG). Colours are set as CSS variables (--bg, --surface, --surface2, --elevated, --border, --fg, --muted, --subtle, --accent, --accent-fg, --ok, --warn, --err, --info, --radius) and plain elements are already styled with them. By default they are THE PROJECT\'S OWN colours, read from its stylesheets and Tailwind config, so a proposed screen looks like the app it is for (this tool\'s answer says what it found); use the variables rather than your own hex so the sketch stays on-brand, and match the project\'s layout, density and components as you saw them in its code. Where the project has no colours, Glassbox\'s are used. A chart palette --cat-1 to --cat-8 (for categories, in order) is there too. Every colour (accent, ok, warn, err, info, cat-1 to cat-8) has classes .text-<colour> (coloured text), .fill-<colour> (a soft tint with a matching border, e.g. a card or row) and .solid-<colour> (a strong fill, e.g. a button or tag). Set scheme to match, dark or light (Glassbox\'s look) only when the sketch is about Glassbox itself or the user asks. Keep it rough and quick: it is a sketch, not the product. Classes ready to use: .row (side by side, wrapping) and .col (stacked), .grow, .card (a panel), .box (a dashed placeholder for "image here", "chart here"), .note (an annotation), .bad and .good (mark a problem or the fix), .label (a small tag), .muted, .small, button.primary.\n\n' +
           'To let the user choose, put data-pick="Option A" (a short name) on each option\'s container: clicking one sends you "I pick Option A". Lay options side by side in a .row at the given width, each with a heading saying what is different.',
         {
           id: z.string().describe('Stable slug, e.g. "settings-layout"; the same id again is a new version'),
@@ -128,12 +136,15 @@ export function createGlassboxServer(
           html: z.string().describe('The sketch: an HTML fragment with any inline <style> and <script>'),
           width: z.number().int().min(320).max(2400).optional().describe('Page width in px it is drawn at (default 1200; 390 for a phone)'),
           note: z.string().optional().describe('One line on what changed in this version'),
-          scheme: z.enum(['match', 'dark', 'light']).optional().describe("Leave out (the user's scheme) unless the user asks for dark or light"),
+          scheme: z.enum(['project', 'match', 'dark', 'light']).optional().describe("Leave out (the project's own colours, else the user's scheme); match, dark or light for Glassbox's look"),
           accent: z.enum(['match', 'teal', 'blue', 'violet', 'green', 'amber', 'rose']).optional().describe("Leave out (the user's accent) unless the user asks for another")
         },
         async ({ id, title, html, width, note, scheme, accent }) => {
           emit({ type: 'sketch', id, title, html, width, note, scheme, accent })
-          return ok(`Sketch "${title}" is in the Sketches view. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message.`)
+          const look = !scheme || scheme === 'project' ? describeStyle(projectStyle(cwd ?? process.cwd())) : null
+          return ok(
+            `Sketch "${title}" (id ${id}) is in the Sketches view${look ? `, drawn in ${look}` : !scheme || scheme === 'project' ? ", in Glassbox's colours (no project colours were found)" : ''}. Embed it in a plan with <Sketch id="${id}" />. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message.`
+          )
         },
         ALWAYS_LOAD
       ),

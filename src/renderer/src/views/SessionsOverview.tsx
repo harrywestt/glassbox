@@ -4,7 +4,7 @@ import { money, useFx } from '../money'
 import { CHANGE_TOOLS, isClaudeOwnFile, taskOf, type SessionState } from '../session'
 import { tabTitle, type Tab } from '../tabs'
 import { checkOf } from '../review'
-import { backgroundWork, liveVerb, tallyOf } from '../tally'
+import { backgroundWork, backgroundCommands, liveVerb, tallyOf } from '../tally'
 import { ticketKeyFromBranch } from '../../../shared/ticket'
 import { tr } from '../../../shared/i18n'
 import './FleetBoard.css'
@@ -67,7 +67,7 @@ function finishedAt(s: SessionState): number | null {
 function columnOf(tabId: string, s: SessionState | undefined): Column {
   if (!s) return 'Plan'
   // Agents still working in the background mean the work isn't finished, whatever the last turn said.
-  const done = s.status !== 'running' && backgroundWork(s) === 0 ? finishedAt(s) : null
+  const done = s.status !== 'running' && backgroundWork(s) === 0 && backgroundCommands(s) === 0 ? finishedAt(s) : null
   // Waiting on you (a question, a check-in, a permission) is never Ready.
   if (done !== null) return tallyOf(s) === 'wait' || (seen[tabId] ?? 0) < done ? 'Review' : 'Ready'
   const running = Object.values(s.toolCalls)

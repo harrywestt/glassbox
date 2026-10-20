@@ -14,6 +14,12 @@ export function backgroundWork(s: SessionState): number {
   return Math.max(Object.values(s.agents).filter((a) => a.status === 'running').length, s.backgroundAgents ?? 0)
 }
 
+/** Background tasks that aren't agents (a long command Claude started, say): Claude is waiting on these too. */
+export function backgroundCommands(s: SessionState): number {
+  const agentTasks = new Set(Object.values(s.agents).map((a) => a.taskId).filter(Boolean))
+  return (s.backgroundTasks ?? []).filter((t) => !agentTasks.has(t.id)).length
+}
+
 /** Agents and background tasks you can stop one at a time: the agents Glassbox tracks, then any other background task (a long command, say). */
 export function stoppableTasks(s: SessionState): { id: string; label: string; agentId?: string }[] {
   const agents = Object.values(s.agents).filter((a) => a.status === 'running' && a.taskId)
@@ -28,7 +34,8 @@ export function tallyOf(s: SessionState | undefined): Tally {
   if (!s) return 'idle'
   if (s.permissions.length || s.userQuestions?.length || s.checkins.some((c) => c.answer === undefined) || s.decisions.some((d) => d.kind === 'question' && !d.challenged)) return 'wait'
   if (s.status === 'stopped') return 'err'
-  if (s.status === 'running' || (s.status === 'ready' && backgroundWork(s) > 0)) return 'live'
+  // Still waiting on background work after its turn: not done yet, so not green.
+  if (s.status === 'running' || (s.status === 'ready' && (backgroundWork(s) > 0 || backgroundCommands(s) > 0))) return 'live'
   if (s.status === 'ready') return 'ok'
   return 'idle'
 }
@@ -81,6 +88,7 @@ export function liveVerb(s: SessionState | undefined): string {
       // Claude's turn is over but an agent it started in the background is still working.
       const bg = backgroundWork(s)
       if (bg) return tr('tally.agentsBackground', { count: bg })
+      if (backgroundCommands(s)) return tr('tally.waitingBackground')
       return s.timeline.some((i) => i.kind === 'result') ? tr('tally.done') : tr('tally.ready')
     }
   }

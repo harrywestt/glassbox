@@ -1,6 +1,6 @@
 /* Flow work tab: an animated sequence of how a request moves through the system. */
 .flow { flex: 1; min-height: 0; display: flex; background: var(--bg); border-top: 1px solid var(--border); }
-.flow-empty-wrap { align-items: flex-start; }
+.flow-empty-wrap { display: flex; align-items: center; justify-content: center; }
 .flow-empty { padding: var(--s-4); font-size: 13px; color: var(--muted); }
 
 .flow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }

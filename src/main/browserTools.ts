@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tool } from '@anthropic-ai/claude-agent-sdk'
 import { logsText, newProblems } from './browserLogs'
+import { markRecording } from './recorder'
 import { z } from 'zod'
 
 /**
@@ -121,7 +122,7 @@ const LOCATE = (ref: number) => `(() => {
   if (!el) return null
   el.scrollIntoView({ block: 'center', inline: 'center' })
   const r = el.getBoundingClientRect()
-  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim().slice(0, 60) }
+  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), vw: innerWidth, vh: innerHeight, name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim().slice(0, 60) }
 })()`
 
 const KEYS: Record<string, string> = { enter: 'Enter', escape: 'Escape', esc: 'Escape', tab: 'Tab', backspace: 'Backspace', delete: 'Delete', up: 'Up', down: 'Down', left: 'Left', right: 'Right', space: 'Space', pageup: 'PageUp', pagedown: 'PageDown', home: 'Home', end: 'End' }
@@ -259,9 +260,10 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
       async ({ ref, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
-        const at = (await inTime(c.wc.executeJavaScript(LOCATE(ref)), PAGE_MS)) as { x: number; y: number; name: string } | null
+        const at = (await inTime(c.wc.executeJavaScript(LOCATE(ref)), PAGE_MS)) as { x: number; y: number; vw: number; vh: number; name: string } | null
         if (!at) return fail(`No control [${ref}] on the page now. Take a new browser_snapshot.`)
         await new Promise((r) => setTimeout(r, 120))
+        markRecording(c.wc.id, { label: at.name ? `Click “${at.name}”` : 'Click', fx: at.x / Math.max(1, at.vw), fy: at.y / Math.max(1, at.vh) })
         c.wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
         c.wc.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 })
         c.wc.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 })
@@ -279,6 +281,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         const found = await inTime(c.wc.executeJavaScript(`(() => { const el = document.querySelector('[data-gb="${ref}"]'); if (!el) return false; el.scrollIntoView({ block: 'center' }); el.focus(); ${append ? '' : "if ('select' in el) el.select(); else document.execCommand('selectAll')"}; return true })()`), PAGE_MS)
         if (!found) return fail(`No control [${ref}] on the page now. Take a new browser_snapshot.`)
         if (!append) press(c.wc, 'Backspace')
+        markRecording(c.wc.id, { label: `Type “${text.length > 40 ? text.slice(0, 40) + '…' : text}”${submit ? ' ↵' : ''}` })
         await c.wc.insertText(text)
         if (submit) {
           press(c.wc, 'Enter')
@@ -294,6 +297,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
       async ({ key, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
+        markRecording(c.wc.id, { label: `Press ${key}` })
         press(c.wc, key)
         await settle(c.wc, 4000)
         return ok(`Pressed ${key}. ${where(c.wc)}`)

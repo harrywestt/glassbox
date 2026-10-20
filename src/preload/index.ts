@@ -207,6 +207,8 @@ const api = {
   spend: {
     summary: (): Promise<import('../shared/events').SpendSummary> => invoke('spend:summary')
   },
+  /** The project's own colours, read from its stylesheets (for drawing sketches in them). */
+  projectStyle: (cwd: string): Promise<import('../main/projectStyle').ProjectStyle> => invoke('sketch:projectStyle', cwd),
   /** Where a sketch's HTML is served (sketch://, sandboxed). */
   sketch: {
     url: (html: string): Promise<string> => invoke('sketch:url', html)
@@ -233,7 +235,7 @@ const api = {
   },
   /** The window encodes recordings (MediaRecorder): frames come in, the finished video goes back. */
   recorder: {
-    on(callback: (m: { kind: 'start'; id: string; fps: number } | { kind: 'frame'; id: string; jpeg: Uint8Array } | { kind: 'stop'; id: string }) => void) {
+    on(callback: (m: { kind: 'start'; id: string; fps: number } | { kind: 'frame'; id: string; jpeg: Uint8Array } | { kind: 'stop'; id: string } | { kind: 'mark'; id: string; label: string; fx?: number; fy?: number }) => void) {
       const listener = (_e: IpcRendererEvent, m: Parameters<typeof callback>[0]) => callback(m)
       ipcRenderer.on('glassbox:recorder', listener)
       return () => void ipcRenderer.off('glassbox:recorder', listener)

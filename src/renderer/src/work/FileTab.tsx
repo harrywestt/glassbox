@@ -65,7 +65,7 @@ export function FileTab({ path, line, endLine }: { path: string; line?: number; 
     shownRel.current = rel
     if (!same) setFile(null)
     let live = true
-    const t = setTimeout(() => window.glassbox.fs.read(tab.cwd, rel).then((f) => live && setFile(f), (e) => live && setFile({ error: String(e) })), same ? 500 : 0)
+    const t = setTimeout(() => window.glassbox.fs.read(tab.cwd, rel).then((f) => live && setFile(f), (e) => live && setFile({ error: readError(String(e), rel) })), same ? 500 : 0)
     return () => {
       live = false
       clearTimeout(t)
@@ -120,4 +120,12 @@ export function FileTab({ path, line, endLine }: { path: string; line?: number; 
       </div>
     </div>
   )
+}
+
+/** What went wrong reading a file, in words: not the IPC plumbing around it. */
+function readError(raw: string, rel: string): string {
+  if (/ENOENT|no such file/i.test(raw)) return tr('fileTab.missing', { file: rel })
+  if (/EACCES|EPERM/i.test(raw)) return tr('fileTab.noAccess', { file: rel })
+  if (/EISDIR/i.test(raw)) return tr('fileTab.isFolder', { file: rel })
+  return raw.replace(/^Error:\s*(Error invoking remote method '[^']+':\s*)?(Error:\s*)?/, '')
 }

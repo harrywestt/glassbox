@@ -310,7 +310,7 @@ function lastActivity(calls: SessionState['toolCalls']): number {
 }
 
 function Working() {
-  const { s } = useSession()
+  const { tab, s } = useSession()
   const [now, setNow] = useState(Date.now())
   // Agents still working in the background keep the line going after Claude's own turn ends.
   const background = Object.values(s.agents).filter((a) => a.status === 'running')
@@ -331,6 +331,33 @@ function Working() {
   const word = tr(`timeline.workingWords.${WORKING_WORDS[Math.floor(took / 6) % WORKING_WORDS.length]}`)
   const clock = (n: number) => (n < 60 ? tr('timeline.seconds', { n }) : formatDuration(n * 1000))
   const running = Object.values(s.toolCalls).filter((c) => c.status === 'running').length
+  // Claude's turn is over and only background work is left: Claude isn't thinking (or spending
+  // tokens) until it ends, so the line says it's waiting, on what, and offers to stop it.
+  if (s.status !== 'running') {
+    const ids = [...tasks.map((t) => t.id), ...background.map((a) => a.taskId).filter((id): id is string => !!id)]
+    const what =
+      tasks.length + background.length === 1
+        ? (tasks[0]?.description || (background[0] ? background[0].type : '') || tr('timeline.backgroundTaskUnnamed'))
+        : tr('timeline.waitingMany', { n: tasks.length + background.length })
+    const progress = tasks.length === 0 && background.length === 1 ? background[0].progress : undefined
+    return (
+      <div className="row">
+        <div className="working idle-wait" role="status" aria-live="off">
+          <Icon name="watch" className="idle-wait-icon" />
+          <span className="idle-wait-text">
+            <span className="idle-wait-label">{tr('timeline.waitingOn')}</span> <span className="idle-wait-what">{what}</span>
+            {progress && <span className="muted"> · {progress}</span>}
+          </span>
+          <span className="working-meta">{clock(took)}</span>
+          {ids.length > 0 && (
+            <button className="link small idle-wait-stop" onClick={() => ids.forEach((id) => void window.glassbox.session.stopTask(tab.id, id).catch(() => {}))} title={tr('timeline.stopBackgroundTip')}>
+              {ids.length > 1 ? tr('timeline.stopAll') : tr('timeline.stopBackground')}
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="row">
       <div className="working" role="status" aria-live="off">

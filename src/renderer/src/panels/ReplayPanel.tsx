@@ -28,7 +28,7 @@ export function ReplayPanel() {
     return () => clearInterval(t)
   }, [playing, events.length])
 
-  if (!events.length) return <div className="panel"><PanelHeader title={tr('replayPanel.title')} /><Empty icon="history" title={tr('replayPanel.emptyTitle')} /></div>
+  if (!events.length) return <div className="panel"><PanelHeader title={tr('replayPanel.title')} /><Empty center icon="history" title={tr('replayPanel.emptyTitle')}>{tr('replayPanel.emptyBody')}</Empty></div>
 
   const item = events[Math.min(pos, events.length - 1)]
   const at = item.at
