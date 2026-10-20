@@ -168,6 +168,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
   const predicted = !text && s.status === 'ready' && voice.state === 'idle' && !currentAsk ? s.suggestion : undefined
 
   const submit = () => sendPrompt(text)
+  const planWaiting = s.permissions.find((p) => p.toolName === 'ExitPlanMode')
 
   // Beside another view (Live, a diff) the box is one line until you click into it. Once open it stays
   // open, wherever else you click, until you send, press Esc with it empty, or move to another view.
@@ -208,7 +209,13 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
     // Whatever you'd scrolled up to, sending takes the conversation back to the bottom.
     window.dispatchEvent(new CustomEvent('glassbox:to-latest', { detail: tab.id }))
     try {
-      if (targets.length) await answerAll(targets, prompt)
+      // A plan waiting for you holds Claude's turn: a message would sit in the queue until the plan
+      // is decided. So it is the reply to the plan: Claude gets it now and revises (or answers).
+      if (planWaiting) {
+        actions.planStatus(tab.id, 'changes-requested')
+        actions.notePlanReply(tab.id, prompt)
+        await window.glassbox.session.respondPermission(tab.id, planWaiting.id, 'deny', `The user replied to your plan instead of approving it:\n\n${prompt}\n\nRespond to what they said. If it changes the plan, revise it and present it again; if it's a question, answer it and present the plan again when ready.`)
+      } else if (targets.length) await answerAll(targets, prompt)
       else if (planFirst) {
         await actions.send(tab.id, prompt, undefined, { plan: true })
         setPlanFirst(false)
@@ -343,7 +350,7 @@ export function Composer({ compact, liveOwnsAsks }: { compact?: boolean; liveOwn
           value={text}
           rows={currentAsk ? 1 : 3}
           className={predicted ? 'has-prediction' : undefined}
-          placeholder={currentAsk ? (targets.length > 1 ? tr('composer.placeholderAnswerAll', { count: targets.length }) : tr('composer.placeholderAnswer')) : predicted ?? (canSend ? tr('composer.placeholderMessage') : tr('composer.placeholderStarting'))}
+          placeholder={planWaiting && !currentAsk ? tr('composer.placeholderPlan') : currentAsk ? (targets.length > 1 ? tr('composer.placeholderAnswerAll', { count: targets.length }) : tr('composer.placeholderAnswer')) : predicted ?? (canSend ? tr('composer.placeholderMessage') : tr('composer.placeholderStarting'))}
           onFocus={() => setOpened(true)}
           onChange={(e) => {
             setText(e.target.value)

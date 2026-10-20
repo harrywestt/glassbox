@@ -85,7 +85,8 @@ function SelectList<T extends string>({ anchor, options, value, onPick, onClose 
     const margin = 8
     const below = window.innerHeight - r.bottom - margin
     const above = r.top - margin
-    const width = Math.min(Math.max(r.width, 200), window.innerWidth - margin * 2)
+    // Options with a note beside them need room for both (a list of plans: its name and its state).
+    const width = Math.min(Math.max(r.width, options.some((o) => o.hint) ? 360 : 200), window.innerWidth - margin * 2)
     const left = Math.max(margin, Math.min(r.left, window.innerWidth - width - margin))
     const flip = below < 220 && above > below
     setPos(flip ? { left, bottom: window.innerHeight - r.top + 4, width, maxHeight: Math.min(360, above - 4) } : { left, top: r.bottom + 4, width, maxHeight: Math.min(360, below - 4) })

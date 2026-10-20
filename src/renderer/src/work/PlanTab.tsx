@@ -32,10 +32,36 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
   const [feedback, setFeedback] = useState('')
   const [asking, setAsking] = useState(false)
   const request = s.permissions.find((p) => p.toolName === 'ExitPlanMode')
-  // The waiting plan comes first; otherwise the one you opened, or the latest.
-  const waiting = request && (!shown || shown.text === String(request.input.plan ?? ''))
-  const text = waiting ? String(request.input.plan ?? '') : (shown?.text ?? s.plan?.text ?? '')
-  const status = waiting ? 'proposed' : (shown ? shown.status : s.plan?.status)
+  // Every plan presented in this session, oldest first. Versions of one plan share its title; a plan
+  // with a new title (another feature for the ticket, say) is a plan of its own, not a replacement.
+  const versions = useMemo(
+    () =>
+      Object.values(s.toolCalls)
+        .filter((c) => c.name === 'ExitPlanMode' && typeof c.input.plan === 'string' && c.input.plan.trim())
+        .sort((a, b) => a.at - b.at),
+    [s.toolCalls]
+  )
+  const plans = useMemo(() => {
+    const out: { title: string; calls: typeof versions }[] = []
+    for (const c of versions) {
+      const t = planTitle(String(c.input.plan))
+      const same = out.find((p) => p.title.toLowerCase() === t.toLowerCase())
+      if (same) same.calls.push(c)
+      else out.push({ title: t, calls: [c] })
+    }
+    return out
+  }, [versions])
+  const [pickedId, setPickedId] = useState<string | null>(null)
+  // A new plan arriving (or one opened from the conversation) shows instead of what you'd picked.
+  useEffect(() => setPickedId(null), [versions.length, shown?.text])
+  const picked = pickedId ? versions.find((c) => c.id === pickedId) : undefined
+  // The waiting plan comes first unless you picked another; otherwise the one you picked or opened, or the latest.
+  const waitingText = request ? String(request.input.plan ?? '') : null
+  const text = picked ? String(picked.input.plan) : waitingText !== null && (!shown || shown.text === waitingText) ? waitingText : (shown?.text ?? s.plan?.text ?? '')
+  const waiting = !!request && text === waitingText
+  const statusOf = (callText: string, callStatus?: string) =>
+    waitingText === callText ? 'proposed' : s.plan?.text === callText ? s.plan.status : callStatus === 'error' ? 'changes-requested' : callStatus === 'done' ? 'approved' : undefined
+  const status = waiting ? 'proposed' : picked ? statusOf(text, picked.status) : (shown ? shown.status : s.plan?.status)
   // The plan's shape, when Claude drew it on the map for this plan (since your last message).
   const since = [...s.timeline].reverse().find((i) => i.kind === 'user')?.at ?? 0
   const shape = waiting && s.planMap && s.planMap.at >= since ? s.planMap : undefined
@@ -62,23 +88,18 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
   const changedAnswers = segments.some((sg) => sg.kind === 'questions' && sg.items.some((q) => answers[q.text]?.trim() && answers[q.text].trim() !== q.options[0]))
   const steps = useRef<string[]>([])
 
-  // The versions of the plan in this session, oldest first: a revision can show what changed.
-  const versions = useMemo(
-    () =>
-      Object.values(s.toolCalls)
-        .filter((c) => c.name === 'ExitPlanMode' && typeof c.input.plan === 'string')
-        .sort((a, b) => a.at - b.at),
-    [s.toolCalls]
-  )
-  const index = versions.findIndex((c) => String(c.input.plan) === text)
-  const previous = index > 0 ? String(versions[index - 1].input.plan) : null
+  // This plan's versions: a revision can show what changed since the one before.
+  const group = plans.find((p) => p.calls.some((c) => String(c.input.plan) === text))
+  const own = group?.calls ?? []
+  const index = own.findIndex((c) => String(c.input.plan) === text)
+  const previous = index > 0 ? String(own[index - 1].input.plan) : null
   const [showChanges, setShowChanges] = useState(false)
   useEffect(() => setShowChanges(false), [text])
   const changes = useMemo(() => (showChanges && previous ? planChanges(previous, text) : null), [showChanges, previous, text])
 
   // Once approved (and still the latest plan), it follows the build.
   const building = !waiting && s.plan?.status === 'approved' && s.plan.text === text
-  const approvedAt = index >= 0 ? (versions[index].endedAt ?? versions[index].at) : 0
+  const approvedAt = index >= 0 ? (own[index].endedAt ?? own[index].at) : 0
   const builtFiles = useMemo(() => {
     if (!building) return undefined
     return new Set(s.files.filter((f) => CHANGE_TOOLS.has(f.tool) && f.at >= approvedAt).map((f) => relPath(tab.cwd, f.path).replace(/\\/g, '/').toLowerCase()))
@@ -262,7 +283,30 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
       <div className="plan-bar">
         <Icon name="checklist" />
         <strong>{tr('planTab.title')}</strong>
-        {versions.length > 1 && index >= 0 && <span className="muted small">{tr('planTab.version', { n: index + 1, of: versions.length })}</span>}
+        {plans.length > 1 && (
+          <Select
+            className="plan-picker"
+            value={group?.calls[group.calls.length - 1].id ?? ''}
+            onChange={(id) => setPickedId(id)}
+            aria-label={tr('planTab.pickPlan')}
+            title={tr('planTab.pickPlan')}
+            options={plans.map((p) => {
+              const last = p.calls[p.calls.length - 1]
+              const st = statusOf(String(last.input.plan), last.status)
+              return { value: last.id, label: p.title, hint: [st ? tr(STATUS[st]) : '', p.calls.length > 1 ? tr('planTab.versions', { count: p.calls.length }) : ''].filter(Boolean).join(' · ') }
+            })}
+          />
+        )}
+        {own.length > 1 && index >= 0 && (
+          <Select
+            className="plan-version-picker"
+            value={own[index].id}
+            onChange={(id) => setPickedId(id)}
+            aria-label={tr('planTab.pickVersion')}
+            title={tr('planTab.pickVersion')}
+            options={own.map((c, i) => ({ value: c.id, label: tr('planTab.version', { n: i + 1, of: own.length }) }))}
+          />
+        )}
         {status && <span className={`plan-status plan-status-${status}`}>{tr(STATUS[status])}</span>}
         {waiting && <span className="muted small ellipsis">{tr('planTab.nothingChangedYet')}</span>}
         {building && stepsTotal > 0 && <span className="plan-progress small">{tr('planTab.building', { done: stepsDone, total: stepsTotal })}</span>}
@@ -453,4 +497,10 @@ function shapeText(shape: NonNullable<SessionState['planMap']>): string {
     (shape.connections.length ? tr('planTab.shape.changesConnections', { count: shape.connections.length }) : '') +
     tr('planTab.shape.end')
   )
+}
+
+/** A plan's name: its first heading, else its first line. */
+function planTitle(text: string): string {
+  const t = text.match(/^#{1,2}\s+(.+)$/m)?.[1] ?? text.split('\n').find((l) => l.trim()) ?? ''
+  return t.replace(/^plan\s*[:\-–]\s*/i, '').replace(/[*_`]/g, '').trim().slice(0, 80) || tr('planTab.title')
 }
