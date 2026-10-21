@@ -2170,7 +2170,7 @@
     "showSide": "Show the side panel",
     "mapLegend": "Shaded: edited this session. Red edge: being edited now. Amber edge: waiting for you. Hatched: fenced.",
     "unseen": "New since you last looked",
-    "keptTitle": "Kept open in this project. Click to stop keeping it.",
+    "keptTitle": "Pinned: opens in every session in this project. Right-click to unpin.",
     "keepTitle": "Keep open: open this view in every session in this project",
     "close": "Close",
     "fullScreenTitle": "Show this view full screen (Esc to exit)",
@@ -2191,7 +2191,14 @@
     "giveOwnCopyTip": "Move this session to its own copy of the repo (a git worktree on a new branch), so the two stop mixing",
     "makeCopy": "Make copy",
     "cancelCopy": "Cancel",
-    "sharedWithMore": "Also open in {names} and {n} more."
+    "sharedWithMore": "Also open in {names} and {n} more.",
+    "tabMenu": {
+      "pin": "Pin this view",
+      "unpin": "Unpin",
+      "close": "Close",
+      "closeOthers": "Close other tabs",
+      "pinNote": "A pinned view opens in every session in this project."
+    }
   },
   "sessionsOverview": {
     "columnPlan": "Plan",
