@@ -2100,9 +2100,17 @@ button.plan-file-name:hover { color: var(--accent); text-decoration: underline; 
 /* View tabs, as a browser draws them: a darker strip, the open tab raised in the page's own colour
    with rounded top corners so it joins the view below, thin dividers between the others, and a
    close button at the end of each. */
-.work-tabs { background: var(--surface2); align-items: flex-end; padding-top: 4px; }
-.work-tab-list { align-items: flex-end; gap: 0; height: 100%; }
-.work-tab { align-self: flex-end; height: 30px; padding: 0 8px 0 12px; border-radius: 8px 8px 0 0; margin-bottom: -1px; color: var(--muted); }
+.work-tabs { background: var(--surface2); align-items: flex-end; height: 40px; padding-top: 6px; }
+.work-tab-list { align-items: flex-end; gap: 2px; height: 100%; }
+.work-tab { align-self: flex-end; height: 34px; padding: 0 12px 0 16px; gap: 8px; border-radius: 8px 8px 0 0; margin-bottom: -1px; color: var(--muted); font-size: 12.5px; }
+.work-tab:not(:has(.work-tab-close)) { padding-right: 16px; }
+/* The buttons at the end line up with the tabs' labels. */
+.work-tabs > .icon-btn, .work-tabs > .work-tab-add { align-self: flex-end; height: 34px; margin-bottom: 0; }
+.work-tabs > .work-tab-add > .icon-btn { align-self: center; }
+.work-tab-pinned { font-size: 12px !important; color: var(--accent) !important; }
+.tab-menu { width: 220px; z-index: 60; }
+.tab-menu .menu-item { display: flex; align-items: center; gap: var(--s-2); }
+.menu-note { padding: 6px var(--s-2) 2px; border-top: 1px solid var(--border); margin-top: 4px; line-height: 1.4; }
 .work-tab:hover:not(.active) { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .work-tab.active { background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1px var(--border); clip-path: inset(-1px -1px 0 -1px); z-index: 1; }
 .work-tab.active::after { display: none; }

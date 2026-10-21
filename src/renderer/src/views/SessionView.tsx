@@ -1010,6 +1010,7 @@ function WorkTabs({
   yourTurn: boolean
 }) {
   const [picking, setPicking] = useState(false)
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const strip = useScrollStrip<HTMLDivElement>(active)
   const isView = (t: WorkTab): t is WorkTab & { kind: ViewKind } => VIEWS.some((v) => v.kind === t.kind)
   const tab = (t: WorkTab, i: number) => (
@@ -1021,6 +1022,10 @@ function WorkTabs({
       className={t.id === active ? 'work-tab active' : 'work-tab'}
       onClick={() => onActivate(t.id)}
       onAuxClick={(e) => e.button === 1 && !isFixed(t, qa) && onClose(t.id)}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        setMenu({ id: t.id, x: e.clientX, y: e.clientY })
+      }}
       title={t.kind === 'file' || t.kind === 'diff' ? t.path : t.kind === 'map' ? tr('sessionView.mapLegend') : undefined}
     >
       <Icon name={WORK_ICON[t.kind]} />
@@ -1034,16 +1039,7 @@ function WorkTabs({
         </span>
       )}
       {unseen.has(t.id) && t.id !== active && <span className="unseen-dot" title={tr('sessionView.unseen')} />}
-      {isView(t) && (
-        <button
-          className={kept.includes(t.kind) ? 'work-tab-keep on' : 'work-tab-keep'}
-          title={kept.includes(t.kind) ? tr('sessionView.keptTitle') : tr('sessionView.keepTitle')}
-          aria-pressed={kept.includes(t.kind)}
-          onClick={(e) => (e.stopPropagation(), onKeep(t.kind, !kept.includes(t.kind)))}
-        >
-          <Icon name={kept.includes(t.kind) ? 'pinned' : 'pin'} />
-        </button>
-      )}
+      {isView(t) && kept.includes(t.kind) && <Icon name="pinned" className="work-tab-pinned" title={tr('sessionView.keptTitle')} />}
       {!isFixed(t, qa) && !(isView(t) && kept.includes(t.kind)) && (
         <button className="work-tab-close" title={tr('sessionView.close')} onClick={(e) => (e.stopPropagation(), onClose(t.id))}>
           <Icon name="close" />
@@ -1059,6 +1055,37 @@ function WorkTabs({
         {tabs.map((t, i) => (t.kind === 'conversation' ? null : tab(t, i)))}
       </div>
       <span className="spacer" />
+      {menu &&
+        (() => {
+          const t = tabs.find((x) => x.id === menu.id)
+          if (!t) return null
+          const view = isView(t) ? t : null
+          const pinned = !!view && kept.includes(view.kind)
+          const closable = !isFixed(t, qa) && !pinned
+          const others = tabs.filter((x) => x.id !== t.id && !isFixed(x, qa) && !(isView(x) && kept.includes(x.kind)))
+          const run = (f: () => void) => () => (setMenu(null), f())
+          return (
+            <>
+              <div className="menu-scrim" onMouseDown={() => setMenu(null)} onContextMenu={(e) => (e.preventDefault(), setMenu(null))} />
+              <div className="menu tab-menu" role="menu" style={{ position: 'fixed', left: menu.x, top: menu.y, right: 'auto' }}>
+                {view && (
+                  <button role="menuitem" className="menu-item" onClick={run(() => onKeep(view.kind, !pinned))}>
+                    <Icon name={pinned ? 'pinned' : 'pin'} /> {pinned ? tr('sessionView.tabMenu.unpin') : tr('sessionView.tabMenu.pin')}
+                  </button>
+                )}
+                {closable && (
+                  <button role="menuitem" className="menu-item" onClick={run(() => onClose(t.id))}>
+                    <Icon name="close" /> {tr('sessionView.tabMenu.close')}
+                  </button>
+                )}
+                <button role="menuitem" className="menu-item" disabled={!others.length} onClick={run(() => others.forEach((x) => onClose(x.id)))}>
+                  <Icon name="close-all" /> {tr('sessionView.tabMenu.closeOthers')}
+                </button>
+                {view && <div className="menu-note small muted">{tr('sessionView.tabMenu.pinNote')}</div>}
+              </div>
+            </>
+          )
+        })()}
       <IconButton icon="screen-full" title={tr('sessionView.fullScreenTitle')} onClick={onFullScreen} />
       {/* Outside the scrolling list, so its menu isn't clipped. */}
       <div className="work-tab-add" hidden={qa}>
