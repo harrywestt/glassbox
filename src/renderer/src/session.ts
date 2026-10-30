@@ -207,21 +207,24 @@ function rememberDismissed(ids: string[]) {
 export type FileTouch = { path: string; tool: string; toolId: string; agentId: string | null; at: number; turn: number }
 export type Diagram = { id: string; title: string; mermaid: string; at: number }
 /** scheme: none or 'project' for the project's own colours (when it has them); 'match', 'dark' or 'light' for Glassbox's. */
-export type SketchVersion = { html: string; width: number; note?: string; scheme?: 'project' | 'match' | 'dark' | 'light'; accent?: string; at: number }
+export type SketchVersion = { html: string; width: number; note?: string; scheme?: 'project' | 'match' | 'dark' | 'light'; accent?: string; at: number; /** Where it's kept (sent as edits or a file, the HTML is read from there). */ ref?: string; /** The stylesheet its colours come from. */ stylesheet?: string; /** Without Glassbox's sketching styles. */ bare?: boolean; /** The show_sketch call that made it. */ toolId?: string }
 /** A rough page Claude drew (show_sketch); each call with the same id adds a version. */
 export type Sketch = { id: string; title: string; versions: SketchVersion[]; at: number }
 
 /** Adds a version to a sketch (the same page again only renames it). */
-function addSketch(all: Record<string, Sketch>, s: { id: string; title?: unknown; html?: unknown; width?: unknown; note?: unknown; scheme?: unknown; accent?: unknown }, at: number): Record<string, Sketch> {
+function addSketch(all: Record<string, Sketch>, s: { id: string; title?: unknown; html?: unknown; width?: unknown; note?: unknown; scheme?: unknown; accent?: unknown; ref?: unknown; stylesheet?: unknown; bare?: unknown; toolId?: string }, at: number): Record<string, Sketch> {
   const html = String(s.html ?? '')
   const prev = all[s.id]
   const title = String(s.title ?? prev?.title ?? s.id)
   const last = prev?.versions[prev.versions.length - 1]
-  const width = typeof s.width === 'number' && s.width >= 320 ? Math.min(2400, s.width) : 1200
+  const width = typeof s.width === 'number' && s.width >= 320 ? s.width : (prev?.versions.at(-1)?.width ?? 1200)
   const scheme: SketchVersion['scheme'] = s.scheme === 'dark' || s.scheme === 'light' || s.scheme === 'match' ? s.scheme : undefined
   const accent = typeof s.accent === 'string' && s.accent !== 'match' ? s.accent : undefined
-  const same = last && last.html === html && last.width === width && last.scheme === scheme && last.accent === accent
-  const versions = same ? prev.versions : [...(prev?.versions ?? []), { html, width, note: typeof s.note === 'string' ? s.note : undefined, scheme, accent, at }]
+  const ref = typeof s.ref === 'string' ? s.ref : undefined
+  const stylesheet = typeof s.stylesheet === 'string' ? s.stylesheet : undefined
+  const bare = s.bare === true || undefined
+  const same = last && (ref && last.ref === ref ? true : !!html && last.html === html) && last.width === width && last.scheme === scheme && last.accent === accent && last.stylesheet === stylesheet && last.bare === bare
+  const versions = same ? prev.versions : [...(prev?.versions ?? []), { html, width, note: typeof s.note === 'string' ? s.note : undefined, scheme, accent, at, ref, stylesheet, bare, toolId: s.toolId }]
   return { ...all, [s.id]: { id: s.id, title, versions, at } }
 }
 /**
@@ -240,6 +243,12 @@ function withOverview(sketches: Record<string, Sketch>, input: Record<string, un
   })
   const size = ['tiny', 'small', 'medium', 'large'].includes(o.size) ? o.size : 'medium'
   return { overview: { ...o, size, screens, at }, sketches: all }
+}
+/** A sketch taken out (delete_sketch). */
+function withoutSketch(all: Record<string, Sketch>, id: string): Record<string, Sketch> {
+  if (!all[id]) return all
+  const { [id]: _gone, ...rest } = all
+  return rest
 }
 export type { FlowHop }
 export type Flow = { id: string; title: string; lanes: string[]; before?: FlowHop[]; after: FlowHop[]; at: number }
@@ -661,6 +670,7 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       const s = event.signal
       if (s.type === 'diagram') return { ...state, diagrams: { ...state.diagrams, [s.id]: { ...s, at } } }
       if (s.type === 'sketch') return { ...state, sketches: addSketch(state.sketches ?? {}, s, at) }
+      if (s.type === 'sketch-delete') return { ...state, sketches: withoutSketch(state.sketches ?? {}, s.id) }
       if (s.type === 'flow') return { ...state, flows: { ...state.flows, [s.id]: { ...s, at } } }
       if (s.type === 'task') return { ...state, task: { summary: s.summary, steps: s.steps, at } }
       if (s.type === 'showcase') return { ...state, showcase: { ...s, artifactUrl: s.artifactUrl ?? (state.showcase?.path === s.path ? state.showcase.artifactUrl : undefined), at } }
@@ -870,7 +880,9 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
           if (block.name === 'mcp__glassbox__show_diagram' && typeof input.id === 'string') {
             next.diagrams = { ...next.diagrams, [input.id]: { id: input.id, title: String(input.title ?? input.id), mermaid: String(input.mermaid ?? ''), at } }
           }
-          if (block.name === 'mcp__glassbox__show_sketch' && typeof input.id === 'string') next.sketches = addSketch(next.sketches ?? {}, { ...input, id: input.id }, at)
+          // Sent whole, the version is in the call; sent as edits or a file, it comes with the answer (by reference).
+          if (block.name === 'mcp__glassbox__show_sketch' && typeof input.id === 'string' && typeof input.html === 'string') next.sketches = addSketch(next.sketches ?? state.sketches ?? {}, { ...input, id: input.id, toolId: block.id }, at)
+          if (block.name === 'mcp__glassbox__delete_sketch' && typeof input.id === 'string') next.sketches = withoutSketch(next.sketches ?? state.sketches ?? {}, input.id)
           if (block.name === 'mcp__glassbox__pr_overview') {
             const o = withOverview(next.sketches ?? state.sketches ?? {}, input, at)
             if (o.overview) (next.overview = o.overview), (next.sketches = o.sketches)
@@ -982,6 +994,12 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
         const status = block.is_error ? 'error' : 'done'
         const result = contentToText(block.content)
         toolCalls[call.id] = { ...call, status, result, endedAt: fromHistory && !when ? undefined : at }
+        // A sketch sent as edits or a file: its version is the one the answer refers to.
+        const sketchRef = call.name === 'mcp__glassbox__show_sketch' && status === 'done' ? result.match(/\[sketch-ref:([0-9a-f]{20})\]/)?.[1] : undefined
+        if (sketchRef && typeof call.input.id === 'string') {
+          const have = next.sketches?.[call.input.id]?.versions.some((v) => v.toolId === call.id || v.ref === sketchRef)
+          if (!have) next = { ...next, sketches: addSketch(next.sketches ?? {}, { ...call.input, id: call.input.id, html: '', ref: sketchRef, toolId: call.id }, call.at) }
+        }
         // A task Claude created: its result names the id later updates use.
         if (call.name === 'TaskCreate') {
           const structured = (msg as { tool_use_result?: { task?: { id?: string } } }).tool_use_result?.task?.id

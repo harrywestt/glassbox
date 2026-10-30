@@ -3053,7 +3053,9 @@
     "notesHead_other": "{count} notes on {where}, numbered as pinned on it:",
     "notesHeadVersions_one": "A note on the sketch “{title}”:",
     "notesHeadVersions_other": "{count} notes on the sketch “{title}”, numbered as pinned on it:",
-    "notesAsk": "Change the sketch to match (a new version), and say if any of it would not work."
+    "notesAsk": "Change the sketch to match (a new version), and say if any of it would not work.",
+    "delete": "Delete sketch",
+    "deleteConfirm": "Delete the sketch “{title}”?"
   },
   "mainUx": {
     "label": "UX review of screenshots",

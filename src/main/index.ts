@@ -45,7 +45,7 @@ import { handoffMessage } from './handoff'
 import { commentOnTicket, getTicket, getTransitions, transitionTicket } from './jira'
 import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
-import { sketchPage, sketchPng, sketchUrl } from './sketch'
+import { sketchPage, sketchPng, sketchUrl, readSketch } from './sketch'
 import { spendSummary } from './spend'
 import { addPlanToPr, savePlan } from './planShare'
 import { projectStyle } from './projectStyle'
@@ -564,8 +564,9 @@ ipcMain.on('tabs:load', (e) => {
 ipcMain.handle('plan:save', (_e, cwd: string, title: string, markdown: string) => savePlan(cwd, title, markdown))
 ipcMain.handle('plan:toPr', (_e, cwd: string, markdown: string) => addPlanToPr(cwd, markdown))
 ipcMain.handle('sketch:png', (_e, url: string, width: number, title: string, how?: 'copy' | 'save') => sketchPng(url, width, title, capturesDir(), how === 'copy' ? 'copy' : 'save'))
-ipcMain.handle('sketch:projectStyle', (_e, cwd: string) => projectStyle(cwd))
-ipcMain.handle('sketch:url', (_e, html: string) => sketchUrl(String(html)))
+ipcMain.handle('sketch:projectStyle', (_e, cwd: string, stylesheet?: string) => projectStyle(cwd, stylesheet))
+ipcMain.handle('sketch:url', (_e, html: string, cwd?: string) => sketchUrl(String(html), cwd))
+ipcMain.handle('sketch:read', (_e, ref: string) => readSketch(String(ref)))
 ipcMain.handle('erd:get', (_e, cwd: string) => getErd(cwd))
 ipcMain.handle('terminal:open', (_e, scope: string, cwd: string, cols: number, rows: number) => openTerminal(scope, cwd, cols, rows, toRenderer))
 ipcMain.on('terminal:write', (_e, id: string, data: string) => writeTerminal(id, data))

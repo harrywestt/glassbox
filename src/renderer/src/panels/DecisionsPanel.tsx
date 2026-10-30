@@ -17,37 +17,36 @@ export function DecisionsPanel() {
   // Newest at the top. Open questions are also asked in the box under the conversation.
   const list = s.decisions.filter((d) => filter === 'all' || d.kind === filter).sort((a, b) => b.at - a.at)
 
+  const kinds = (['question', 'assumption', 'decision'] as const).filter((k) => count(k) > 0).length
   return (
     <div className="panel">
       <PanelHeader title={tr('decisionsPanel.title')} />
-      {s.decisions.length > 0 && (
-        <div className="panel-toolbar">
-          <Segmented<Filter>
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: 'all', label: tr('decisionsPanel.filterAll'), count: s.decisions.length },
-              { value: 'question', label: tr('decisionsPanel.filterQuestions'), count: count('question') },
-              { value: 'assumption', label: tr('decisionsPanel.filterAssumptions'), count: count('assumption') },
-              { value: 'decision', label: tr('decisionsPanel.filterDecisions'), count: count('decision') }
-            ]}
-          />
-        </div>
-      )}
       <div className="panel-scroll decisions-list">
-        {/* What to review: the acceptance criteria and what a review found, then Claude's decisions. */}
+        {/* What to review: the acceptance criteria and what a review found, then Claude's decisions; each a section, like the other panels. */}
         <CriteriaList />
         <Findings />
         <RadarCard />
-        {list.length === 0 ? (
-          <Empty title={s.decisions.length ? tr('decisionsPanel.nothingInFilter') : tr('decisionsPanel.emptyTitle')}>{tr('decisionsPanel.emptyBody')}</Empty>
-        ) : s.findings.length || s.criteria?.list.length ? (
-          <Section id="decisions-list" title={tr('decisionsPanel.title')} meta={<span className="count">{list.length}</span>}>
-            {list.map((d) => <DecisionCard key={d.id} d={d} />)}
-          </Section>
-        ) : (
-          list.map((d) => <DecisionCard key={d.id} d={d} />)
-        )}
+        <Section id="decisions-list" title={tr('decisionsPanel.title')} meta={s.decisions.length > 0 && <span className="count">{s.decisions.length}</span>}>
+          {kinds > 1 && (
+            <div className="decisions-filter">
+              <Segmented<Filter>
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: 'all', label: tr('decisionsPanel.filterAll'), count: s.decisions.length },
+                  { value: 'question', label: tr('decisionsPanel.filterQuestions'), count: count('question') },
+                  { value: 'assumption', label: tr('decisionsPanel.filterAssumptions'), count: count('assumption') },
+                  { value: 'decision', label: tr('decisionsPanel.filterDecisions'), count: count('decision') }
+                ]}
+              />
+            </div>
+          )}
+          {list.length === 0 ? (
+            <Empty title={s.decisions.length ? tr('decisionsPanel.nothingInFilter') : tr('decisionsPanel.emptyTitle')}>{tr('decisionsPanel.emptyBody')}</Empty>
+          ) : (
+            list.map((d) => <DecisionCard key={d.id} d={d} />)
+          )}
+        </Section>
       </div>
     </div>
   )

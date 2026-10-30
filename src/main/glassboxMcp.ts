@@ -6,11 +6,16 @@ import { BROWSER_TOOL_NAMES, browserTools, type BrowserBridge, type BrowserHooks
 import type { UxReviewer } from './uxReviewer'
 import { Loaders } from './loaders'
 import { describeStyle, projectStyle } from './projectStyle'
+import { keepSketch, latestSketch, readSketch, setLatestSketch, sketchSnapshot, sketchUrl, withAssets } from './sketch'
+import { readFileSync } from 'node:fs'
+import { isAbsolute, resolve as resolvePath } from 'node:path'
 
 export const GLASSBOX_TOOLS = [
   'mcp__glassbox__show_diagram',
   'mcp__glassbox__show_flow',
   'mcp__glassbox__show_sketch',
+  'mcp__glassbox__sketch_snapshot',
+  'mcp__glassbox__delete_sketch',
   'mcp__glassbox__pr_overview',
   'mcp__glassbox__review_ux',
   'mcp__glassbox__set_current_task',
@@ -125,22 +130,70 @@ export function createGlassboxServer(
         'show_sketch',
         'Show a rough HTML sketch in the Glassbox Sketches view, to put an idea or a problem in front of the user: layouts to choose between, a screen as it is against as it should be, a rough table, a small interactive prototype. The user pans and zooms it, clicks options, and comments on parts of it; their pick or comment comes back to you as a message. Reusing an id adds a new version (they can step back through versions), so revise rather than making near-duplicates.\n\n' +
           'Write a self-contained fragment (no doctype needed): inline <style> and <script> are fine; nothing loads from the network, so no external fonts, images or libraries (draw with HTML, CSS or inline SVG). Colours are set as CSS variables (--bg, --surface, --surface2, --elevated, --border, --fg, --muted, --subtle, --accent, --accent-fg, --ok, --warn, --err, --info, --radius) and plain elements are already styled with them. By default they are THE PROJECT\'S OWN colours, read from its stylesheets and Tailwind config, so a proposed screen looks like the app it is for (this tool\'s answer says what it found); use the variables rather than your own hex so the sketch stays on-brand, and match the project\'s layout, density and components as you saw them in its code. Where the project has no colours, Glassbox\'s are used. A chart palette --cat-1 to --cat-8 (for categories, in order) is there too. Every colour (accent, ok, warn, err, info, cat-1 to cat-8) has classes .text-<colour> (coloured text), .fill-<colour> (a soft tint with a matching border, e.g. a card or row) and .solid-<colour> (a strong fill, e.g. a button or tag). Set scheme to match, dark or light (Glassbox\'s look) only when the sketch is about Glassbox itself or the user asks. Keep it rough and quick: it is a sketch, not the product. Classes ready to use: .row (side by side, wrapping) and .col (stacked), .grow, .card (a panel), .box (a dashed placeholder for "image here", "chart here"), .note (an annotation), .bad and .good (mark a problem or the fix), .label (a small tag), .muted, .small, button.primary.\n\n' +
-          'To let the user choose, put data-pick="Option A" (a short name) on each option\'s container: clicking one sends you "I pick Option A". Lay options side by side in a .row at the given width, each with a heading saying what is different.',
+          'To let the user choose, put data-pick="Option A" (a short name) on each option\'s container: clicking one sends you "I pick Option A". Lay options side by side in a .row at the given width, each with a heading saying what is different.\n\n' +
+          'Real images and fonts: refer to files on disk in src, href or CSS url() (a path relative to the project, an absolute path, or file://), e.g. a screenshot you took or the app\'s own font files; Glassbox brings them along (nothing loads from the network). Revisions: send html_file (a file you wrote) or edits (find and replace on the previous version) instead of the whole page again. stylesheet picks which CSS file the project colours come from. bare: true leaves out Glassbox\'s plain-element styles and classes. Check your work with sketch_snapshot.',
         {
           id: z.string().describe('Stable slug, e.g. "settings-layout"; the same id again is a new version'),
           title: z.string().describe('What it shows, e.g. "Settings: three layouts"'),
-          html: z.string().describe('The sketch: an HTML fragment with any inline <style> and <script>'),
-          width: z.number().int().min(320).max(2400).optional().describe('Page width in px it is drawn at (default 1200; 390 for a phone)'),
+          html: z.string().optional().describe('The sketch: an HTML fragment with any inline <style> and <script>'),
+          html_file: z.string().optional().describe('Or a file with the HTML (relative to the project, or absolute)'),
+          edits: z.array(z.object({ find: z.string(), replace: z.string() })).optional().describe('Or changes to the previous version of this id: each find (exact text, once) becomes replace'),
+          width: z.number().int().min(320).optional().describe('Page width in px it is drawn at (default 1200; 390 for a phone; as wide as you need for frames side by side)'),
+          stylesheet: z.string().optional().describe('The CSS file (or Tailwind config) the project colours come from, if not the one Glassbox picks'),
+          bare: z.boolean().optional().describe("true: leave out Glassbox's styles for plain elements and its classes (.card, .row…)"),
+          look: z.boolean().optional().describe('The answer includes a picture of the sketch as drawn, and any console errors (default true); false to skip it'),
           note: z.string().optional().describe('One line on what changed in this version'),
           scheme: z.enum(['project', 'match', 'dark', 'light']).optional().describe("Leave out (the project's own colours, else the user's scheme); match, dark or light for Glassbox's look"),
           accent: z.enum(['match', 'teal', 'blue', 'violet', 'green', 'amber', 'rose']).optional().describe("Leave out (the user's accent) unless the user asks for another")
         },
-        async ({ id, title, html, width, note, scheme, accent }) => {
-          emit({ type: 'sketch', id, title, html, width, note, scheme, accent })
-          const look = !scheme || scheme === 'project' ? describeStyle(projectStyle(cwd ?? process.cwd())) : null
-          return ok(
-            `Sketch "${title}" (id ${id}) is in the Sketches view${look ? `, drawn in ${look}` : !scheme || scheme === 'project' ? ", in Glassbox's colours (no project colours were found)" : ''}. Embed it in a plan with <Sketch id="${id}" />. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message.`
-          )
+        async ({ id, title, html, html_file, edits, width, note, scheme, accent, stylesheet, bare, look }) => {
+          const root = cwd ?? process.cwd()
+          const prev = latestSketch(root, id)
+          // The page: given, read from a file, or the previous version with edits made to it.
+          let page = html
+          if (page == null && html_file) {
+            try {
+              page = readFileSync(isAbsolute(html_file) ? html_file : resolvePath(root, html_file), 'utf8')
+            } catch (e) {
+              return { ...ok(`Couldn't read ${html_file}: ${(e as Error).message}`), isError: true }
+            }
+          }
+          if (page == null && edits?.length) {
+            const base = prev ? readSketch(prev.ref) : null
+            if (base == null) return { ...ok(`There's no earlier version of "${id}" to edit; send html (or html_file) once.`), isError: true }
+            page = base
+            const missed: string[] = []
+            for (const e of edits) {
+              const at = page.indexOf(e.find)
+              if (at < 0) missed.push(e.find.slice(0, 80))
+              else page = page.slice(0, at) + e.replace + page.slice(at + e.find.length)
+            }
+            if (missed.length) return { ...ok(`No change made: not found in the previous version: ${missed.map((m) => JSON.stringify(m)).join(', ')}`), isError: true }
+          }
+          if (page == null) return { ...ok('Send html, html_file or edits.'), isError: true }
+          const w = width ?? prev?.width
+          const sheet = stylesheet ?? prev?.stylesheet
+          const plain = bare ?? prev?.bare
+          const ref = keepSketch(page)
+          setLatestSketch(root, id, { ref, width: w ?? 1200, stylesheet: sheet, bare: plain })
+          const assets = withAssets(page, root)
+          emit({ type: 'sketch', id, title, html: page, ref, width: w, note, scheme, accent, stylesheet: sheet, bare: plain })
+          const style = projectStyle(root, sheet)
+          const drawnIn = !scheme || scheme === 'project' ? describeStyle(style) : null
+          // What it looks like, so Claude sees what it drew (and any script errors) without asking.
+          let picture: { png: Buffer; height: number; logs: string[] } | null = null
+          if (look !== false) {
+            const set = style.light ?? style.dark
+            const vars = set && (!scheme || scheme === 'project') ? { base: style.light ? 'light' : 'dark', ...set } : {}
+            picture = await sketchSnapshot(`${sketchUrl(page, root)}?t=${encodeURIComponent(JSON.stringify(vars))}${plain ? '&b=1' : ''}`, w ?? 1200).catch(() => null)
+          }
+          const text =
+            `Sketch "${title}" (id ${id}) is in the Sketches view${drawnIn ? `, drawn in ${drawnIn}` : !scheme || scheme === 'project' ? ", in Glassbox's colours (no project colours were found)" : ''}.` +
+              (assets.found ? ` ${assets.found} local file${assets.found === 1 ? '' : 's'} brought along.` : '') +
+              (assets.missing.length ? ` Not found (shown broken): ${assets.missing.slice(0, 5).join(', ')}.` : '') +
+              (picture ? ` The picture is how it draws, ${w ?? 1200}px wide and ${picture.height}px tall.${picture.logs.length ? ` Console: ${picture.logs.join(' | ')}` : ' No console errors.'}` : '') +
+              ` Embed it in a plan with <Sketch id="${id}" />. Revise with edits. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message. [sketch-ref:${ref}]`
+          return picture ? { content: [{ type: 'text' as const, text }, { type: 'image' as const, data: picture.png.toString('base64'), mimeType: 'image/png' }] } : ok(text)
         },
         ALWAYS_LOAD
       ),
@@ -170,6 +223,40 @@ export function createGlassboxServer(
         async (overview) => {
           emit({ type: 'overview', overview })
           return ok('The PR overview is in Glassbox\'s PR overview view. The user can copy it or add it to the pull request description from there.')
+        },
+        ALWAYS_LOAD
+      ),
+      tool(
+        'sketch_snapshot',
+        'See a sketch you made: a picture of the whole page as it is drawn (in the project colours), and anything its console or scripts reported while it loaded. Use it to check layout, overflow and that images and fonts loaded.',
+        { id: z.string().describe('The sketch id'), width: z.number().int().min(320).optional().describe('Draw it at this width instead of its own') },
+        async ({ id, width }) => {
+          const root = cwd ?? process.cwd()
+          const v = latestSketch(root, id)
+          const page = v ? readSketch(v.ref) : null
+          if (!v || page == null) return { ...ok(`No sketch "${id}" in this project.`), isError: true }
+          const style = projectStyle(root, v.stylesheet)
+          const set = style.light ?? style.dark
+          const vars = set ? { base: style.light ? 'light' : 'dark', ...set } : {}
+          const url = `${sketchUrl(page, root)}?t=${encodeURIComponent(JSON.stringify(vars))}${v.bare ? '&b=1' : ''}`
+          const shot = await sketchSnapshot(url, width ?? v.width)
+          return {
+            content: [
+              { type: 'image' as const, data: shot.png.toString('base64'), mimeType: 'image/png' },
+              { type: 'text' as const, text: `Drawn at ${width ?? v.width}px wide, ${shot.height}px tall.${shot.logs.length ? `\nConsole:\n${shot.logs.join('\n')}` : ' Nothing in the console.'}` }
+            ]
+          }
+        },
+        ALWAYS_LOAD
+      ),
+      tool(
+        'delete_sketch',
+        'Remove a sketch from the Sketches view, e.g. a test or one that is no longer relevant.',
+        { id: z.string() },
+        async ({ id }) => {
+          setLatestSketch(cwd ?? process.cwd(), id, null)
+          emit({ type: 'sketch-delete', id })
+          return ok(`Sketch "${id}" removed.`)
         },
         ALWAYS_LOAD
       ),
