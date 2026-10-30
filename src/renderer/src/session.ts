@@ -881,7 +881,7 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
             next.diagrams = { ...next.diagrams, [input.id]: { id: input.id, title: String(input.title ?? input.id), mermaid: String(input.mermaid ?? ''), at } }
           }
           // Sent whole, the version is in the call; sent as edits or a file, it comes with the answer (by reference).
-          if (block.name === 'mcp__glassbox__show_sketch' && typeof input.id === 'string' && typeof input.html === 'string') next.sketches = addSketch(next.sketches ?? state.sketches ?? {}, { ...input, id: input.id, toolId: block.id }, at)
+          if (block.name === 'mcp__glassbox__show_sketch' && typeof input.id === 'string' && typeof input.html === 'string' && input.html.trim()) next.sketches = addSketch(next.sketches ?? state.sketches ?? {}, { ...input, id: input.id, toolId: block.id }, at)
           if (block.name === 'mcp__glassbox__delete_sketch' && typeof input.id === 'string') next.sketches = withoutSketch(next.sketches ?? state.sketches ?? {}, input.id)
           if (block.name === 'mcp__glassbox__pr_overview') {
             const o = withOverview(next.sketches ?? state.sketches ?? {}, input, at)

@@ -129,9 +129,9 @@ export function createGlassboxServer(
       tool(
         'show_sketch',
         'Show a rough HTML sketch in the Glassbox Sketches view, to put an idea or a problem in front of the user: layouts to choose between, a screen as it is against as it should be, a rough table, a small interactive prototype. The user pans and zooms it, clicks options, and comments on parts of it; their pick or comment comes back to you as a message. Reusing an id adds a new version (they can step back through versions), so revise rather than making near-duplicates.\n\n' +
-          'Write a self-contained fragment (no doctype needed): inline <style> and <script> are fine; nothing loads from the network, so no external fonts, images or libraries (draw with HTML, CSS or inline SVG). Colours are set as CSS variables (--bg, --surface, --surface2, --elevated, --border, --fg, --muted, --subtle, --accent, --accent-fg, --ok, --warn, --err, --info, --radius) and plain elements are already styled with them. By default they are THE PROJECT\'S OWN colours, read from its stylesheets and Tailwind config, so a proposed screen looks like the app it is for (this tool\'s answer says what it found); use the variables rather than your own hex so the sketch stays on-brand, and match the project\'s layout, density and components as you saw them in its code. Where the project has no colours, Glassbox\'s are used. A chart palette --cat-1 to --cat-8 (for categories, in order) is there too. Every colour (accent, ok, warn, err, info, cat-1 to cat-8) has classes .text-<colour> (coloured text), .fill-<colour> (a soft tint with a matching border, e.g. a card or row) and .solid-<colour> (a strong fill, e.g. a button or tag). Set scheme to match, dark or light (Glassbox\'s look) only when the sketch is about Glassbox itself or the user asks. Keep it rough and quick: it is a sketch, not the product. Classes ready to use: .row (side by side, wrapping) and .col (stacked), .grow, .card (a panel), .box (a dashed placeholder for "image here", "chart here"), .note (an annotation), .bad and .good (mark a problem or the fix), .label (a small tag), .muted, .small, button.primary.\n\n' +
+          'Write a self-contained fragment (no doctype needed): inline <style> and <script> are fine; nothing loads from the network (no CDN fonts, images or libraries; draw with HTML, CSS or inline SVG), but image and font files on disk can be used (see below). Any width works. Colours are set as CSS variables (--bg, --surface, --surface2, --elevated, --border, --fg, --muted, --subtle, --accent, --accent-fg, --ok, --warn, --err, --info, --radius) and plain elements are already styled with them. By default they are THE PROJECT\'S OWN colours, read from its stylesheets and Tailwind config, so a proposed screen looks like the app it is for (this tool\'s answer says what it found); use the variables rather than your own hex so the sketch stays on-brand, and match the project\'s layout, density and components as you saw them in its code. Where the project has no colours, Glassbox\'s are used. A chart palette --cat-1 to --cat-8 (for categories, in order) is there too. Every colour (accent, ok, warn, err, info, cat-1 to cat-8) has classes .text-<colour> (coloured text), .fill-<colour> (a soft tint with a matching border, e.g. a card or row) and .solid-<colour> (a strong fill, e.g. a button or tag). Set scheme to match, dark or light (Glassbox\'s look) only when the sketch is about Glassbox itself or the user asks. Keep it rough and quick: it is a sketch, not the product. Classes ready to use: .row (side by side, wrapping) and .col (stacked), .grow, .card (a panel), .box (a dashed placeholder for "image here", "chart here"), .note (an annotation), .bad and .good (mark a problem or the fix), .label (a small tag), .muted, .small, button.primary.\n\n' +
           'To let the user choose, put data-pick="Option A" (a short name) on each option\'s container: clicking one sends you "I pick Option A". Lay options side by side in a .row at the given width, each with a heading saying what is different.\n\n' +
-          'Real images and fonts: refer to files on disk in src, href or CSS url() (a path relative to the project, an absolute path, or file://), e.g. a screenshot you took or the app\'s own font files; Glassbox brings them along (nothing loads from the network). Revisions: send html_file (a file you wrote) or edits (find and replace on the previous version) instead of the whole page again. stylesheet picks which CSS file the project colours come from. bare: true leaves out Glassbox\'s plain-element styles and classes. Check your work with sketch_snapshot.',
+          'Glassbox\'s styles below sit underneath the sketch\'s own, so a class you define (.note, .card…) always wins; bare: true drops them altogether. Real images and fonts: refer to files on disk in src, href or CSS url() (a path relative to the project, an absolute path, or file://), e.g. a screenshot you took or the app\'s own font files; Glassbox brings them along (nothing loads from the network). Revisions: send html_file (a file you wrote) or edits (find and replace on the previous version) instead of the whole page again. stylesheet picks which CSS file the project colours come from. bare: true leaves out Glassbox\'s plain-element styles and classes. Check your work with sketch_snapshot.',
         {
           id: z.string().describe('Stable slug, e.g. "settings-layout"; the same id again is a new version'),
           title: z.string().describe('What it shows, e.g. "Settings: three layouts"'),
@@ -150,7 +150,7 @@ export function createGlassboxServer(
           const root = cwd ?? process.cwd()
           const prev = latestSketch(root, id)
           // The page: given, read from a file, or the previous version with edits made to it.
-          let page = html
+          let page = html?.trim() ? html : undefined
           if (page == null && html_file) {
             try {
               page = readFileSync(isAbsolute(html_file) ? html_file : resolvePath(root, html_file), 'utf8')
@@ -170,7 +170,7 @@ export function createGlassboxServer(
             }
             if (missed.length) return { ...ok(`No change made: not found in the previous version: ${missed.map((m) => JSON.stringify(m)).join(', ')}`), isError: true }
           }
-          if (page == null) return { ...ok('Send html, html_file or edits.'), isError: true }
+          if (page == null || !page.trim()) return { ...ok(html != null ? 'The html was empty, so nothing was saved. Send the page as html or html_file, or change the previous version with edits.' : 'Send html, html_file or edits.'), isError: true }
           const w = width ?? prev?.width
           const sheet = stylesheet ?? prev?.stylesheet
           const plain = bare ?? prev?.bare
@@ -181,18 +181,19 @@ export function createGlassboxServer(
           const style = projectStyle(root, sheet)
           const drawnIn = !scheme || scheme === 'project' ? describeStyle(style) : null
           // What it looks like, so Claude sees what it drew (and any script errors) without asking.
-          let picture: { png: Buffer; height: number; logs: string[] } | null = null
+          let picture: { png: Buffer; height: number; from: number; to: number; logs: string[] } | null = null
           if (look !== false) {
             const set = style.light ?? style.dark
             const vars = set && (!scheme || scheme === 'project') ? { base: style.light ? 'light' : 'dark', ...set } : {}
             picture = await sketchSnapshot(`${sketchUrl(page, root)}?t=${encodeURIComponent(JSON.stringify(vars))}${plain ? '&b=1' : ''}`, w ?? 1200).catch(() => null)
           }
+          const cut = picture && picture.to < picture.height ? ` The picture stops at ${picture.to}px of ${picture.height}px; see the rest with sketch_snapshot and top.` : ''
           const text =
             `Sketch "${title}" (id ${id}) is in the Sketches view${drawnIn ? `, drawn in ${drawnIn}` : !scheme || scheme === 'project' ? ", in Glassbox's colours (no project colours were found)" : ''}.` +
               (assets.found ? ` ${assets.found} local file${assets.found === 1 ? '' : 's'} brought along.` : '') +
               (assets.missing.length ? ` Not found (shown broken): ${assets.missing.slice(0, 5).join(', ')}.` : '') +
-              (picture ? ` The picture is how it draws, ${w ?? 1200}px wide and ${picture.height}px tall.${picture.logs.length ? ` Console: ${picture.logs.join(' | ')}` : ' No console errors.'}` : '') +
-              ` Embed it in a plan with <Sketch id="${id}" />. Revise with edits. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message. [sketch-ref:${ref}]`
+              (picture ? ` The picture is how it draws, ${w ?? 1200}px wide and ${picture.height}px tall.${cut}${picture.logs.length ? ` Console: ${picture.logs.join(' | ')}` : ' No console errors.'}` : '') +
+              ` Embed it in a plan with <Sketch id="${id}" />. Revise with edits (find and replace on this version) or html_file rather than the whole page; if your copy of show_sketch doesn't list edits, html_file, stylesheet or bare, it has changed since you loaded it: look it up again with tool search. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message. [sketch-ref:${ref}]`
           return picture ? { content: [{ type: 'text' as const, text }, { type: 'image' as const, data: picture.png.toString('base64'), mimeType: 'image/png' }] } : ok(text)
         },
         ALWAYS_LOAD
@@ -229,8 +230,8 @@ export function createGlassboxServer(
       tool(
         'sketch_snapshot',
         'See a sketch you made: a picture of the whole page as it is drawn (in the project colours), and anything its console or scripts reported while it loaded. Use it to check layout, overflow and that images and fonts loaded.',
-        { id: z.string().describe('The sketch id'), width: z.number().int().min(320).optional().describe('Draw it at this width instead of its own') },
-        async ({ id, width }) => {
+        { id: z.string().describe('The sketch id'), width: z.number().int().min(320).optional().describe('Draw it at this width instead of its own'), top: z.number().int().min(0).optional().describe('For a long page: start this many px down (each picture covers up to 8000px)') },
+        async ({ id, width, top }) => {
           const root = cwd ?? process.cwd()
           const v = latestSketch(root, id)
           const page = v ? readSketch(v.ref) : null
@@ -239,11 +240,11 @@ export function createGlassboxServer(
           const set = style.light ?? style.dark
           const vars = set ? { base: style.light ? 'light' : 'dark', ...set } : {}
           const url = `${sketchUrl(page, root)}?t=${encodeURIComponent(JSON.stringify(vars))}${v.bare ? '&b=1' : ''}`
-          const shot = await sketchSnapshot(url, width ?? v.width)
+          const shot = await sketchSnapshot(url, width ?? v.width, top ?? 0)
           return {
             content: [
               { type: 'image' as const, data: shot.png.toString('base64'), mimeType: 'image/png' },
-              { type: 'text' as const, text: `Drawn at ${width ?? v.width}px wide, ${shot.height}px tall.${shot.logs.length ? `\nConsole:\n${shot.logs.join('\n')}` : ' Nothing in the console.'}` }
+              { type: 'text' as const, text: `Drawn at ${width ?? v.width}px wide, ${shot.height}px tall; this picture shows ${shot.from}px to ${shot.to}px.${shot.to < shot.height ? ` Pass top: ${shot.to} for the next part.` : ''}${shot.logs.length ? `\nConsole:\n${shot.logs.join('\n')}` : ' Nothing in the console.'}` }
             ]
           }
         },
@@ -254,6 +255,7 @@ export function createGlassboxServer(
         'Remove a sketch from the Sketches view, e.g. a test or one that is no longer relevant.',
         { id: z.string() },
         async ({ id }) => {
+          if (!latestSketch(cwd ?? process.cwd(), id)) return { ...ok(`No sketch "${id}" in this project, so nothing was removed.`), isError: true }
           setLatestSketch(cwd ?? process.cwd(), id, null)
           emit({ type: 'sketch-delete', id })
           return ok(`Sketch "${id}" removed.`)

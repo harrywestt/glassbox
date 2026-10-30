@@ -160,10 +160,16 @@ export function sketchPage(url: string): Response {
     .join(' ')
   const dark = theme.base === 'dark'
   const palette = (dark ? CAT_DARK : CAT_LIGHT).map((v, i) => `--cat-${i + 1}: ${v};`).join(' ')
-  // Bare: the page's own styles only, without Glassbox's sketching kit.
-  const kit = u.searchParams.get('b') === '1' ? '' : `<style>${KIT}</style>`
-  const head = `<meta charset="utf-8"><style>:root { color-scheme: ${dark ? 'dark' : 'light'}; ${palette} ${vars} }</style>${kit}`
   const html = readFileSync(file, 'utf8')
+  // Bare: the page's own styles only, without Glassbox's sketching kit. Otherwise the kit sits in a
+  // layer underneath the sketch's styles, and a class the sketch styles itself (its own .note,
+  // .card…) is left out of it altogether, so none of Glassbox's look (a border, a tint) leaks in.
+  const own = new Set([...[...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n').matchAll(/\.([A-Za-z_][\w-]*)/g)].map((m) => m[1]))
+  const kitRules = KIT.split('\n')
+    .filter((line) => !line.includes('{') || ![...line.slice(0, line.indexOf('{')).matchAll(/\.([A-Za-z_][\w-]*)/g)].some((m) => own.has(m[1])))
+    .join('\n')
+  const kit = u.searchParams.get('b') === '1' ? '' : `<style>@layer glassbox-kit {${kitRules}}</style>`
+  const head = `<meta charset="utf-8"><style>:root { color-scheme: ${dark ? 'dark' : 'light'}; ${palette} ${vars} }</style>${kit}`
   // A full document gets the head bits inside its own head; a fragment gets a document around it.
   const page = /<head[^>]*>/i.test(html)
     ? html.replace(/<head[^>]*>/i, (m) => m + head)
@@ -404,7 +410,7 @@ export async function sketchPng(url: string, width: number, title: string, outDi
  * A sketch drawn off screen for Claude to look at: the whole page at its own width (scaled down to
  * at most 1600px across), and what its console and scripts said while it loaded.
  */
-export async function sketchSnapshot(url: string, width: number): Promise<{ png: Buffer; height: number; logs: string[] }> {
+export async function sketchSnapshot(url: string, width: number, top = 0): Promise<{ png: Buffer; height: number; from: number; to: number; logs: string[] }> {
   const logs: string[] = []
   const w = new BrowserWindow({ show: false, width, height: 800, useContentSize: true, frame: false, webPreferences: { sandbox: true, javascript: true, offscreen: true } })
   w.webContents.on('console-message', (e: unknown, ...rest: unknown[]) => {
@@ -416,16 +422,20 @@ export async function sketchSnapshot(url: string, width: number): Promise<{ png:
   try {
     await w.loadURL(url)
     await new Promise((r) => setTimeout(r, 500))
-    const height = Math.min(8000, Math.ceil(Number(await w.webContents.executeJavaScript('Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)'))) || 800)
-    w.setContentSize(width, height)
+    const height = Math.ceil(Number(await w.webContents.executeJavaScript('Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)'))) || 800
+    // A part at a time for a long page: from `top`, at most 8000px of it (a window can't be drawn much taller).
+    const from = Math.max(0, Math.min(top, Math.max(0, height - 200)))
+    const part = Math.min(8000, height - from)
+    w.setContentSize(width, part)
     await new Promise((r) => setTimeout(r, 300))
+    if (from) await w.webContents.executeJavaScript(`scrollTo(0, ${from})`)
     w.webContents.invalidate()
-    await new Promise((r) => setTimeout(r, 120))
-    let image = await w.webContents.capturePage({ x: 0, y: 0, width, height })
+    await new Promise((r) => setTimeout(r, 150))
+    let image = await w.webContents.capturePage({ x: 0, y: 0, width, height: part })
     // Small enough to read without costing much: at most 1600px across and 3000px down.
-    const scale = Math.min(1, 1600 / width, 3000 / height)
+    const scale = Math.min(1, 1600 / width, 3000 / part)
     if (scale < 1) image = image.resize({ width: Math.round(width * scale), quality: 'good' })
-    return { png: image.toPNG(), height, logs: logs.slice(0, 40) }
+    return { png: image.toPNG(), height, from, to: from + part, logs: logs.slice(0, 40) }
   } finally {
     w.destroy()
   }

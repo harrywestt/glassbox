@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative } from 'node:path'
 
@@ -64,9 +65,31 @@ function named(cwd: string, stylesheet: string): ProjectStyle {
   }
 }
 
+/** Files the work touches (uncommitted, and the last commits), relative to the repo, for picking the nearest stylesheet. */
+function touched(cwd: string): string[] {
+  const run = (args: string[]) => {
+    try {
+      return execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 3000, windowsHide: true })
+    } catch {
+      return ''
+    }
+  }
+  const status = run(['status', '--porcelain']).split('\n').map((l) => l.slice(3).trim())
+  const recent = run(['log', '-15', '--name-only', '--format=']).split('\n')
+  return [...status, ...recent].map((p) => p.trim().replace(/\\/g, '/')).filter(Boolean)
+}
+
+/** The app a stylesheet belongs to: its path up to the source folder (ui/naq-webapp-ui for ui/naq-webapp-ui/src/styles/globals.css). */
+function appOf(rel: string): string {
+  const parts = rel.split('/')
+  const src = parts.findIndex((p) => /^(src|app|styles|public|assets)$/i.test(p))
+  return parts.slice(0, src > 0 ? src : Math.max(1, parts.length - 1)).join('/')
+}
+
 function read(cwd: string): ProjectStyle {
   const files = find(cwd)
-  let best: { score: number; style: ProjectStyle } | null = null
+  const work = touched(cwd)
+  let best: { score: number; near: number; style: ProjectStyle } | null = null
   for (const file of files) {
     let text: string
     try {
@@ -79,7 +102,11 @@ function read(cwd: string): ProjectStyle {
     const light = mapVars(sets.light ?? {})
     const dark = sets.dark ? mapVars(sets.dark) : undefined
     const score = Object.keys(light).length + (light.accent ? 4 : 0) + (light.bg ? 2 : 0) + (dark ? Object.keys(dark).length / 2 : 0)
-    if (score >= 3 && (!best || score > best.score)) best = { score, style: { light, dark, source: relative(cwd, file).replace(/\\/g, '/') } }
+    const rel = relative(cwd, file).replace(/\\/g, '/')
+    const app = appOf(rel)
+    // How much of the work is in this stylesheet's app: that one wins over a more complete one elsewhere.
+    const near = work.filter((p) => p.startsWith(app + '/')).length
+    if (score >= 3 && (!best || near > best.near || (near === best.near && score > best.score))) best = { score, near, style: { light, dark, source: rel } }
   }
   return best?.style ?? {}
 }
