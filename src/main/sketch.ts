@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { extname, isAbsolute, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, clipboard, ClipboardItem } from 'electron'
 
 /**
@@ -15,16 +16,121 @@ const dir = () => {
   return d
 }
 
-/** Keeps a sketch's HTML and returns the address it's served at. */
-export function sketchUrl(html: string): string {
-  const name = `${createHash('sha1').update(html).digest('hex').slice(0, 20)}.html`
+const sub = (name: string) => {
+  const d = join(dir(), name)
+  mkdirSync(d, { recursive: true })
+  return d
+}
+const hash = (data: string | Buffer) => createHash('sha1').update(data).digest('hex').slice(0, 20)
+
+/** Files a sketch may show: images, video and fonts. */
+const ASSET_FILE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|woff2?|ttf|otf)$/i
+const ASSET_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml', ico: 'image/x-icon', bmp: 'image/bmp',
+  mp4: 'video/mp4', webm: 'video/webm', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf'
+}
+
+/**
+ * The files on disk a sketch refers to (in src, href, poster or a CSS url(): a path relative to the
+ * project, an absolute path or a file:// address), copied into the sketch store by their content and
+ * pointed at there. The page still can't reach the disk or the network: only these copies.
+ */
+export function withAssets(html: string, cwd?: string): { html: string; found: number; missing: string[] } {
+  const missing: string[] = []
+  let found = 0
+  const swap = (raw: string): string | null => {
+    const v = raw.trim()
+    if (!v || /^(data:|blob:|https?:|sketch:|#|mailto:|javascript:)/i.test(v)) return null
+    let path: string
+    try {
+      path = v.startsWith('file:') ? fileURLToPath(v) : decodeURI(v.split(/[?#]/)[0])
+    } catch {
+      return null
+    }
+    if (!ASSET_FILE.test(path)) return null
+    const abs = isAbsolute(path) || /^[a-z]:[\\/]/i.test(path) ? path : cwd ? resolve(cwd, path) : null
+    if (!abs) return null
+    try {
+      const st = statSync(abs)
+      if (!st.isFile() || st.size > 25 * 1024 * 1024) throw new Error('not a file')
+      const data = readFileSync(abs)
+      const name = `${hash(data)}${extname(abs).toLowerCase()}`
+      const file = join(sub('assets'), name)
+      if (!existsSync(file)) writeFileSync(file, data)
+      found++
+      return `sketch://asset/${name}`
+    } catch {
+      missing.push(v)
+      return null
+    }
+  }
+  const out = html
+    .replace(/\b(src|href|poster)\s*=\s*(["'])(.*?)\2/gi, (m, attr: string, q: string, val: string) => {
+      const s = swap(val)
+      return s ? `${attr}=${q}${s}${q}` : m
+    })
+    .replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi, (m, q: string, val: string) => {
+      const s = swap(val)
+      return s ? `url(${q}${s}${q})` : m
+    })
+  return { html: out, found, missing }
+}
+
+/** Keeps a sketch's HTML (its local images and fonts brought along) and returns the address it's served at. */
+export function sketchUrl(html: string, cwd?: string): string {
+  const page = withAssets(html, cwd).html
+  const name = `${hash(page)}.html`
   const file = join(dir(), name)
-  if (!existsSync(file)) writeFileSync(file, html, 'utf8')
+  if (!existsSync(file)) writeFileSync(file, page, 'utf8')
   return `sketch://page/${name}`
 }
 
-/** Scripts and inline styles only; nothing from anywhere else. */
-export const SKETCH_CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:"
+/**
+ * A sketch version as Claude wrote it, kept by its content so a later version can be an edit of it
+ * and a resumed session can find it again (the reference goes in the tool's answer).
+ */
+export function keepSketch(html: string): string {
+  const ref = hash(html)
+  const file = join(sub('raw'), `${ref}.html`)
+  if (!existsSync(file)) writeFileSync(file, html, 'utf8')
+  return ref
+}
+export function readSketch(ref: string): string | null {
+  if (!/^[0-9a-f]{20}$/.test(ref)) return null
+  try {
+    return readFileSync(join(sub('raw'), `${ref}.html`), 'utf8')
+  } catch {
+    return null
+  }
+}
+/** The latest version of each sketch, per project, for edits and snapshots (kept across restarts). */
+const LATEST = () => join(dir(), 'latest.json')
+type Latest = Record<string, { ref: string; width: number; stylesheet?: string; bare?: boolean }>
+let latest: Latest | null = null
+const latestAll = (): Latest => (latest ??= (() => {
+  try {
+    return JSON.parse(readFileSync(LATEST(), 'utf8')) as Latest
+  } catch {
+    return {} as Latest
+  }
+})())
+const latestKey = (cwd: string, id: string) => `${cwd.replace(/\\/g, '/').toLowerCase()}|${id}`
+export function latestSketch(cwd: string, id: string) {
+  return latestAll()[latestKey(cwd, id)]
+}
+export function setLatestSketch(cwd: string, id: string, v: { ref: string; width: number; stylesheet?: string; bare?: boolean } | null) {
+  const all = latestAll()
+  if (v) all[latestKey(cwd, id)] = v
+  else delete all[latestKey(cwd, id)]
+  try {
+    writeFileSync(LATEST(), JSON.stringify(all))
+  } catch {
+    /* this run only */
+  }
+}
+
+/** Scripts and inline styles; images, fonts and video only from the sketch's own copies. Nothing from anywhere else. */
+export const SKETCH_CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob: sketch:; font-src data: sketch:; media-src data: blob: sketch:"
 
 const TOKEN = /^[\w#%(),. -]{1,60}$/
 
@@ -32,6 +138,13 @@ const TOKEN = /^[\w#%(),. -]{1,60}$/
 export function sketchPage(url: string): Response {
   const u = new URL(url)
   const name = u.pathname.replace(/^\/+/, '')
+  // A copied image, font or video the sketch shows.
+  if (u.hostname === 'asset') {
+    if (!/^[0-9a-f]{20}\.[a-z0-9]{2,5}$/.test(name)) return new Response('Not found', { status: 404 })
+    const file = join(sub('assets'), name)
+    if (!existsSync(file)) return new Response('Not found', { status: 404 })
+    return new Response(readFileSync(file), { headers: { 'Content-Type': ASSET_TYPES[name.split('.').pop() ?? ''] ?? 'application/octet-stream', 'Cache-Control': 'max-age=31536000' } })
+  }
   if (!/^[0-9a-f]{20}\.html$/.test(name)) return new Response('Not found', { status: 404 })
   const file = join(dir(), name)
   if (!existsSync(file)) return new Response('Not found', { status: 404 })
@@ -47,7 +160,9 @@ export function sketchPage(url: string): Response {
     .join(' ')
   const dark = theme.base === 'dark'
   const palette = (dark ? CAT_DARK : CAT_LIGHT).map((v, i) => `--cat-${i + 1}: ${v};`).join(' ')
-  const head = `<meta charset="utf-8"><style>:root { color-scheme: ${dark ? 'dark' : 'light'}; ${palette} ${vars} }</style><style>${KIT}</style>`
+  // Bare: the page's own styles only, without Glassbox's sketching kit.
+  const kit = u.searchParams.get('b') === '1' ? '' : `<style>${KIT}</style>`
+  const head = `<meta charset="utf-8"><style>:root { color-scheme: ${dark ? 'dark' : 'light'}; ${palette} ${vars} }</style>${kit}`
   const html = readFileSync(file, 'utf8')
   // A full document gets the head bits inside its own head; a fragment gets a document around it.
   const page = /<head[^>]*>/i.test(html)
@@ -280,6 +395,37 @@ export async function sketchPng(url: string, width: number, title: string, outDi
     const file = join(outDir, name)
     writeFileSync(file, image.toPNG())
     return file
+  } finally {
+    w.destroy()
+  }
+}
+
+/**
+ * A sketch drawn off screen for Claude to look at: the whole page at its own width (scaled down to
+ * at most 1600px across), and what its console and scripts said while it loaded.
+ */
+export async function sketchSnapshot(url: string, width: number): Promise<{ png: Buffer; height: number; logs: string[] }> {
+  const logs: string[] = []
+  const w = new BrowserWindow({ show: false, width, height: 800, useContentSize: true, frame: false, webPreferences: { sandbox: true, javascript: true, offscreen: true } })
+  w.webContents.on('console-message', (e: unknown, ...rest: unknown[]) => {
+    const ev = e as { message?: string; level?: string | number }
+    const message = ev.message ?? String(rest[1] ?? '')
+    const level = ev.level ?? rest[0]
+    if (message && !/^\[glassbox\]/.test(message)) logs.push(`${typeof level === 'number' ? ['log', 'info', 'warning', 'error'][level] ?? 'log' : level}: ${message}`.slice(0, 400))
+  })
+  try {
+    await w.loadURL(url)
+    await new Promise((r) => setTimeout(r, 500))
+    const height = Math.min(8000, Math.ceil(Number(await w.webContents.executeJavaScript('Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)'))) || 800)
+    w.setContentSize(width, height)
+    await new Promise((r) => setTimeout(r, 300))
+    w.webContents.invalidate()
+    await new Promise((r) => setTimeout(r, 120))
+    let image = await w.webContents.capturePage({ x: 0, y: 0, width, height })
+    // Small enough to read without costing much: at most 1600px across and 3000px down.
+    const scale = Math.min(1, 1600 / width, 3000 / height)
+    if (scale < 1) image = image.resize({ width: Math.round(width * scale), quality: 'good' })
+    return { png: image.toPNG(), height, logs: logs.slice(0, 40) }
   } finally {
     w.destroy()
   }

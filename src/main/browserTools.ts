@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import { tool } from '@anthropic-ai/claude-agent-sdk'
 import { logsText, newProblems } from './browserLogs'
 import { markRecording, type RecordCue, type RecordOptions } from './recorder'
@@ -44,13 +44,19 @@ const slow = (what: string, ms: number) =>
 
 async function contents(bridge: BrowserBridge, tab?: string): Promise<{ wc: WC; tab: string } | string> {
   const { webContents } = await import('electron')
-  const list = await bridge.tabs()
-  if (!list.length) return 'No browser tabs are open. Use browser_open first.'
-  const t = tab ? list.find((x) => x.tab === tab) : list.find((x) => x.active) ?? list[0]
-  if (!t) return `No tab "${tab}". Open tabs: ${list.map((x) => `${x.tab} (${x.title ?? x.url})`).join(', ')}`
-  const wc = t.wcId !== undefined ? webContents.fromId(t.wcId) : undefined
-  if (!wc || wc.isDestroyed()) return 'That tab is still starting; try again in a moment.'
-  return { wc, tab: t.tab }
+  // A tab just opened gets a few seconds to attach its page before Glassbox says why it can't use it.
+  const until = Date.now() + 8000
+  for (;;) {
+    const list = await bridge.tabs()
+    if (!list.length) return 'No browser tabs are open. Use browser_open first.'
+    const t = tab ? list.find((x) => x.tab === tab) : (list.find((x) => x.active) ?? list[0])
+    if (!t) return `No tab "${tab}". Open tabs: ${list.map((x) => `${x.tab} (${x.title ?? x.url})`).join(', ')}`
+    const wc = t.wcId !== undefined ? webContents.fromId(t.wcId) : undefined
+    if (wc && !wc.isDestroyed()) return { wc, tab: t.tab }
+    if (Date.now() > until)
+      return `Tab ${t.tab} has no page attached after 8s (it was opening ${t.url}${t.title ? `, "${t.title}"` : ''}). Its page never started: close it with browser_close and open the address again with browser_open; if that fails too, check the address answers (a sign-in redirect or a server that isn't up shows here as a page that never loads).`
+    await new Promise((r) => setTimeout(r, 300))
+  }
 }
 
 /** Waits for the page to settle: loading done, then a short quiet spell for scripts to render. */
@@ -124,6 +130,96 @@ const LOCATE = (ref: number) => `(() => {
   const r = el.getBoundingClientRect()
   return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), vw: innerWidth, vh: innerHeight, name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim().slice(0, 60) }
 })()`
+
+/** How a step finds a control: by its number from the latest snapshot, or by something that stays valid between pages. */
+export type Locator = { ref?: number; selector?: string; role?: string; name?: string; contains?: string }
+const describe = (l: Locator) => (l.ref ? `[${l.ref}]` : l.selector ? `"${l.selector}"` : l.role ? `${l.role} "${l.name ?? ''}"` : `"${l.contains ?? ''}"`)
+
+/** Finds a control (number, CSS selector, role and accessible name, or visible text), marks it, scrolls it into view and says where it is. */
+const FIND = (l: Locator) => `(() => {
+  const L = ${JSON.stringify(l)}
+  const shown = (el) => { const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; const s = getComputedStyle(el); return s.visibility !== 'hidden' && s.display !== 'none' }
+  const norm = (t) => (t || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const nameOf = (el) => norm(el.getAttribute('aria-label') || el.getAttribute('title') || el.innerText || el.value || el.getAttribute('placeholder') || el.getAttribute('alt') || '')
+  const ROLE = { button: 'button,[role=button],input[type=submit],input[type=button]', link: 'a[href],[role=link]', textbox: 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=submit]),textarea,[contenteditable=true],[role=textbox]', checkbox: 'input[type=checkbox],[role=checkbox]', radio: 'input[type=radio],[role=radio]', tab: '[role=tab]', menuitem: '[role=menuitem]', option: '[role=option],option', combobox: 'select,[role=combobox]', heading: 'h1,h2,h3,h4,h5,h6,[role=heading]', switch: '[role=switch]' }
+  let el = null
+  if (L.ref) el = document.querySelector('[data-gb="' + L.ref + '"]')
+  else if (L.selector) el = [...document.querySelectorAll(L.selector)].find(shown) || null
+  else if (L.role) {
+    const want = norm(L.name)
+    const all = [...document.querySelectorAll(ROLE[L.role] || '[role="' + L.role + '"]')].filter(shown)
+    el = all.find((e) => nameOf(e) === want) || all.find((e) => nameOf(e).includes(want)) || null
+  } else if (L.contains) {
+    const want = norm(L.contains)
+    const all = [...document.querySelectorAll('button,a,[role],label,summary,span,div,p,li,td,th,h1,h2,h3,h4,h5,h6')].filter((e) => shown(e) && nameOf(e).includes(want))
+    el = all.sort((a, b) => nameOf(a).length - nameOf(b).length)[0] || null
+  }
+  if (!el) return null
+  document.querySelectorAll('[data-gb-target]').forEach((e) => e.removeAttribute('data-gb-target'))
+  el.setAttribute('data-gb-target', '1')
+  el.scrollIntoView({ block: 'center', inline: 'center' })
+  const r = el.getBoundingClientRect()
+  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), vw: innerWidth, vh: innerHeight, name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || '').replace(/\s+/g, ' ').trim().slice(0, 60) }
+})()`
+
+/** Clicks a control like a person would (a real mouse click at its middle). */
+async function clickAt(wc: WC, l: Locator): Promise<string> {
+  const at = (await inTime(wc.executeJavaScript(FIND(l)), PAGE_MS)) as { x: number; y: number; vw: number; vh: number; name: string } | null
+  if (!at) throw new Error(`No control ${describe(l)} on the page now.${l.ref ? ' Take a new browser_snapshot.' : ''}`)
+  await new Promise((r) => setTimeout(r, 120))
+  markRecording(wc.id, { label: at.name ? `Click “${at.name}”` : 'Click', fx: at.x / Math.max(1, at.vw), fy: at.y / Math.max(1, at.vh) })
+  wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
+  wc.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 })
+  wc.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 })
+  await settle(wc, 8000)
+  return `Clicked ${describe(l)} "${at.name}".`
+}
+
+/** Types into a control (replacing what's there unless append), optionally pressing Enter after. */
+async function typeInto(wc: WC, l: Locator, text: string, submit?: boolean, append?: boolean): Promise<string> {
+  const at = await inTime(wc.executeJavaScript(FIND(l)), PAGE_MS)
+  if (!at) throw new Error(`No control ${describe(l)} on the page now.${l.ref ? ' Take a new browser_snapshot.' : ''}`)
+  await inTime(wc.executeJavaScript(`(() => { const el = document.querySelector('[data-gb-target]'); el.focus(); ${append ? '' : "if ('select' in el) el.select(); else document.execCommand('selectAll')"} })()`), PAGE_MS)
+  if (!append) press(wc, 'Backspace')
+  markRecording(wc.id, { label: `Type “${text.length > 40 ? text.slice(0, 40) + '…' : text}”${submit ? ' ↵' : ''}` })
+  await wc.insertText(text)
+  if (submit) {
+    press(wc, 'Enter')
+    await settle(wc, 8000)
+  }
+  return `Typed into ${describe(l)}${submit ? ' and pressed Enter' : ''}.`
+}
+
+/** What a wait can wait for; checked by Glassbox every half second, each check a quick look at the page. */
+export type WaitFor = { text?: string; gone?: string; until?: string; stable?: number; seconds?: number }
+async function waitFor(wc: WC, w: WaitFor): Promise<{ ok: boolean; what: string; took: number }> {
+  const start = Date.now()
+  const limit = Math.min(600, w.seconds ?? (w.text || w.gone || w.until || w.stable ? 60 : 2)) * 1000
+  const cond = w.until ? (/\breturn\b/.test(w.until) ? `(async () => { ${w.until} })()` : `(async () => (${w.until}))()`) : null
+  let last = ''
+  let quietSince = Date.now()
+  const what = [w.text && `"${w.text}" appears`, w.gone && `"${w.gone}" is gone`, w.until && 'the condition holds', w.stable && `the page stops changing for ${w.stable}s`].filter(Boolean).join(' and ') || 'a moment'
+  while (Date.now() - start < limit) {
+    const probe = (await inTime(
+      wc.executeJavaScript(`(async () => { const t = document.body ? document.body.innerText : ''; return { t: t.length + ':' + t.slice(-400), has: ${JSON.stringify(w.text ?? '')} ? t.includes(${JSON.stringify(w.text ?? '')}) : true, gone: ${JSON.stringify(w.gone ?? '')} ? !(t.includes(${JSON.stringify(w.gone ?? '')}) || !!document.querySelector(${JSON.stringify(/^[.#\[]/.test(w.gone ?? '') ? w.gone : 'gb-none')})) : true, cond: ${cond ? `!!(await ${cond})` : 'true'} } })()`),
+      PAGE_MS
+    ).catch(() => null)) as { t: string; has: boolean; gone: boolean; cond: boolean } | null
+    if (probe) {
+      if (probe.t !== last) (last = probe.t), (quietSince = Date.now())
+      const quiet = !w.stable || Date.now() - quietSince >= w.stable * 1000
+      if (probe.has && probe.gone && probe.cond && quiet && (w.text || w.gone || w.until || w.stable)) return { ok: true, what, took: Date.now() - start }
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  return { ok: !(w.text || w.gone || w.until || w.stable), what, took: Date.now() - start }
+}
+
+/** One step of browser_steps. */
+type Step = Locator & { do: 'open' | 'click' | 'type' | 'press' | 'wait' | 'read' | 'screenshot' | 'eval'; url?: string; new_tab?: boolean; value?: string; submit?: boolean; append?: boolean; key?: string; find?: string; limit?: number; code?: string; label?: string } & WaitFor
+
+/** Background runs of browser_steps, by id: where they are and what each step gave. */
+const jobs = new Map<string, { total: number; done: number; lines: string[]; status: 'running' | 'done' | 'failed'; started: number; ended?: number; record?: string }>()
+let jobSeq = 0
 
 /** A numbered control's box on screen (scrolled into view first), for a recording's highlight. */
 const BOX = (ref: number) => `(() => {
@@ -227,6 +323,86 @@ export type BrowserHooks = {
 
 export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: BrowserHooks = {}) {
   const TAB = z.string().optional().describe('Browser tab id (from browser_open or browser_tabs); defaults to the tab showing')
+  const LOCATOR = {
+    ref: z.number().int().positive().optional().describe('Its number from the latest browser_snapshot'),
+    selector: z.string().optional().describe('Or a CSS selector'),
+    role: z.string().optional().describe('Or its role: button, link, textbox, checkbox, radio, tab, menuitem, option, combobox, heading, switch'),
+    name: z.string().optional().describe('With role: its accessible name or label (exact, else contains)'),
+    contains: z.string().optional().describe('Or text it shows (the smallest element containing it)')
+  }
+  const WAIT = {
+    text: z.string().optional().describe('Wait until this text is on the page'),
+    gone: z.string().optional().describe('Wait until this text (or a CSS selector starting with . # or [) is gone, e.g. a spinner'),
+    until: z.string().optional().describe('Wait until this JavaScript is true, e.g. document.querySelectorAll(".msg").length >= 4 (a short check, run every half second)'),
+    stable: z.number().positive().max(120).optional().describe('Wait until the page text has stopped changing for this many seconds, e.g. a streamed answer finishing'),
+    seconds: z.number().positive().max(600).optional().describe('Give up after this many seconds (default 60, at most 600)')
+  }
+
+  /** Runs browser_steps: each step in turn, a short line each, written to the record folder as it goes. */
+  const runSteps = async (steps: Step[], tab: string | undefined, record: string | undefined, onLine: (line: string) => void, stopOnError: boolean) => {
+    let current = tab
+    if (record) mkdirSync(record, { recursive: true })
+    let failed = false
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i]
+      const n = i + 1
+      const started = Date.now()
+      let line: string
+      let ok = true
+      let shot: string | undefined
+      try {
+        if (s.do === 'open') {
+          const opened = await bridge.open(s.url ?? 'about:blank', s.new_tab === true)
+          current = opened.tab
+          const c = await contents(bridge, current)
+          if (typeof c === 'string') throw new Error(c)
+          await new Promise((r) => setTimeout(r, 350))
+          await settle(c.wc)
+          line = `opened ${c.wc.getURL()} (tab ${current})`
+        } else {
+          const c = await contents(bridge, current)
+          if (typeof c === 'string') throw new Error(c)
+          if (s.do === 'click') line = await clickAt(c.wc, s)
+          else if (s.do === 'type') line = await typeInto(c.wc, s, s.value ?? '', s.submit, s.append)
+          else if (s.do === 'press') {
+            press(c.wc, s.key ?? 'Enter')
+            await settle(c.wc, 4000)
+            line = `pressed ${s.key ?? 'Enter'}`
+          } else if (s.do === 'wait') {
+            const w = await waitFor(c.wc, s)
+            ok = w.ok
+            line = `${w.ok ? 'waited for' : 'gave up waiting for'} ${w.what} (${(w.took / 1000).toFixed(1)}s)`
+          } else if (s.do === 'read') {
+            line = String(await inTime(c.wc.executeJavaScript(SNAPSHOT(s.find ?? '', s.limit ?? 1500)), PAGE_MS))
+          } else if (s.do === 'eval') {
+            const v = await inTime(c.wc.executeJavaScript(`(async () => { ${s.code ?? ''} })().then((v) => { try { return JSON.stringify(v) } catch { return String(v) } })`), 30_000)
+            line = String(v).slice(0, 4000)
+          } else {
+            const img = await captureTab(c.wc)
+            const dir = record ?? shotsDir
+            mkdirSync(dir, { recursive: true })
+            shot = join(dir, `step-${String(n).padStart(3, '0')}${s.label ? '-' + s.label.replace(/[^\w-]+/g, '-').slice(0, 40) : ''}.png`)
+            writeFileSync(shot, img.toPNG())
+            line = `screenshot ${shot}`
+          }
+        }
+      } catch (e) {
+        ok = false
+        line = e instanceof Error ? e.message : String(e)
+      }
+      const text = `${n}. ${s.do}${s.label ? ` (${s.label})` : ''}: ${ok ? '' : 'FAILED '}${line}`
+      onLine(text)
+      if (record) {
+        const c = await contents(bridge, current).catch(() => null)
+        const url = c && typeof c !== 'string' ? c.wc.getURL() : undefined
+        appendFileSync(join(record, 'steps.jsonl'), JSON.stringify({ n, do: s.do, label: s.label, ok, result: line, url, screenshot: shot, ms: Date.now() - started, at: new Date().toISOString() }) + '\n')
+      }
+      if (!ok) failed = true
+      if (!ok && stopOnError) break
+    }
+    return failed
+  }
+
   return [
     tool(
       'browser_open',
@@ -264,39 +440,30 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
     ),
     tool(
       'browser_click',
-      'Click a numbered control from the latest browser_snapshot (a real mouse click at its position). Returns where the page is afterwards; take a new snapshot to read it.',
-      { ref: z.number().int().positive(), tab: TAB },
-      async ({ ref, tab }) => {
+      'Click a control (a real mouse click at its position): by its number from the latest browser_snapshot, or by something that stays valid without a fresh snapshot: role and name (role "button", name "Details"), text it shows (contains), or a CSS selector. Returns where the page is afterwards.',
+      { ...LOCATOR, tab: TAB },
+      async ({ ref, selector, role, name, contains, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
-        const at = (await inTime(c.wc.executeJavaScript(LOCATE(ref)), PAGE_MS)) as { x: number; y: number; vw: number; vh: number; name: string } | null
-        if (!at) return fail(`No control [${ref}] on the page now. Take a new browser_snapshot.`)
-        await new Promise((r) => setTimeout(r, 120))
-        markRecording(c.wc.id, { label: at.name ? `Click “${at.name}”` : 'Click', fx: at.x / Math.max(1, at.vw), fy: at.y / Math.max(1, at.vh) })
-        c.wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
-        c.wc.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 })
-        c.wc.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 })
-        await settle(c.wc, 8000)
-        return ok(`Clicked [${ref}] "${at.name}". ${where(c.wc)}`)
+        try {
+          return ok(`${await clickAt(c.wc, { ref, selector, role, name, contains })} ${where(c.wc)}`)
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e))
+        }
       }
     ),
     tool(
       'browser_type',
-      'Type into a numbered input from the latest browser_snapshot (replacing what is there unless append is set). Optionally press Enter after.',
-      { ref: z.number().int().positive(), text: z.string(), submit: z.boolean().optional().describe('Press Enter afterwards'), append: z.boolean().optional(), tab: TAB },
-      async ({ ref, text, submit, append, tab }) => {
+      'Type into an input (replacing what is there unless append is set), found by its number from the latest browser_snapshot or by role and name, the text it shows (contains) or a CSS selector. Optionally press Enter after.',
+      { ...LOCATOR, text: z.string().describe('What to type'), submit: z.boolean().optional().describe('Press Enter afterwards'), append: z.boolean().optional(), tab: TAB },
+      async ({ ref, selector, role, name, contains, text, submit, append, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
-        const found = await inTime(c.wc.executeJavaScript(`(() => { const el = document.querySelector('[data-gb="${ref}"]'); if (!el) return false; el.scrollIntoView({ block: 'center' }); el.focus(); ${append ? '' : "if ('select' in el) el.select(); else document.execCommand('selectAll')"}; return true })()`), PAGE_MS)
-        if (!found) return fail(`No control [${ref}] on the page now. Take a new browser_snapshot.`)
-        if (!append) press(c.wc, 'Backspace')
-        markRecording(c.wc.id, { label: `Type “${text.length > 40 ? text.slice(0, 40) + '…' : text}”${submit ? ' ↵' : ''}` })
-        await c.wc.insertText(text)
-        if (submit) {
-          press(c.wc, 'Enter')
-          await settle(c.wc, 8000)
+        try {
+          return ok(`${await typeInto(c.wc, { ref, selector, role, name, contains }, text, submit, append)} ${where(c.wc)}`)
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e))
         }
-        return ok(`Typed into [${ref}]${submit ? ' and pressed Enter' : ''}. ${where(c.wc)}`)
       }
     ),
     tool(
@@ -470,20 +637,77 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
     ),
     tool(
       'browser_wait',
-      'Wait for text to appear on the page (or just wait a moment), e.g. after starting something slow.',
-      { text: z.string().optional(), seconds: z.number().positive().max(60).optional(), tab: TAB },
-      async ({ text, seconds, tab }) => {
+      'Wait until something is true on the page: text appears, text or a spinner is gone, a JavaScript condition holds, or the page has stopped changing (a streamed answer has finished); any combination, for up to 10 minutes. Glassbox checks every half second, so never loop in browser_eval to wait. With none given, just waits a moment.',
+      { ...WAIT, tab: TAB },
+      async ({ text, gone, until, stable, seconds, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
-        const until = Date.now() + (seconds ?? (text ? 15 : 2)) * 1000
-        while (Date.now() < until) {
-          if (text && (await inTime(c.wc.executeJavaScript(`document.body && document.body.innerText.includes(${JSON.stringify(text)})`), PAGE_MS))) return ok(`"${text}" is on the page. ${where(c.wc)}`)
-          await new Promise((r) => setTimeout(r, 300))
+        const w = await waitFor(c.wc, { text, gone, until, stable, seconds })
+        return w.ok ? ok(`Done waiting: ${w.what} (${(w.took / 1000).toFixed(1)}s). ${where(c.wc)}`) : fail(`Gave up waiting for ${w.what} after ${(w.took / 1000).toFixed(0)}s. ${where(c.wc)}`)
+      }
+    ),
+    tool(
+      'browser_steps',
+      'Run a sequence of browser steps in one call: open, click, type, press, wait (as browser_wait), read (an outline, narrowed with find), eval and screenshot. Find controls by role and name, text or selector, so no snapshot is needed in between. Returns one short line per step. For long runs (many conversations or pages), set background: true to carry on with other work and check with browser_job; set record_dir to keep a JSON line per step (steps.jsonl) and the screenshots there, to compare runs afterwards.',
+      {
+        steps: z
+          .array(
+            z.object({
+              do: z.enum(['open', 'click', 'type', 'press', 'wait', 'read', 'screenshot', 'eval']),
+              label: z.string().optional().describe('A name for the step in the results'),
+              url: z.string().optional().describe('open: the address'),
+              new_tab: z.boolean().optional(),
+              ...LOCATOR,
+              value: z.string().optional().describe('type: what to type'),
+              submit: z.boolean().optional(),
+              append: z.boolean().optional(),
+              key: z.string().optional().describe('press: the key'),
+              find: z.string().optional().describe('read: only lines with these words'),
+              limit: z.number().int().positive().max(20000).optional(),
+              code: z.string().optional().describe('eval: an async function body; use return'),
+              ...WAIT
+            })
+          )
+          .min(1)
+          .max(500),
+        tab: TAB,
+        background: z.boolean().optional().describe('Run in the background and return a job id at once (check it with browser_job)'),
+        record_dir: z.string().optional().describe('Folder to write steps.jsonl and screenshots to (an absolute path; a relative one goes under the screenshots folder for this session)'),
+        stop_on_error: z.boolean().optional().describe('Stop at the first failed step (default true)')
+      },
+      async ({ steps, tab, background, record_dir, stop_on_error }) => {
+        const record = record_dir ? (isAbsolute(record_dir) ? record_dir : join(shotsDir, record_dir)) : undefined
+        const stop = stop_on_error !== false
+        if (background) {
+          const id = `j${++jobSeq}`
+          const job: { total: number; done: number; lines: string[]; status: 'running' | 'done' | 'failed'; started: number; ended?: number; record?: string } = { total: steps.length, done: 0, lines: [], status: 'running', started: Date.now(), record }
+          jobs.set(id, job)
+          void runSteps(steps as Step[], tab, record, (l) => (job.lines.push(l), job.done++), stop)
+            .then((failed) => (job.status = failed ? 'failed' : 'done'))
+            .catch((e) => (job.lines.push(`stopped: ${e instanceof Error ? e.message : String(e)}`), (job.status = 'failed')))
+            .finally(() => (job.ended = Date.now()))
+          return ok(`Started job ${id} (${steps.length} steps) in the background${record ? `, recording to ${record}` : ''}. Check it with browser_job.`)
         }
-        return text ? fail(`"${text}" didn't appear within ${seconds ?? 15}s. ${where(c.wc)}`) : ok(`Waited. ${where(c.wc)}`)
+        const lines: string[] = []
+        const failed = await runSteps(steps as Step[], tab, record, (l) => lines.push(l), stop)
+        const out = lines.join('\n')
+        return failed ? fail(out) : ok(out.length > 16000 ? `${out.slice(0, 16000)}\n(cut at 16000 characters)` : out)
+      }
+    ),
+    tool(
+      'browser_job',
+      'How a background browser_steps run is going: steps done, its latest lines, and whether it finished. Optionally wait up to wait_seconds for it to finish first.',
+      { id: z.string(), wait_seconds: z.number().min(0).max(600).optional(), lines: z.number().int().min(1).max(200).optional().describe('How many of its latest lines to show (default 20)') },
+      async ({ id, wait_seconds, lines }) => {
+        const job = jobs.get(id)
+        if (!job) return fail(`No job ${id}. Jobs: ${[...jobs.keys()].join(', ') || 'none'}`)
+        const until = Date.now() + (wait_seconds ?? 0) * 1000
+        while (job.status === 'running' && Date.now() < until) await new Promise((r) => setTimeout(r, 500))
+        const took = Math.round(((job.ended ?? Date.now()) - job.started) / 1000)
+        return ok(`Job ${id}: ${job.status}, ${job.done} of ${job.total} steps, ${took}s.${job.record ? ` Record: ${job.record}` : ''}\n${job.lines.slice(-(lines ?? 20)).join('\n')}`)
       }
     )
   ]
 }
 
-export const BROWSER_TOOL_NAMES = ['browser_open', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_press', 'browser_eval', 'browser_screenshot', 'browser_record', 'browser_logs', 'browser_viewport', 'browser_close', 'browser_tabs', 'browser_wait'].map((n) => `mcp__glassbox__${n}`)
+export const BROWSER_TOOL_NAMES = ['browser_open', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_press', 'browser_eval', 'browser_screenshot', 'browser_record', 'browser_logs', 'browser_viewport', 'browser_close', 'browser_tabs', 'browser_wait', 'browser_steps', 'browser_job'].map((n) => `mcp__glassbox__${n}`)

@@ -227,12 +227,15 @@ const api = {
     toPr: (cwd: string, markdown: string): Promise<{ url?: string; error?: string }> => invoke('plan:toPr', cwd, markdown)
   },
   /** The project's own colours, read from its stylesheets (for drawing sketches in them). */
-  projectStyle: (cwd: string): Promise<import('../main/projectStyle').ProjectStyle> => invoke('sketch:projectStyle', cwd),
+  projectStyle: (cwd: string, stylesheet?: string): Promise<import('../main/projectStyle').ProjectStyle> => invoke('sketch:projectStyle', cwd, stylesheet),
   /** Where a sketch's HTML is served (sketch://, sandboxed). */
   sketch: {
     /** The sketch drawn to a PNG file (in code: a hidden window and a screenshot). Returns its path. */
     png: (url: string, width: number, title: string, how?: 'copy' | 'save'): Promise<string> => invoke('sketch:png', url, width, title, how),
-    url: (html: string): Promise<string> => invoke('sketch:url', html)
+    /** `cwd`: where the files the page refers to are looked for. */
+    url: (html: string, cwd?: string): Promise<string> => invoke('sketch:url', html, cwd),
+    /** A version kept by reference (one Claude sent as edits or a file). */
+    read: (ref: string): Promise<string | null> => invoke('sketch:read', ref)
   },
   erd: {
     get: (cwd: string): Promise<Erd> => invoke('erd:get', cwd),

@@ -43,6 +43,8 @@ export type AppActions = {
   /** Close questions without answering (Claude isn't told). */
   dismissQuestions: (tabId: string, ids: string[]) => void
   dismissLoader: (tabId: string, id: string) => void
+  /** Take a sketch out of the Sketches view. */
+  deleteSketch: (tabId: string, id: string) => void
   dismissAlert: (tabId: string, at: number) => void
   findingStatus: (tabId: string, id: string, status: 'sent' | 'dismissed') => void
   recordPrompt: (tabId: string, text: string) => void
@@ -169,6 +171,7 @@ export function App() {
       show: (tabId, target, why) => dispatch({ type: 'session', tabId, action: { type: 'show', target, why } }),
       dismissQuestions: (tabId, ids) => dispatch({ type: 'session', tabId, action: { type: 'dismiss-questions', ids } }),
       dismissLoader: (tabId, id) => dispatch({ type: 'session', tabId, action: { type: 'dismiss-loader', id } }),
+      deleteSketch: (tabId, id) => dispatch({ type: 'session', tabId, action: { type: 'event', event: { kind: 'glassbox', signal: { type: 'sketch-delete', id } } } }),
       dismissAlert: (tabId, at) => dispatch({ type: 'session', tabId, action: { type: 'dismiss-alert', at } }),
       findingStatus: (tabId, id, status) => dispatch({ type: 'session', tabId, action: { type: 'finding-status', id, status } }),
       recordPrompt: (tabId, text) => dispatch({ type: 'session', tabId, action: { type: 'user-prompt', text } }),

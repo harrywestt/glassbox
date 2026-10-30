@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { isAbsolute, join, relative } from 'node:path'
 
 /**
  * The project's own look, read from its stylesheets (no model involved): the colour tokens it
@@ -37,7 +37,8 @@ const SAFE = /^[\w#%(),. -]{1,60}$/
 
 const cache = new Map<string, { at: number; style: ProjectStyle }>()
 
-export function projectStyle(cwd: string): ProjectStyle {
+export function projectStyle(cwd: string, stylesheet?: string): ProjectStyle {
+  if (stylesheet) return named(cwd, stylesheet)
   const key = cwd.toLowerCase()
   const hit = cache.get(key)
   if (hit && Date.now() - hit.at < 60_000) return hit.style
@@ -49,6 +50,18 @@ export function projectStyle(cwd: string): ProjectStyle {
   }
   cache.set(key, { at: Date.now(), style })
   return style
+}
+
+/** The colours from one stylesheet or Tailwind config the sketch names (relative to the project, or absolute). */
+function named(cwd: string, stylesheet: string): ProjectStyle {
+  const file = isAbsolute(stylesheet) ? stylesheet : join(cwd, stylesheet)
+  try {
+    const text = readFileSync(file, 'utf8')
+    const sets = TW_CONFIG.test(file) ? { light: tailwind(text) } : cssSets(text)
+    return { light: mapVars(sets.light ?? {}), dark: sets.dark ? mapVars(sets.dark) : undefined, source: relative(cwd, file).replace(/\\/g, '/') }
+  } catch {
+    return {}
+  }
 }
 
 function read(cwd: string): ProjectStyle {

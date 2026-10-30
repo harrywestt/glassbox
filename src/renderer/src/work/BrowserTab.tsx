@@ -148,9 +148,19 @@ function Page({ t, visible, follow, edits }: { t: BrowserTabState; visible: bool
     const wv = ref.current
     if (!wv) return
     const on = (name: string, fn: (e: never) => void) => (wv.addEventListener(name, fn as never), () => wv.removeEventListener(name, fn as never))
+    // Ready for Claude's tools as soon as the page is attached, not once its first page has loaded:
+    // a page stuck in a sign-in redirect (or one that never finishes loading) left the tab "starting".
+    const attached = () => {
+      try {
+        updateBrowserTab(tab.id, t.id, { wcId: wv.getWebContentsId() })
+      } catch {
+        /* not attached yet */
+      }
+    }
     const offs = [
-      on('dom-ready', () => updateBrowserTab(tab.id, t.id, { wcId: wv.getWebContentsId() })),
-      on('did-start-loading', () => (updateBrowserTab(tab.id, t.id, { loading: true }), setFailed(null))),
+      on('did-attach', attached),
+      on('dom-ready', attached),
+      on('did-start-loading', () => (attached(), updateBrowserTab(tab.id, t.id, { loading: true }), setFailed(null))),
       on('did-stop-loading', () => updateBrowserTab(tab.id, t.id, { loading: false })),
       on('did-navigate', (e: { url: string }) => updateBrowserTab(tab.id, t.id, { url: e.url })),
       on('did-navigate-in-page', (e: { url: string; isMainFrame: boolean }) => e.isMainFrame && updateBrowserTab(tab.id, t.id, { url: e.url })),

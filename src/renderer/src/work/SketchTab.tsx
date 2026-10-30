@@ -33,17 +33,18 @@ function schemeFor(app: ThemeTokens, userAccent: string, scheme?: 'dark' | 'ligh
 
 /** The project's own colours (read from its stylesheets once per folder), for sketches drawn in them. */
 const styles = new Map<string, Promise<ProjectStyle>>()
-export function useProjectStyle(cwd: string): ProjectStyle | null {
+export function useProjectStyle(cwd: string, stylesheet?: string): ProjectStyle | null {
   const [style, setStyle] = useState<ProjectStyle | null>(null)
   useEffect(() => {
-    let p = styles.get(cwd)
-    if (!p) styles.set(cwd, (p = window.glassbox.projectStyle(cwd).catch(() => ({}))))
+    const key = `${cwd}|${stylesheet ?? ''}`
+    let p = styles.get(key)
+    if (!p) styles.set(key, (p = window.glassbox.projectStyle(cwd, stylesheet).catch(() => ({}))))
     let live = true
     void p.then((v) => live && setStyle(v))
     return () => {
       live = false
     }
-  }, [cwd])
+  }, [cwd, stylesheet])
   return style
 }
 
@@ -84,25 +85,49 @@ export function useSketchUrl(version: SketchVersion): { url: string | null; base
   const { tab } = useSession()
   const app = useThemeTokens()
   const appearance = useAppearance()
-  const project = useProjectStyle(tab.cwd)
+  const project = useProjectStyle(tab.cwd, version.stylesheet)
   const wantsProject = !version.scheme || version.scheme === 'project'
   const vars = useMemo(() => (wantsProject && !project ? null : sketchVars(app, appearance.accent, version, project)), [app, appearance.accent, version.scheme, version.accent, project, wantsProject])
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     if (!vars) return
     let live = true
-    void window.glassbox.sketch.url(version.html).then((u) => live && setUrl(`${u}?t=${encodeURIComponent(JSON.stringify(vars))}`))
+    // Sent as edits or a file, the page is read from where it's kept; files it refers to are looked for in the session's folder.
+    void (version.html ? Promise.resolve(version.html) : version.ref ? window.glassbox.sketch.read(version.ref) : Promise.resolve(null))
+      .then((html) => (html == null ? null : window.glassbox.sketch.url(html, tab.cwd)))
+      .then((u) => live && u && setUrl(`${u}?t=${encodeURIComponent(JSON.stringify(vars))}${version.bare ? '&b=1' : ''}`))
     return () => {
       live = false
     }
-  }, [version.html, vars])
+  }, [version.html, version.ref, version.bare, vars, tab.cwd])
   return { url, base: vars?.base ?? app.base }
 }
 
 /** Claude's sketches: rough pages to look at, choose between and comment on, panned and zoomed like a diagram. */
+/** Sketches you deleted, per session: hidden until Claude sends a new version of one. */
+const DELETED_KEY = 'glassbox.deletedSketches'
+function deletedAt(tabId: string, id: string): number {
+  try {
+    return (JSON.parse(localStorage.getItem(DELETED_KEY) ?? '{}') as Record<string, number>)[`${tabId}|${id}`] ?? 0
+  } catch {
+    return 0
+  }
+}
+function markDeleted(tabId: string, id: string) {
+  try {
+    const all = JSON.parse(localStorage.getItem(DELETED_KEY) ?? '{}') as Record<string, number>
+    all[`${tabId}|${id}`] = Date.now()
+    localStorage.setItem(DELETED_KEY, JSON.stringify(all))
+  } catch {
+    /* this run only */
+  }
+}
+
 export function SketchTab() {
-  const { s } = useSession()
-  const list = Object.values(s.sketches ?? {}).sort((a, b) => b.at - a.at)
+  const { s, tab } = useSession()
+  const list = Object.values(s.sketches ?? {})
+    .filter((k) => k.at > deletedAt(tab.id, k.id))
+    .sort((a, b) => b.at - a.at)
   const [selected, setSelected] = useState<string | null>(null)
   const current = (selected && s.sketches?.[selected]) || list[0]
   if (!current)
@@ -136,7 +161,7 @@ const NOTES = new Map<string, Note[]>()
 const NOTE_ICON: Record<Note['kind'], string> = { pick: 'pass', comment: 'comment', move: 'gripper', draw: 'primitive-square' }
 
 function SketchView({ sketch, others, onSelect }: { sketch: Sketch; others: Sketch[]; onSelect: (id: string) => void }) {
-  const { tab, s, send } = useSession()
+  const { tab, s, send, actions } = useSession()
   const count = sketch.versions.length
   const [index, setIndex] = useState(count - 1)
   // A new version from Claude comes to the front.
@@ -356,9 +381,18 @@ function SketchView({ sketch, others, onSelect }: { sketch: Sketch; others: Sket
                 <IconButton icon="primitive-square" title={tr('sketchTab.modeDraw')} active={mode === 'draw'} onClick={() => switchMode('draw')} />
                 <IconButton icon="inspect" title={tr('sketchTab.modeUse')} active={mode === 'use'} onClick={() => switchMode('use')} />
                 <span className="panzoom-sep" />
-                <IconButton icon="copy" title={tr('sketchTab.copyHtml')} onClick={() => void navigator.clipboard.writeText(version.html)} />
+                <IconButton icon="copy" title={tr('sketchTab.copyHtml')} onClick={() => void (version.html ? Promise.resolve(version.html) : window.glassbox.sketch.read(version.ref ?? '')).then((h) => void (h && navigator.clipboard.writeText(h)))} />
                 <IconButton icon={exporting ? 'loading' : 'file-media'} title={tr('sketchTab.copyPng')} onClick={() => void exportPng('copy')} />
                 <IconButton icon="desktop-download" title={tr('sketchTab.savePng')} onClick={() => void exportPng('save')} />
+                <IconButton
+                  icon="trash"
+                  title={tr('sketchTab.delete')}
+                  onClick={() => {
+                    if (!window.confirm(tr('sketchTab.deleteConfirm', { title: sketch.title }))) return
+                    markDeleted(tab.id, sketch.id)
+                    actions.deleteSketch(tab.id, sketch.id)
+                  }}
+                />
               </>
             }
           >
