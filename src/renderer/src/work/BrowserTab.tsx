@@ -175,16 +175,17 @@ function Page({ t, visible, follow, edits }: { t: BrowserTabState; visible: bool
     return () => offs.forEach((f) => f())
   }, [tab.id, t.id])
 
-  // Claude asked this tab to go somewhere else (browser_open into the current tab).
+  // Claude asked this tab to load an address (browser_open into the current tab): every request loads
+  // it, even one the tab already shows or started at (clicks inside the page may have moved it on).
   useEffect(() => {
     const wv = ref.current
-    if (!wv || !t.url || t.url === src) return
+    if (!wv || !t.nav || !t.url) return
     try {
-      if (wv.getURL() !== t.url) void wv.loadURL(t.url).catch(() => {})
+      void wv.loadURL(t.url).catch(() => {})
     } catch {
       /* not attached yet: src covers it */
     }
-  }, [t.url])
+  }, [t.nav])
 
   // Local pages reload a moment after each edit (dev servers need a beat to rebuild).
   useEffect(() => {

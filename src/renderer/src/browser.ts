@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
  * Every tab shares one saved profile, so sign-ins and cookies carry across tabs and restarts.
  */
 
-export type BrowserTabState = { id: string; url: string; title?: string; icon?: string; loading?: boolean; /** The page's webContents id once it's attached (what Claude's tools drive). */ wcId?: number; /** Width the page is shown at, to see it as a phone or tablet would (unset: the full view). */ width?: number }
+export type BrowserTabState = { id: string; url: string; title?: string; icon?: string; loading?: boolean; /** The page's webContents id once it's attached (what Claude's tools drive). */ wcId?: number; /** Width the page is shown at, to see it as a phone or tablet would (unset: the full view). */ width?: number; /** Counts Claude's requests to load `url` in this tab, so each one navigates. */ nav?: number }
 
 /** The sizes to try a page at. */
 export const VIEWPORTS = { desktop: 0, tablet: 820, phone: 390 } as const
@@ -49,7 +49,7 @@ export function openInBrowser(sid: string, url: string, newTab = true): string {
   const s = get(sid)
   const current = s.tabs.find((t) => t.id === s.active)
   if (!newTab && current) {
-    set(sid, { ...s, tabs: s.tabs.map((t) => (t.id === current.id ? { ...t, url, loading: true } : t)) })
+    set(sid, { ...s, tabs: s.tabs.map((t) => (t.id === current.id ? { ...t, url, loading: true, nav: (t.nav ?? 0) + 1 } : t)) })
     return current.id
   }
   const id = `b${seq++}`
