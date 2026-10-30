@@ -59,6 +59,24 @@ async function contents(bridge: BrowserBridge, tab?: string): Promise<{ wc: WC; 
   }
 }
 
+/**
+ * Opens an address: in a new tab, or by loading it into `tab` (the active one when unset) directly, so
+ * it navigates even when the tab's page has moved on by clicks or scripts since Glassbox last sent it there.
+ */
+async function openTo(bridge: BrowserBridge, url: string, newTab: boolean, tab?: string): Promise<{ wc: WC; tab: string }> {
+  if (!newTab && (await bridge.tabs()).length) {
+    const c = await contents(bridge, tab)
+    if (typeof c === 'string') throw new Error(c)
+    // A redirect or a page that stops the load early rejects; the outcome shows in the page itself.
+    await c.wc.loadURL(url).catch(() => {})
+    return c
+  }
+  const opened = await bridge.open(url, newTab)
+  const c = await contents(bridge, opened.tab)
+  if (typeof c === 'string') throw new Error(c)
+  return c
+}
+
 /** Waits for the page to settle: loading done, then a short quiet spell for scripts to render. */
 async function settle(wc: WC, ms = 12000) {
   const start = Date.now()
@@ -163,8 +181,18 @@ const FIND = (l: Locator) => `(() => {
 })()`
 
 /** Clicks a control like a person would (a real mouse click at its middle). */
+/** Finds a control, giving the page up to `ms` for it to appear (after a navigation it may still be loading). */
+async function findSoon(wc: WC, l: Locator, ms = 5000): Promise<{ x: number; y: number; vw: number; vh: number; name: string } | null> {
+  const until = Date.now() + ms
+  for (;;) {
+    const at = (await inTime(wc.executeJavaScript(FIND(l)), PAGE_MS).catch(() => null)) as { x: number; y: number; vw: number; vh: number; name: string } | null
+    if (at || Date.now() > until) return at
+    await new Promise((r) => setTimeout(r, 250))
+  }
+}
+
 async function clickAt(wc: WC, l: Locator): Promise<string> {
-  const at = (await inTime(wc.executeJavaScript(FIND(l)), PAGE_MS)) as { x: number; y: number; vw: number; vh: number; name: string } | null
+  const at = await findSoon(wc, l)
   if (!at) throw new Error(`No control ${describe(l)} on the page now.${l.ref ? ' Take a new browser_snapshot.' : ''}`)
   await new Promise((r) => setTimeout(r, 120))
   markRecording(wc.id, { label: at.name ? `Click “${at.name}”` : 'Click', fx: at.x / Math.max(1, at.vw), fy: at.y / Math.max(1, at.vh) })
@@ -177,7 +205,7 @@ async function clickAt(wc: WC, l: Locator): Promise<string> {
 
 /** Types into a control (replacing what's there unless append), optionally pressing Enter after. */
 async function typeInto(wc: WC, l: Locator, text: string, submit?: boolean, append?: boolean): Promise<string> {
-  const at = await inTime(wc.executeJavaScript(FIND(l)), PAGE_MS)
+  const at = await findSoon(wc, l)
   if (!at) throw new Error(`No control ${describe(l)} on the page now.${l.ref ? ' Take a new browser_snapshot.' : ''}`)
   await inTime(wc.executeJavaScript(`(() => { const el = document.querySelector('[data-gb-target]'); el.focus(); ${append ? '' : "if ('select' in el) el.select(); else document.execCommand('selectAll')"} })()`), PAGE_MS)
   if (!append) press(wc, 'Backspace')
@@ -191,14 +219,16 @@ async function typeInto(wc: WC, l: Locator, text: string, submit?: boolean, appe
 }
 
 /** What a wait can wait for; checked by Glassbox every half second, each check a quick look at the page. */
-export type WaitFor = { text?: string; gone?: string; until?: string; stable?: number; seconds?: number }
+export type WaitFor = { text?: string; gone?: string; until?: string; stable?: number; seconds?: number; /** A control to appear (selector, role and name, or text it shows). */ el?: Locator }
 async function waitFor(wc: WC, w: WaitFor): Promise<{ ok: boolean; what: string; took: number }> {
   const start = Date.now()
-  const limit = Math.min(600, w.seconds ?? (w.text || w.gone || w.until || w.stable ? 60 : 2)) * 1000
+  const el = w.el && (w.el.selector || w.el.role || w.el.contains || w.el.ref) ? w.el : undefined
+  const any = !!(w.text || w.gone || w.until || w.stable || el)
+  const limit = Math.min(600, w.seconds ?? (any ? 60 : 2)) * 1000
   const cond = w.until ? (/\breturn\b/.test(w.until) ? `(async () => { ${w.until} })()` : `(async () => (${w.until}))()`) : null
   let last = ''
   let quietSince = Date.now()
-  const what = [w.text && `"${w.text}" appears`, w.gone && `"${w.gone}" is gone`, w.until && 'the condition holds', w.stable && `the page stops changing for ${w.stable}s`].filter(Boolean).join(' and ') || 'a moment'
+  const what = [el && `${describe(el)} is there`, w.text && `"${w.text}" appears`, w.gone && `"${w.gone}" is gone`, w.until && 'the condition holds', w.stable && `the page stops changing for ${w.stable}s`].filter(Boolean).join(' and ') || 'a moment'
   while (Date.now() - start < limit) {
     const probe = (await inTime(
       wc.executeJavaScript(`(async () => { const t = document.body ? document.body.innerText : ''; return { t: t.length + ':' + t.slice(-400), has: ${JSON.stringify(w.text ?? '')} ? t.includes(${JSON.stringify(w.text ?? '')}) : true, gone: ${JSON.stringify(w.gone ?? '')} ? !(t.includes(${JSON.stringify(w.gone ?? '')}) || !!document.querySelector(${JSON.stringify(/^[.#\[]/.test(w.gone ?? '') ? w.gone : 'gb-none')})) : true, cond: ${cond ? `!!(await ${cond})` : 'true'} } })()`),
@@ -207,18 +237,19 @@ async function waitFor(wc: WC, w: WaitFor): Promise<{ ok: boolean; what: string;
     if (probe) {
       if (probe.t !== last) (last = probe.t), (quietSince = Date.now())
       const quiet = !w.stable || Date.now() - quietSince >= w.stable * 1000
-      if (probe.has && probe.gone && probe.cond && quiet && (w.text || w.gone || w.until || w.stable)) return { ok: true, what, took: Date.now() - start }
+      const found = !el || !!(await inTime(wc.executeJavaScript(FIND(el)), PAGE_MS).catch(() => null))
+      if (probe.has && probe.gone && probe.cond && quiet && found && any) return { ok: true, what, took: Date.now() - start }
     }
     await new Promise((r) => setTimeout(r, 500))
   }
-  return { ok: !(w.text || w.gone || w.until || w.stable), what, took: Date.now() - start }
+  return { ok: !any, what, took: Date.now() - start }
 }
 
 /** One step of browser_steps. */
 type Step = Locator & { do: 'open' | 'click' | 'type' | 'press' | 'wait' | 'read' | 'screenshot' | 'eval'; url?: string; new_tab?: boolean; value?: string; submit?: boolean; append?: boolean; key?: string; find?: string; limit?: number; code?: string; label?: string } & WaitFor
 
 /** Background runs of browser_steps, by id: where they are and what each step gave. */
-const jobs = new Map<string, { total: number; done: number; lines: string[]; status: 'running' | 'done' | 'failed'; started: number; ended?: number; record?: string }>()
+const jobs = new Map<string, { total: number; done: number; failed: number; lines: string[]; status: 'running' | 'done' | 'failed'; started: number; ended?: number; record?: string }>()
 let jobSeq = 0
 
 /** A numbered control's box on screen (scrolled into view first), for a recording's highlight. */
@@ -339,7 +370,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
   }
 
   /** Runs browser_steps: each step in turn, a short line each, written to the record folder as it goes. */
-  const runSteps = async (steps: Step[], tab: string | undefined, record: string | undefined, onLine: (line: string) => void, stopOnError: boolean) => {
+  const runSteps = async (steps: Step[], tab: string | undefined, record: string | undefined, onLine: (line: string, ok: boolean) => void, stopOnError: boolean) => {
     let current = tab
     if (record) mkdirSync(record, { recursive: true })
     let failed = false
@@ -352,10 +383,8 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
       let shot: string | undefined
       try {
         if (s.do === 'open') {
-          const opened = await bridge.open(s.url ?? 'about:blank', s.new_tab === true)
-          current = opened.tab
-          const c = await contents(bridge, current)
-          if (typeof c === 'string') throw new Error(c)
+          const c = await openTo(bridge, s.url ?? 'about:blank', s.new_tab === true, current)
+          current = c.tab
           await new Promise((r) => setTimeout(r, 350))
           await settle(c.wc)
           line = `opened ${c.wc.getURL()} (tab ${current})`
@@ -369,7 +398,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
             await settle(c.wc, 4000)
             line = `pressed ${s.key ?? 'Enter'}`
           } else if (s.do === 'wait') {
-            const w = await waitFor(c.wc, s)
+            const w = await waitFor(c.wc, { ...s, el: { ref: s.ref, selector: s.selector, role: s.role, name: s.name, contains: s.contains } })
             ok = w.ok
             line = `${w.ok ? 'waited for' : 'gave up waiting for'} ${w.what} (${(w.took / 1000).toFixed(1)}s)`
           } else if (s.do === 'read') {
@@ -391,7 +420,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         line = e instanceof Error ? e.message : String(e)
       }
       const text = `${n}. ${s.do}${s.label ? ` (${s.label})` : ''}: ${ok ? '' : 'FAILED '}${line}`
-      onLine(text)
+      onLine(text, ok)
       if (record) {
         const c = await contents(bridge, current).catch(() => null)
         const url = c && typeof c !== 'string' ? c.wc.getURL() : undefined
@@ -414,11 +443,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
       },
       async ({ url, new_tab, find }) => {
         try {
-          const { tab, wcId } = await bridge.open(url, new_tab === true)
-          const { webContents } = await import('electron')
-          const wc = webContents.fromId(wcId)
-          if (!wc) return fail('The tab opened but its page is not ready.')
-          // Reusing a tab: give the new address a moment to start loading before waiting on it.
+          const { wc, tab } = await openTo(bridge, url, new_tab === true)
           await new Promise((r) => setTimeout(r, 350))
           await settle(wc)
           return ok(`Tab ${tab}.\n${await inTime(wc.executeJavaScript(SNAPSHOT(find ?? '', 4000)), PAGE_MS)}`)
@@ -637,12 +662,12 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
     ),
     tool(
       'browser_wait',
-      'Wait until something is true on the page: text appears, text or a spinner is gone, a JavaScript condition holds, or the page has stopped changing (a streamed answer has finished); any combination, for up to 10 minutes. Glassbox checks every half second, so never loop in browser_eval to wait. With none given, just waits a moment.',
-      { ...WAIT, tab: TAB },
-      async ({ text, gone, until, stable, seconds, tab }) => {
+      'Wait until something is true on the page: a control is there (selector, role and name, or contains), text appears, text or a spinner is gone, a JavaScript condition holds, or the page has stopped changing (a streamed answer has finished); any combination, for up to 10 minutes. Glassbox checks every half second, so never loop in browser_eval to wait. With none given, just waits a moment.',
+      { ...WAIT, selector: LOCATOR.selector, role: LOCATOR.role, name: LOCATOR.name, contains: LOCATOR.contains, tab: TAB },
+      async ({ text, gone, until, stable, seconds, selector, role, name, contains, tab }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
-        const w = await waitFor(c.wc, { text, gone, until, stable, seconds })
+        const w = await waitFor(c.wc, { text, gone, until, stable, seconds, el: { selector, role, name, contains } })
         return w.ok ? ok(`Done waiting: ${w.what} (${(w.took / 1000).toFixed(1)}s). ${where(c.wc)}`) : fail(`Gave up waiting for ${w.what} after ${(w.took / 1000).toFixed(0)}s. ${where(c.wc)}`)
       }
     ),
@@ -680,18 +705,20 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         const stop = stop_on_error !== false
         if (background) {
           const id = `j${++jobSeq}`
-          const job: { total: number; done: number; lines: string[]; status: 'running' | 'done' | 'failed'; started: number; ended?: number; record?: string } = { total: steps.length, done: 0, lines: [], status: 'running', started: Date.now(), record }
+          const job: { total: number; done: number; failed: number; lines: string[]; status: 'running' | 'done' | 'failed'; started: number; ended?: number; record?: string } = { total: steps.length, done: 0, failed: 0, lines: [], status: 'running', started: Date.now(), record }
           jobs.set(id, job)
-          void runSteps(steps as Step[], tab, record, (l) => (job.lines.push(l), job.done++), stop)
-            .then((failed) => (job.status = failed ? 'failed' : 'done'))
+          // Stopping at the first failure, a failure fails the job; carrying on, the job is done when it reaches the end.
+          void runSteps(steps as Step[], tab, record, (l, ok) => (job.lines.push(l), job.done++, ok || job.failed++), stop)
+            .then((failed) => (job.status = failed && stop ? 'failed' : 'done'))
             .catch((e) => (job.lines.push(`stopped: ${e instanceof Error ? e.message : String(e)}`), (job.status = 'failed')))
             .finally(() => (job.ended = Date.now()))
           return ok(`Started job ${id} (${steps.length} steps) in the background${record ? `, recording to ${record}` : ''}. Check it with browser_job.`)
         }
         const lines: string[] = []
-        const failed = await runSteps(steps as Step[], tab, record, (l) => lines.push(l), stop)
-        const out = lines.join('\n')
-        return failed ? fail(out) : ok(out.length > 16000 ? `${out.slice(0, 16000)}\n(cut at 16000 characters)` : out)
+        let failures = 0
+        const failed = await runSteps(steps as Step[], tab, record, (l, good) => (lines.push(l), good || failures++), stop)
+        const out = (lines.join('\n') + (failures && !stop ? `\n${failures} step${failures === 1 ? '' : 's'} failed; the rest ran.` : '')).slice(0, 16000)
+        return failed && stop ? fail(out) : ok(out)
       }
     ),
     tool(
@@ -704,7 +731,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         const until = Date.now() + (wait_seconds ?? 0) * 1000
         while (job.status === 'running' && Date.now() < until) await new Promise((r) => setTimeout(r, 500))
         const took = Math.round(((job.ended ?? Date.now()) - job.started) / 1000)
-        return ok(`Job ${id}: ${job.status}, ${job.done} of ${job.total} steps, ${took}s.${job.record ? ` Record: ${job.record}` : ''}\n${job.lines.slice(-(lines ?? 20)).join('\n')}`)
+        return ok(`Job ${id}: ${job.status}, ${job.done} of ${job.total} steps${job.failed ? ` (${job.failed} failed)` : ''}, ${took}s.${job.record ? ` Record: ${job.record}` : ''}\n${job.lines.slice(-(lines ?? 20)).join('\n')}`)
       }
     )
   ]
