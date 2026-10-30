@@ -11,7 +11,17 @@ function useRuns() {
   return useMemo(() => testRuns(s), [s.toolCalls, s.files])
 }
 
-/** A test run in the conversation: green or red, what failed, and whether an edit just broke it. */
+/** The end of a run's output (where test runners put the summary and the failures), without colour codes. */
+function outputTail(text: string | undefined, lines = 40): string {
+  const clean = (text ?? '').replace(/\u001b\[[0-9;]*m/g, '').trimEnd()
+  return clean.split('\n').slice(-lines).join('\n')
+}
+
+/**
+ * A test run in the conversation: green or red, what failed, and whether an edit just broke it.
+ * It opens like an accordion: the failing tests by name, or the end of the output when the
+ * runner's report didn't name them.
+ */
 export function TestCard({ call }: { call: ToolCall }) {
   const runs = useRuns()
   const [open, setOpen] = useState(false)
@@ -28,24 +38,36 @@ export function TestCard({ call }: { call: ToolCall }) {
   const prev = runs[i - 1]
   const broke = prev?.ok && !run.ok
   const fixed = prev && !prev.ok && run.ok
+  const output = outputTail(call.result)
+  const more = run.failures.length > 0 || !!output
   return (
-    <div className={run.ok ? 'test-card ok' : 'test-card bad'}>
-      <button className="test-head" onClick={() => setOpen(!open)} title={run.command}>
+    <div className={`test-card ${run.ok ? 'ok' : 'bad'}${open ? ' open' : ''}`}>
+      <button className="test-head" onClick={() => more && setOpen(!open)} aria-expanded={more ? open : undefined} title={run.command}>
         <Icon name={run.ok ? 'pass-filled' : 'error'} className={run.ok ? 'ok' : 'err'} />
-        <strong>{run.ok ? tr('testSignals.passed') : tr('testSignals.failed')}</strong>
-        <span className="muted small">{runSummary(run)}</span>
+        <span className="test-title">{run.ok ? tr('testSignals.passed') : tr('testSignals.failed')}</span>
+        <span className="test-count">{runSummary(run)}</span>
         {broke && run.editsSince.length > 0 && <span className="tag warn-tag">{tr('testSignals.wentRedAfterEditing', { files: run.editsSince.slice(0, 2).map(baseName).join(', ') })}</span>}
         {fixed && <span className="tag accent">{tr('testSignals.fixed')}</span>}
         <span className="spacer" />
-        {run.failures.length > 0 && <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />}
+        {more && <Icon name="chevron-down" className="test-chevron" />}
       </button>
-      {(open || !run.ok) && run.failures.length > 0 && (
-        <ul className="test-failures">
-          {run.failures.slice(0, open ? 12 : 3).map((f) => (
-            <li key={f} className="mono small">{f}</li>
-          ))}
-          {!open && run.failures.length > 3 && <li className="muted small">{tr('testSignals.andMore', { count: run.failures.length - 3 })}</li>}
-        </ul>
+      {open && (
+        <div className="test-body">
+          {run.failures.length > 0 && (
+            <ul className="test-failures">
+              {run.failures.slice(0, 30).map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+              {run.failures.length > 30 && <li className="muted">{tr('testSignals.andMore', { count: run.failures.length - 30 })}</li>}
+            </ul>
+          )}
+          {output && (run.failures.length === 0 || !run.ok) && (
+            <>
+              {run.failures.length > 0 && <div className="test-output-label">{tr('testSignals.output')}</div>}
+              <pre className="test-output">{output}</pre>
+            </>
+          )}
+        </div>
       )}
     </div>
   )

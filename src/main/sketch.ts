@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { app, BrowserWindow, clipboard, ClipboardItem } from 'electron'
 
 /**
  * Claude's sketches: rough HTML pages to show an idea or a problem. Each version is kept by its
@@ -95,17 +95,33 @@ table { border-collapse: collapse; } th, td { padding: 6px 10px; border-bottom: 
 ${COLOURS.map((c) => `.text-${c} { color: var(--${c}); } .fill-${c} { background: color-mix(in srgb, var(--${c}) 16%, transparent); border-color: color-mix(in srgb, var(--${c}) 45%, transparent); } .solid-${c} { background: var(--${c}); color: ${c === 'accent' ? 'var(--accent-fg)' : '#fff'}; border-color: transparent; }`).join('\n')}
 .gb-mark { position: absolute; pointer-events: none; z-index: 2147483647; border: 2px solid var(--accent, #2f6fde); border-radius: 6px; transition: all 80ms ease-out; }
 .gb-mark.chosen { background: color-mix(in srgb, var(--accent, #2f6fde) 10%, transparent); }
+.gb-mark.draw, .gb-note.draw { border-style: dashed; background: color-mix(in srgb, var(--accent, #2f6fde) 8%, transparent); }
+html { scrollbar-width: none; }
+.gb-notes { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 2147483646; }
+.gb-note { position: absolute; border: 2px solid var(--accent, #2f6fde); border-radius: 6px; }
+.gb-note.move { border-style: dotted; }
+.gb-pin { position: absolute; left: -11px; top: -11px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent, #2f6fde); color: var(--accent-fg, #fff); font: 600 11px/20px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+[data-gb-moved] { position: relative; z-index: 2; outline: 1px dotted var(--accent, #2f6fde); outline-offset: 2px; }
 `
 
 /**
  * Inside the page: reports its size, and answers the view's taps and hovers (the view lays a
  * surface over the page for panning, so it passes clicks on). A tap on a [data-pick] picks it; in
- * comment mode, a tap says what was pointed at.
+ * comment mode, a tap says what was pointed at. In move mode a drag moves a part of the page, and
+ * in draw mode it draws a box; the user's notes are drawn over the page as numbered pins, and the
+ * parts they moved stay moved (the notes are the record: the page redraws from them).
  */
 const HELPER = `(() => {
   const post = (m) => parent.postMessage(Object.assign({ glassboxSketch: true }, m), '*')
   // The content's own height (not the frame's), so the view can fit it and the frame can shrink to it.
-  const size = () => { const b = document.body; if (b) post({ type: 'size', h: Math.ceil(Math.max(b.scrollHeight, b.offsetHeight)) }) }
+  // Parts moved below it, and boxes drawn there, count too, so the frame grows to show them.
+  const size = () => {
+    const b = document.body
+    if (!b) return
+    let h = Math.max(b.scrollHeight, b.offsetHeight)
+    document.querySelectorAll('[data-gb-moved], .gb-note, .gb-mark').forEach((e) => { const r = e.getBoundingClientRect(); if (r.height) h = Math.max(h, r.bottom + scrollY + 16) })
+    post({ type: 'size', h: Math.ceil(h) })
+  }
   new ResizeObserver(size).observe(document.body || document.documentElement)
   addEventListener('load', size)
   const marks = {}
@@ -131,24 +147,140 @@ const HELPER = `(() => {
     return { kind, text, pick: pick ? pick.getAttribute('data-pick') : '', section }
   }
   const target = (x, y) => { const el = document.elementFromPoint(x - scrollX, y - scrollY); return el && el !== document.documentElement && el !== document.body ? el : null }
+  // A part to move: the nearest whole thing (a button, a card, a heading), not a run of text inside it.
+  const MOVABLE = '[data-pick], button, a, input, select, textarea, img, svg, label, li, tr, table, h1, h2, h3, h4, h5, h6, p, section, article, aside, nav, header, footer, form, figure, .card, .box, .note'
+  const movable = (el) => (el && el.closest(MOVABLE)) || el
+  const rectOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height } }
+  // Where a part is in the page (child indexes from the body), so a reloaded page finds it again.
+  const pathOf = (el) => { const p = []; for (let e = el; e && e !== document.body && e.parentElement; e = e.parentElement) p.unshift(Array.prototype.indexOf.call(e.parentElement.children, e)); return p.join('/') }
+  const byPath = (s) => { if (!s) return null; let e = document.body; for (const i of s.split('/')) { e = e && e.children[+i] } return e || null }
+  let layer = null
+  let grabbed = null
+  const showNotes = (list) => {
+    document.querySelectorAll('[data-gb-moved]').forEach((e) => { e.style.translate = ''; e.removeAttribute('data-gb-moved') })
+    for (const n of list) {
+      const e = n.kind === 'move' && byPath(n.path)
+      if (e) { e.style.translate = n.dx + 'px ' + n.dy + 'px'; e.setAttribute('data-gb-moved', '') }
+    }
+    if (!layer) { layer = document.createElement('div'); layer.className = 'gb-notes'; document.body.appendChild(layer) }
+    layer.textContent = ''
+    for (const n of list) {
+      const e = n.path ? byPath(n.path) : null
+      const r = e ? rectOf(e) : n.rect
+      if (!r) continue
+      const box = document.createElement('div')
+      box.className = 'gb-note ' + n.kind
+      Object.assign(box.style, { left: (r.x - 4) + 'px', top: (r.y - 4) + 'px', width: (r.w + 8) + 'px', height: (r.h + 8) + 'px' })
+      const pin = document.createElement('span')
+      pin.className = 'gb-pin'
+      pin.textContent = n.n
+      box.appendChild(pin)
+      layer.appendChild(box)
+    }
+    size()
+  }
   addEventListener('message', (e) => {
     const m = e.data
     if (!m || !m.glassboxSketch) return
     if (m.type === 'hover') {
       const el = m.x == null ? null : target(m.x, m.y)
-      const show = !el ? null : m.mode === 'comment' ? el : el.closest('[data-pick], button, a, input, select, textarea, label, summary, [role=button], [role=tab], [onclick]')
+      const show = !el ? null : m.mode === 'comment' ? el : m.mode === 'move' ? movable(el) : m.mode === 'draw' ? null : el.closest('[data-pick], button, a, input, select, textarea, label, summary, [role=button], [role=tab], [onclick]')
       mark('hover', show)
       post({ type: 'cursor', pointer: !!show })
     } else if (m.type === 'tap') {
       const el = target(m.x, m.y)
       if (!el) return
-      if (m.mode === 'comment') { mark('chosen', el, true); post({ type: 'comment', what: describe(el) }); return }
+      if (m.mode === 'comment') { mark('chosen', el, true); post({ type: 'comment', what: describe(el), path: pathOf(el) }); return }
+      if (m.mode === 'move' || m.mode === 'draw') return
       const pick = el.closest('[data-pick]')
-      if (pick) { mark('chosen', pick, true); post({ type: 'pick', label: pick.getAttribute('data-pick') || clean(pick.innerText).slice(0, 60) }); return }
+      if (pick) { mark('chosen', pick, true); post({ type: 'pick', label: pick.getAttribute('data-pick') || clean(pick.innerText).slice(0, 60), path: pathOf(pick) }); return }
       if (/^(input|select|textarea)$/i.test(el.tagName)) el.focus()
       el.click()
     } else if (m.type === 'clear') {
       mark('chosen', null)
+      mark('draw', null)
+    } else if (m.type === 'notes') {
+      showNotes(m.notes || [])
+    } else if (m.type === 'grab') {
+      const el = movable(target(m.x, m.y))
+      if (!el) return
+      const t = (el.style.translate || '').split(' ').map(parseFloat)
+      grabbed = { el, dx: t[0] || 0, dy: t[1] || 0 }
+      el.setAttribute('data-gb-moved', '')
+    } else if (m.type === 'drag' && grabbed) {
+      grabbed.el.style.translate = (grabbed.dx + m.dx) + 'px ' + (grabbed.dy + m.dy) + 'px'
+      mark('hover', grabbed.el)
+    } else if (m.type === 'drop' && grabbed) {
+      const g = grabbed
+      grabbed = null
+      const dx = Math.round(g.dx + m.dx), dy = Math.round(g.dy + m.dy)
+      g.el.style.translate = dx + 'px ' + dy + 'px'
+      // What it now sits on or beside: whatever is under its middle, with it out of the way.
+      const r = g.el.getBoundingClientRect()
+      g.el.style.pointerEvents = 'none'
+      const under = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      g.el.style.pointerEvents = ''
+      const near = under && under !== document.body && under !== document.documentElement && !g.el.contains(under) && !(layer && layer.contains(under)) ? describe(under) : null
+      mark('hover', null)
+      size()
+      post({ type: 'moved', what: describe(g.el), path: pathOf(g.el), dx, dy, near })
+    } else if (m.type === 'drawing') {
+      const r = m.rect
+      let d = marks.draw
+      if (!d) { d = marks.draw = document.createElement('div'); d.className = 'gb-mark draw'; document.body.appendChild(d) }
+      Object.assign(d.style, { display: 'block', left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' })
+      size()
+    } else if (m.type === 'drawn') {
+      const r = m.rect
+      const el = target(r.x + r.w / 2, r.y + r.h / 2)
+      post({ type: 'area', rect: r, what: el ? describe(el) : { kind: '', text: '', pick: '', section: '' } })
     }
   })
 })()`
+
+/**
+ * A sketch as a PNG, drawn in code (no model): the page drawn off screen at its own width and full
+ * height (off screen, so a tall page isn't cut to the screen's height), on a clear background, and
+ * cropped to what's drawn on it. Copied to the clipboard, or saved under captures.
+ */
+export async function sketchPng(url: string, width: number, title: string, outDir: string, how: 'copy' | 'save' = 'save'): Promise<string> {
+  const w = new BrowserWindow({ show: false, width, height: 800, useContentSize: true, transparent: true, frame: false, backgroundColor: '#00000000', webPreferences: { sandbox: true, javascript: true, offscreen: true } })
+  try {
+    await w.loadURL(url)
+    await w.webContents.insertCSS('html, body { background: transparent !important; }')
+    // Its scripts settle, then the window takes the page's full height.
+    await new Promise((r) => setTimeout(r, 400))
+    const height = Math.min(12000, Math.ceil(Number(await w.webContents.executeJavaScript('Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)'))) || 800)
+    w.setContentSize(width, height)
+    await new Promise((r) => setTimeout(r, 300))
+    // The box around everything drawn (the body's padding and empty space left out), with a small margin.
+    const box = (await w.webContents.executeJavaScript(`(() => {
+      let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity
+      for (const el of document.body.children) {
+        if (/^(SCRIPT|STYLE)$/.test(el.tagName) || /\bgb-/.test(el.className)) continue
+        const x = el.getBoundingClientRect()
+        if (!x.width || !x.height) continue
+        l = Math.min(l, x.left); t = Math.min(t, x.top); r = Math.max(r, x.right); b = Math.max(b, x.bottom)
+      }
+      return l === Infinity ? null : { x: l + scrollX, y: t + scrollY, w: r - l, h: b - t }
+    })()`)) as { x: number; y: number; w: number; h: number } | null
+    const pad = 8
+    const rect = box
+      ? { x: Math.max(0, Math.floor(box.x - pad)), y: Math.max(0, Math.floor(box.y - pad)), width: Math.min(width, Math.ceil(box.w + pad * 2)), height: Math.min(height, Math.ceil(box.h + pad * 2)) }
+      : { x: 0, y: 0, width, height }
+    w.webContents.invalidate()
+    await new Promise((r) => setTimeout(r, 120))
+    const image = await w.webContents.capturePage(rect)
+    if (how === 'copy') {
+      await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }) })])
+      return ''
+    }
+    const name = `${title.replace(/[^\w -]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'sketch'}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
+    mkdirSync(outDir, { recursive: true })
+    const file = join(outDir, name)
+    writeFileSync(file, image.toPNG())
+    return file
+  } finally {
+    w.destroy()
+  }
+}

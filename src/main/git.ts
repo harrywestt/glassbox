@@ -90,12 +90,14 @@ async function resolveBase(cwd: string, ref: string, mode: DiffMode): Promise<st
 }
 
 /** Working tree (including uncommitted and untracked files) compared against `ref`. */
-export async function gitDiff(cwd: string, ref: string, mode: DiffMode): Promise<DiffResult> {
+/** `committed`: the branch's commits only (what a pull request holds), leaving out uncommitted and untracked files. */
+export async function gitDiff(cwd: string, ref: string, mode: DiffMode, committed = false): Promise<DiffResult> {
   const base = await resolveBase(cwd, ref, mode)
+  const range = committed ? [base, 'HEAD'] : [base]
   const [nameStatus, numstat, untracked] = await Promise.all([
-    git(cwd, ['diff', '--name-status', '-M', base]),
-    git(cwd, ['diff', '--numstat', '-M', base]),
-    git(cwd, ['ls-files', '--others', '--exclude-standard'])
+    git(cwd, ['diff', '--name-status', '-M', ...range]),
+    git(cwd, ['diff', '--numstat', '-M', ...range]),
+    committed ? Promise.resolve('') : git(cwd, ['ls-files', '--others', '--exclude-standard'])
   ])
   const stats = new Map<string, { additions: number; deletions: number }>()
   for (const line of numstat.split('\n').filter(Boolean)) {

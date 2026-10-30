@@ -53,14 +53,17 @@
 @keyframes live-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
 
 /* Three panes when there's room: needs you, the stage, the checks. */
-.live-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.7fr) minmax(300px, 1fr); gap: var(--s-2); padding: var(--s-2); }
+/* Columns divided by hairlines on the screen's own colour, not boxed: the same as every other view. */
+.live-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.7fr) minmax(300px, 1fr); gap: 0; padding: 0; }
+.live-shell > * + * { border-left: 1px solid var(--border); }
 /* Each column shares its height: the top pane takes what it needs up to about half, the lower one
    keeps a usable minimum, and both scroll inside rather than pushing the other off screen. */
-.live-stage, .live-trust { display: flex; flex-direction: column; gap: var(--s-2); min-height: 0; min-width: 0; }
+.live-stage, .live-trust { display: flex; flex-direction: column; gap: 0; min-height: 0; min-width: 0; }
+.live-stage > * + *, .live-trust > * + * { border-top: 1px solid var(--border); }
 .live-stage > .live-lanes, .live-trust > .live-checked { flex: 0 1 auto; max-height: 50%; min-height: 0; }
 .live-stage > :last-child, .live-trust > .live-looked { flex: 1 1 0; min-height: 160px; }
 .live-lanes .live-lane-list { overflow: auto; min-height: 0; }
-.live-pane { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-lg); min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.live-pane { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 /* Each pane opens with a label strip; its rows run edge to edge beneath it. */
 .live-pane-h { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-3); min-height: 36px; box-sizing: border-box; padding: var(--s-1) var(--s-4); border-bottom: 1px solid var(--border); }
 .live-scroll { overflow: auto; min-height: 0; padding: 0 0 var(--s-2); }

@@ -7,6 +7,7 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import './styles.css'
 import { App } from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { copyButtons } from './lib'
 
 // Platform-specific chrome (macOS traffic lights sit on the left of the title bar).
@@ -15,6 +16,8 @@ copyButtons()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary where="app">
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 )

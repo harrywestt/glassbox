@@ -1,11 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
+import { app, BrowserWindow, crashReporter, dialog, ipcMain, nativeImage, net, Notification, powerMonitor, protocol, session, shell } from 'electron'
 import { Updater } from './updater'
 import { setAutomation } from './automation'
 import type { Automation, Effort } from '../shared/events'
 import { abortAllQueries } from './claude'
 import { askMap, type MapAskModule } from './mapAsk'
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
@@ -25,14 +25,14 @@ import { getGitHubSummary } from './github'
 import { createPrWorktree, getBranchPr, getPr, listOpenPrs } from './launcher'
 import { findDependents } from './deps'
 import { getArchitecture, nameArchitecture, onArchitectureChanged, refreshArchitecture } from './architecture'
-import { getAccounts, signIn } from './accounts'
+import { getAccounts, signIn, signInInput, signInCancel } from './accounts'
 import { getStandup } from './standup'
 import { architectureDiff } from './archDiff'
 import { focusErd, getErd } from './erd'
 import { closeTerminal, closeTerminals, openTerminal, resizeTerminal, writeTerminal } from './terminal'
 import { browserTools, captureTab, type BrowserBridge, type BrowserHooks } from './browserTools'
 import { clearLogs, pageLogs, watchNetwork, watchPage } from './browserLogs'
-import { capturesDir, isRecording, recordingEncoded, startRecording, stopRecording } from './recorder'
+import { capturesDir, cueRecording, isRecording, recordingEncoded, startRecording, stopRecording } from './recorder'
 import { forgetDecision, listDecisions } from './projectDecisions'
 import { explainModule } from './mapExplain'
 import { attachContextMenu, setMacMenu } from './contextMenu'
@@ -45,7 +45,7 @@ import { handoffMessage } from './handoff'
 import { commentOnTicket, getTicket, getTransitions, transitionTicket } from './jira'
 import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
-import { sketchPage, sketchUrl } from './sketch'
+import { sketchPage, sketchPng, sketchUrl } from './sketch'
 import { spendSummary } from './spend'
 import { addPlanToPr, savePlan } from './planShare'
 import { projectStyle } from './projectStyle'
@@ -60,6 +60,49 @@ if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'Glass
 if (process.env.GLASSBOX_PROFILE_DIR) app.setPath('userData', process.env.GLASSBOX_PROFILE_DIR)
 // macOS: opened from the Finder, the app doesn't get your shell's PATH (git, gh, Homebrew).
 adoptLoginShellPath()
+
+// One Glassbox at a time: a second copy would open the same profile while the first holds it, and
+// start with no tabs. Opening it again brings the running one to the front instead.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
+}
+// Crash dumps kept locally (userData/Crashpad), so the next crash leaves something to go on.
+crashReporter.start({ uploadToServer: false })
+process.on('uncaughtException', (e) => logMain(`uncaught exception: ${e.stack ?? e}`))
+process.on('unhandledRejection', (e) => logMain(`unhandled rejection: ${e instanceof Error ? e.stack : String(e)}`))
+
+/** A line in logs/main.log: what the main process saw go wrong. */
+function logMain(text: string) {
+  try {
+    const dir = join(app.getPath('userData'), 'logs')
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(join(dir, 'main.log'), `[${new Date().toISOString()}] v${app.getVersion()} ${text}\n`)
+  } catch {
+    /* logging is best effort */
+  }
+}
+
+/** Writes a file so a crash can't leave it half-written: a temp file beside it, then renamed over it. */
+function writeAtomic(file: string, text: string, backup = false) {
+  mkdirSync(dirname(file), { recursive: true })
+  const tmp = `${file}.tmp`
+  writeFileSync(tmp, text, 'utf8')
+  if (backup && existsSync(file)) {
+    try {
+      copyFileSync(file, `${file}.bak`)
+    } catch {
+      /* no backup this time */
+    }
+  }
+  renameSync(tmp, file)
+}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'showcase', privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -93,10 +136,11 @@ app.commandLine.appendSwitch('disable-gpu-process-crash-limit')
 // Glassbox is often covered by the editor while Claude works in its Browser. A covered window
 // otherwise counts as hidden, and pages that pause when hidden (streaming chat UIs) stall until you look.
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
-
-// Dev aid: snapshot runs keep painting while other windows cover this one (Windows otherwise pauses
-// a covered window, and capturePage hands back an old frame).
-if (process.env.GLASSBOX_SNAPSHOTS && !process.env.GLASSBOX_REAL_OCCLUSION) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+// Windows also works out which windows are covered and stops painting them: a recording of the
+// Browser made while you're in another window got about one frame a second, and Claude's pages
+// stalled. Glassbox keeps painting instead (GLASSBOX_REAL_OCCLUSION puts the Windows behaviour back).
+if (!process.env.GLASSBOX_REAL_OCCLUSION) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const toRenderer = (channel: string, payload: unknown) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
@@ -261,6 +305,14 @@ function createWindow() {
       void shell.openExternal(url)
     }
   })
+  // The page's process died (a crash, or the graphics driver resetting under it): reload it, so the
+  // window comes back with its tabs rather than staying blank.
+  win.webContents.on('render-process-gone', (_e, d) => {
+    logMain(`window process ${d.reason} (exit ${d.exitCode}); reloading`)
+    if (d.reason !== 'clean-exit') setTimeout(() => win && !win.isDestroyed() && win.webContents.reload(), 500)
+  })
+  win.webContents.on('unresponsive', () => logMain('window stopped responding'))
+  win.webContents.on('responsive', () => logMain('window responding again'))
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
   if (process.env.GLASSBOX_SNAPSHOTS) void captureSnapshots(win, process.env.GLASSBOX_SNAPSHOTS)
@@ -370,7 +422,7 @@ const browserFor = (tabId: string): { bridge: BrowserBridge; shotsDir: string; r
     resize: (tab, width) => browserRequest(tabId, { cmd: 'resize', tab, width }, 5000)
   },
   shotsDir: join(app.getPath('userData'), 'browser-shots'),
-  record: { start: (wcId) => startRecording(win ?? undefined, wcId), stop: (wcId) => stopRecording(win ?? undefined, wcId) }
+  record: { start: (wcId, opts) => startRecording(win ?? undefined, wcId, opts), stop: (wcId) => stopRecording(win ?? undefined, wcId), cue: (wcId, cue) => cueRecording(wcId, cue) }
 })
 
 // Sessions
@@ -488,8 +540,30 @@ ipcMain.handle('browser:record', async (_e, wcId: number, action: 'start' | 'sto
 })
 ipcMain.handle('recorder:encoded', (_e, id: string, data: ArrayBuffer | null) => recordingEncoded(id, data))
 ipcMain.handle('spend:summary', () => spendSummary())
+// The open tabs, kept on disk too: written to a temp file and renamed over the old (so a crash
+// mid-write can't leave it half-written), the previous copy kept as .bak.
+ipcMain.handle('tabs:save', (_e, json: string) => {
+  const file = join(app.getPath('userData'), 'tabs.json')
+  writeAtomic(file, json, true)
+  // Push the page's own storage to disk too, rather than whenever Chromium gets round to it.
+  void win?.webContents.session.flushStorageData()
+})
+ipcMain.on('tabs:load', (e) => {
+  const file = join(app.getPath('userData'), 'tabs.json')
+  for (const f of [file, file + '.bak']) {
+    try {
+      const raw = readFileSync(f, 'utf8')
+      const v = JSON.parse(raw) as { tabs?: unknown[] }
+      if (Array.isArray(v.tabs) && v.tabs.length) return void (e.returnValue = raw)
+    } catch {
+      /* try the next */
+    }
+  }
+  e.returnValue = null
+})
 ipcMain.handle('plan:save', (_e, cwd: string, title: string, markdown: string) => savePlan(cwd, title, markdown))
 ipcMain.handle('plan:toPr', (_e, cwd: string, markdown: string) => addPlanToPr(cwd, markdown))
+ipcMain.handle('sketch:png', (_e, url: string, width: number, title: string, how?: 'copy' | 'save') => sketchPng(url, width, title, capturesDir(), how === 'copy' ? 'copy' : 'save'))
 ipcMain.handle('sketch:projectStyle', (_e, cwd: string) => projectStyle(cwd))
 ipcMain.handle('sketch:url', (_e, html: string) => sketchUrl(String(html)))
 ipcMain.handle('erd:get', (_e, cwd: string) => getErd(cwd))
@@ -500,7 +574,9 @@ ipcMain.handle('terminal:close', (_e, id: string) => closeTerminal(id))
 ipcMain.handle('erd:focus', (_e, cwd: string, question: string) => focusErd(cwd, question))
 ipcMain.handle('decisions:forget', (_e, cwd: string, id: string) => forgetDecision(cwd, id))
 ipcMain.handle('accounts:get', (_e, force?: boolean) => getAccounts(force))
-ipcMain.handle('accounts:signIn', (_e, id: string) => signIn(id))
+ipcMain.handle('accounts:signIn', (_e, id: string) => signIn(id, (s) => toRenderer('glassbox:signin', s)))
+ipcMain.handle('accounts:signInInput', (_e, id: string, text: string) => signInInput(id, String(text)))
+ipcMain.handle('accounts:signInCancel', (_e, id: string) => signInCancel(id))
 ipcMain.handle('standup:get', (_e, force?: boolean) => getStandup(app.getPath('userData'), force))
 ipcMain.handle('session:permission', (_e, tabId: string, id: string, decision: PermissionDecision, message?: string) =>
   host(tabId).respondPermission(id, decision, message)
@@ -553,7 +629,7 @@ ipcMain.handle('ticket:comment', (_e, cwd: string, key: string, body: string) =>
 // Voice input
 const voiceProgress = (p: unknown) => toRenderer('glassbox:voice', p)
 ipcMain.handle('voice:prepare', async () => void (await prepareVoice(voiceProgress)))
-ipcMain.handle('voice:transcribe', (_e, audio: Float32Array, live?: boolean) => transcribe(audio, voiceProgress, live))
+ipcMain.handle('voice:transcribe', (_e, audio: Float32Array, live?: boolean, offset?: number) => transcribe(audio, voiceProgress, live, offset))
 ipcMain.handle('github:summary', (_e, dirs: string[], force?: boolean) => getGitHubSummary(dirs, { force }))
 
 // Files and git
@@ -583,7 +659,7 @@ ipcMain.handle('git:discard', (_e, cwd: string, paths: string[]) => gitDiscard(c
 ipcMain.handle('git:commit', (_e, cwd: string, message: string) => gitCommit(cwd, message))
 ipcMain.handle('git:push', (_e, cwd: string) => gitPush(cwd))
 ipcMain.handle('git:fetchDefault', (_e, cwd: string) => gitFetchDefault(cwd))
-ipcMain.handle('git:diff', (_e, cwd: string, ref: string, mode: DiffMode) => gitDiff(cwd, ref, mode))
+ipcMain.handle('git:diff', (_e, cwd: string, ref: string, mode: DiffMode, committed?: boolean) => gitDiff(cwd, ref, mode, committed))
 ipcMain.handle('git:fileAt', (_e, cwd: string, ref: string, mode: DiffMode, path: string) => gitFileAt(cwd, ref, mode, path))
 
 // Project services (.glassbox/services.json)
@@ -648,8 +724,13 @@ ipcMain.handle('log:error', (_e, where: string, text: string) => {
   mkdirSync(dir, { recursive: true })
   const file = join(dir, 'renderer.log')
   const line = `[${new Date().toISOString()}] v${app.getVersion()} ${where}: ${String(text).slice(0, 8000)}\n`
-  const old = existsSync(file) ? readFileSync(file, 'utf8') : ''
-  writeFileSync(file, (old.length > 1_000_000 ? old.slice(-500_000) : old) + line)
+  appendFileSync(file, line)
+  // Trimmed to its last half megabyte once it passes a megabyte (rare), not rewritten on every error.
+  try {
+    if (statSync(file).size > 1_000_000) writeAtomic(file, readFileSync(file, 'utf8').slice(-500_000))
+  } catch {
+    /* logging is best effort */
+  }
 })
 ipcMain.handle('window:titleBar', (_e, color: string, symbolColor: string) => {
   titleBar = { color, symbolColor }
@@ -793,14 +874,8 @@ app.whenReady().then(async () => {
 
 // A graphics-process crash (a screen lock or driver reset) goes in the log, so lag after one can be traced.
 app.on('child-process-gone', (_e, d) => {
-  if (d.type !== 'GPU') return
-  try {
-    const dir = join(app.getPath('userData'), 'logs')
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'renderer.log'), `[${new Date().toISOString()}] v${app.getVersion()} gpu: graphics process ${d.reason} (exit ${d.exitCode}); restarted\n`, { flag: 'a' })
-  } catch {
-    /* logging is best effort */
-  }
+  if (d.reason === 'clean-exit') return
+  logMain(`${d.type.toLowerCase()} process ${d.reason} (exit ${d.exitCode})${d.type === 'GPU' ? '; Chromium restarts it' : ''}${d.name ? ` [${d.name}]` : ''}`)
 })
 
 app.on('window-all-closed', () => (closeTerminals(), stopAllBangs(), app.quit()))

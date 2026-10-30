@@ -1,7 +1,6 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import type { GlassboxSignal } from '../shared/events'
-import { showcasePrompt } from './showcase'
 import { SERVICES_FILE, type ProjectServices } from './services'
 import { BROWSER_TOOL_NAMES, browserTools, type BrowserBridge, type BrowserHooks } from './browserTools'
 import type { UxReviewer } from './uxReviewer'
@@ -12,10 +11,10 @@ export const GLASSBOX_TOOLS = [
   'mcp__glassbox__show_diagram',
   'mcp__glassbox__show_flow',
   'mcp__glassbox__show_sketch',
+  'mcp__glassbox__pr_overview',
   'mcp__glassbox__review_ux',
   'mcp__glassbox__set_current_task',
   'mcp__glassbox__pin_file',
-  'mcp__glassbox__showcase_ready',
   'mcp__glassbox__log_decision',
   'mcp__glassbox__set_acceptance_criteria',
   'mcp__glassbox__report_finding',
@@ -27,11 +26,9 @@ export const GLASSBOX_TOOLS = [
   'mcp__glassbox__show_on_map',
   'mcp__glassbox__show_progress',
   'mcp__glassbox__show_plan_on_map',
-  'mcp__glassbox__show_impact',
   'mcp__glassbox__show_database',
   'mcp__glassbox__open_preview',
   'mcp__glassbox__open_tab',
-  'mcp__glassbox__build_showcase',
   'mcp__glassbox__app_status',
   'mcp__glassbox__start_app',
   'mcp__glassbox__app_logs',
@@ -40,7 +37,7 @@ export const GLASSBOX_TOOLS = [
 ]
 
 export const GLASSBOX_INSTRUCTIONS = `You are running inside Glassbox, a desktop app that shows the user your session: the conversation, changed files, a map of the project and a Browser.
-Spend tokens only on what the user asked for. Don't add work they didn't ask for: no diagrams, flows, maps, impact views, showcases or UX reviews unless the user asks for one or the task is about it.
+Spend tokens only on what the user asked for. Don't add work they didn't ask for: no diagrams, flows, maps, decks or UX reviews unless the user asks for one or the task is about it.
 Sketches come first for UI: when a task adds or changes UI, show_sketch the proposed screen (and its states, or two or three options to pick from) before you build it, so the user can react. It is drawn in the project's own colours; match the app's real layout and components.
 Plans (ExitPlanMode) are rendered by Glassbox as a document: Markdown plus these blocks, each tag on its own lines. Use them where they help, not by default:
 - <Sketch id="sketch-id" /> embeds a sketch you made with show_sketch; for UI plans put the proposed screens near the top.
@@ -49,14 +46,13 @@ Plans (ExitPlanMode) are rendered by Glassbox as a document: Markdown plus these
 - One <Questions> block at the end, a line each: "- question | recommended answer | alternative". The user answers in place.
 Lead with the outcome, name real files and symbols, keep prose short.
 Glassbox tools (mcp__glassbox__*, loaded through tool search when you need one):
-- To show something the user asked to see: show_diagram (Mermaid), show_flow, show_sketch, show_on_map, show_plan_on_map, show_impact, show_database, open_file, open_diff, open_preview, open_tab.
+- To show something the user asked to see: show_diagram (Mermaid), show_flow, show_sketch, show_on_map, show_plan_on_map, show_database, open_file, open_diff, open_preview, open_tab.
 - present_file: when you make a file for the user (document, image, video, export), present it rather than saying where it is. Save it in the working folder.
 - check_in: wait for the user's answer before a risky or hard-to-undo step you're unsure about.
 - start_app, app_status, app_logs, stop_app: run the project's services (the user's Run button). Don't start dev servers or open browsers yourself.
 - browser_*: look at web pages in the Glassbox Browser instead of Playwright or an external browser. Read pages with browser_snapshot or browser_eval; screenshot only when the look matters. If a page needs a login, ask the user to sign in there; never ask for passwords. Reuse the current tab and close tabs you're done with.
 - run_as_admin: only for commands that need administrator rights; the user approves each one.
 - show_progress: only for work you expect to run for several minutes; pass watch (a log file, url or file) rather than updating it repeatedly.
-- build_showcase: only when asked for a showcase or demo deck; follow what it returns, then call showcase_ready.
 - set_current_task, log_decision, set_acceptance_criteria, report_finding, pin_file: only when the user asks for them.
 Files the user attaches arrive in an <attachments> block at the end of their message; read them.
 Never leave a command that waits for input or never exits in the foreground: background it or use start_app.
@@ -145,6 +141,35 @@ export function createGlassboxServer(
           return ok(
             `Sketch "${title}" (id ${id}) is in the Sketches view${look ? `, drawn in ${look}` : !scheme || scheme === 'project' ? ", in Glassbox's colours (no project colours were found)" : ''}. Embed it in a plan with <Sketch id="${id}" />. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message.`
           )
+        },
+        ALWAYS_LOAD
+      ),
+      tool(
+        'pr_overview',
+        'Write the overview of a pull request that Glassbox shows the user and reviewers in its PR overview view. Use it only when the user (or Glassbox for them) asks for a PR overview. Base everything on the actual diff (`git diff <base>...HEAD`) and what you know from this session.\n\n' +
+          'Size it to the change. It is an overview, not a file list: only summary and size are required; leave out every other part when it has nothing real to say. A one-line text change is just a one-sentence summary, the one file in changes, and that line as code. A large feature can use every part. Never pad.\n\n' +
+          'Parts: changes (only for a change of one or two files: each with a line on what changed); areas and links (required unless the change is tiny: the 3 to 6 parts of the system the change touches, each with its kind, whether it is added, changed or removed, its files and a short note, and links between them for how one calls, renders or feeds another; Glassbox draws them as boxes with arrows); code (one or two diff excerpts worth reading, each titled with what it shows, e.g. "How a Chat page link takes the conversation into the pane"; never a dump of the change); screens (REQUIRED whenever the change alters anything a person sees: sketch each screen that looks or behaves differently, as it looks after the change, and before and after side by side when the look changed; pass html (or an id from show_sketch), drawn as the real screen looks, in the project colours and layout); assets (images, icons, fonts, media added or changed); notes (at most 3, only what a reviewer must know: breaking changes, migrations, config or environment variables, new dependencies, security, performance, follow-ups left for later); deviations (at most 2: where this code does something differently from how the rest of the codebase does it: the usual way, what this does, and why; check against similar code in the repo before claiming one); risks (at most 3 real ones: what could go wrong, how likely, and what limits it; one sentence of detail each); diagrams (Mermaid, only where structure or a flow changed); testing (up to 4 of each: what was tested, and how a reviewer can check it); reviewFocus (at most 3: where to look hardest). Keep every line short: a title of a few words, a detail of one sentence.',
+        {
+          pr: z.object({ number: z.number().int().optional(), url: z.string().optional(), title: z.string() }).optional(),
+          size: z.enum(['tiny', 'small', 'medium', 'large']),
+          headline: z.string().optional().describe('One plain sentence a new joiner would understand, about what people will notice (no code names), e.g. "The Chat menu now opens the full Chat page, and links in a chat keep the conversation beside the page"'),
+          summary: z.string().describe('What changed and why, for a developer: two or three sentences'),
+          changes: z.array(z.object({ path: z.string().describe('Relative to the repo root'), what: z.string().describe('One line on what changed in it') })).optional().describe('Only for a change of one or two files; otherwise use areas'),
+          areas: z.array(z.object({ id: z.string(), title: z.string().describe('Two or three words, e.g. "Sidebar nav", "Answer library API"'), kind: z.enum(['ui', 'ai', 'api', 'logic', 'data', 'infra', 'config', 'tests', 'docs']), change: z.enum(['added', 'changed', 'removed']), files: z.array(z.string()).optional(), note: z.string().optional().describe('What changed there, in a few words') })).optional(),
+          links: z.array(z.object({ from: z.string().describe('An area id'), to: z.string().describe('An area id'), label: z.string().optional().describe('e.g. "calls", "renders", "writes"') })).optional(),
+          code: z.array(z.object({ title: z.string().optional().describe('What this code shows, as a heading'), path: z.string(), note: z.string().optional(), diff: z.string().describe('A short unified diff excerpt (lines starting with +, - or space; @@ headers allowed)') })).max(3).optional(),
+          screens: z.array(z.object({ title: z.string(), sketch: z.string().optional().describe('Id of a sketch already shown with show_sketch'), html: z.string().optional().describe('Or the sketch itself, as for show_sketch'), width: z.number().int().min(320).max(2400).optional() })).optional().describe('Required when anything a person sees changed'),
+          assets: z.array(z.object({ path: z.string(), note: z.string().optional() })).optional(),
+          notes: z.array(z.object({ kind: z.enum(['breaking', 'migration', 'config', 'dependency', 'security', 'performance', 'follow-up', 'other']), title: z.string(), detail: z.string().optional() })).optional(),
+          deviations: z.array(z.object({ title: z.string(), where: z.string().optional().describe('path or path:line'), usual: z.string().describe('How the codebase usually does this'), here: z.string().describe('What this change does instead'), why: z.string() })).optional(),
+          risks: z.array(z.object({ level: z.enum(['low', 'medium', 'high']), title: z.string(), detail: z.string().optional(), mitigation: z.string().optional() })).optional(),
+          diagrams: z.array(z.object({ title: z.string(), mermaid: z.string() })).optional(),
+          testing: z.object({ done: z.array(z.string()).optional(), howTo: z.array(z.string()).optional() }).optional(),
+          reviewFocus: z.array(z.string()).optional()
+        },
+        async (overview) => {
+          emit({ type: 'overview', overview })
+          return ok('The PR overview is in Glassbox\'s PR overview view. The user can copy it or add it to the pull request description from there.')
         },
         ALWAYS_LOAD
       ),
@@ -392,16 +417,6 @@ export function createGlassboxServer(
         ALWAYS_LOAD
       ),
       tool(
-        'show_impact',
-        "Open the Ripple view for a file's module: everything that depends on it, and which of those are covered by tests. Use it when a change could affect more than it looks.",
-        { path: z.string(), why: z.string().optional() },
-        async ({ path, why }) => {
-          emit({ type: 'open', target: { view: 'ripple', path }, why })
-          return ok('Opened the impact view.')
-        },
-        ALWAYS_LOAD
-      ),
-      tool(
         'open_preview',
         'Show the user a page (usually of the running app) in the Glassbox Browser. To read or use the page yourself, use browser_open instead.',
         { url: z.string().describe('http(s) URL, usually a local dev server'), why: z.string().optional() },
@@ -413,8 +428,8 @@ export function createGlassboxServer(
       ),
       tool(
         'open_tab',
-        'Bring one of the Glassbox views to the front: conversation; plan (your plan, to approve or reread); map (the parts of the project this work touches); database (tables and how they connect; use show_database to focus an area); diagrams (after show_diagram); sketches (after show_sketch); flows (after show_flow); live (each file as you edit it); ripple (what a change could affect; use show_impact for a file); terminal (the user\'s own shell in this folder, for a command they should run themselves); browser (web pages; use open_preview for a URL); attachments (files they attached and files you made); showcase (the shareable deck; use build_showcase to make one); replay (step back through the session).',
-        { tab: z.enum(['conversation', 'plan', 'map', 'database', 'diagrams', 'sketches', 'flows', 'live', 'ripple', 'terminal', 'browser', 'attachments', 'showcase', 'replay']), why: z.string().optional() },
+        'Bring one of the Glassbox views to the front: overview (the PR overview, after pr_overview); conversation; plan (your plan, to approve or reread); map (the parts of the project this work touches); database (tables and how they connect; use show_database to focus an area); diagrams (after show_diagram); sketches (after show_sketch); flows (after show_flow); live (each file as you edit it); terminal (the user\'s own shell in this folder, for a command they should run themselves); browser (web pages; use open_preview for a URL); attachments (files they attached and files you made); replay (step back through the session).',
+        { tab: z.enum(['conversation', 'plan', 'map', 'database', 'diagrams', 'sketches', 'flows', 'live', 'terminal', 'browser', 'attachments', 'replay', 'overview']), why: z.string().optional() },
         async ({ tab, why }) => {
           emit({ type: 'open', target: { view: 'tab', tab }, why })
           return ok(`Showing ${tab}.`)
@@ -445,27 +460,6 @@ export function createGlassboxServer(
             )
           ]
         : []),
-      tool(
-        'build_showcase',
-        'Get the instructions for building a showcase deck of this work (a shareable page for teammates, published as a Claude Artifact). Call it when the user asks for a showcase, demo, deck or "something to show the team" about the work (a PR, a ticket, a feature); then follow the instructions it returns.',
-        {
-          name: z.string().describe('Short kebab-case name for the deck, e.g. the ticket key and a slug'),
-          notes: z.string().optional().describe("Anything the user asked to emphasise"),
-          base: z.string().optional().describe('Branch the work is compared against, if known')
-        },
-        async ({ name, notes, base }) => ok(showcasePrompt({ name: name.replace(/[^\w.-]+/g, '-').slice(0, 80) || 'showcase', base: base ?? null, notes: notes ?? '' })),
-        ALWAYS_LOAD
-      ),
-      tool(
-        'showcase_ready',
-        'Tell Glassbox a showcase deck has been written (and optionally published), so it shows in the Showcase view. Call it when a deck you were asked for is done.',
-        { path: z.string(), title: z.string(), artifactUrl: z.string().optional() },
-        async ({ path, title, artifactUrl }) => {
-          emit({ type: 'showcase', path, title, artifactUrl })
-          return ok('Showcase is visible in Glassbox.')
-        },
-        ALWAYS_LOAD
-      )
     ]
   })
 }

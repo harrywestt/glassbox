@@ -148,7 +148,7 @@ export function ErdTab({ entities: initial, query: initialQuery }: { entities?: 
           ask(q)
         }}
       >
-        <Icon name="sparkle" className="erd-ask-icon" />
+        <Icon name="search" className="erd-ask-icon" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr('erdTab.ask.placeholder')} aria-label={tr('erdTab.ask.label')} />
         {asking ? (
           <span className="erd-ask-state small">

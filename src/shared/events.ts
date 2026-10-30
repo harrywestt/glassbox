@@ -18,6 +18,40 @@ export type TaskStep = { label: string; status: 'pending' | 'active' | 'done'; f
 /** One call or response in a show_flow sequence; from/to are lane names. */
 export type FlowHop = { from: string; to: string; label: string; kind?: 'new' | 'changed' | 'removed' }
 
+/**
+ * Claude's overview of a pull request (pr_overview): what a reviewer needs, sized to the change. Only
+ * summary and size are always there; every other part is left out when it has nothing to say.
+ */
+export type PrOverview = {
+  pr?: { number?: number; url?: string; title: string }
+  /** How big the change is; a tiny one is shown as just its summary, files and code. */
+  size: 'tiny' | 'small' | 'medium' | 'large'
+  /** One plain sentence anyone on the team understands: what people will notice. */
+  headline?: string
+  /** What changed and why, in a sentence or a short paragraph. */
+  summary: string
+  /** For a change of a file or two: those files, with a line on each. Bigger changes use areas instead. */
+  changes?: { path: string; what: string }[]
+  /** The parts of the system the change touches, drawn as boxes, and how they feed each other (arrows). */
+  areas?: { id: string; title: string; kind: 'ui' | 'ai' | 'api' | 'logic' | 'data' | 'infra' | 'config' | 'tests' | 'docs'; change: 'added' | 'changed' | 'removed'; files?: string[]; note?: string }[]
+  links?: { from: string; to: string; label?: string }[]
+  /** Screens, as sketches: an id from show_sketch, or the HTML for a new one. */
+  screens?: { title: string; sketch?: string; html?: string; width?: number }[]
+  /** Images, fonts, media and other assets added or changed. */
+  assets?: { path: string; note?: string }[]
+  /** Anything a reviewer should know: breaking changes, migrations, config or environment, dependencies, security, performance, follow-ups. */
+  notes?: { kind: 'breaking' | 'migration' | 'config' | 'dependency' | 'security' | 'performance' | 'follow-up' | 'other'; title: string; detail?: string }[]
+  /** Where this code does something differently from how the rest of the codebase does it. */
+  deviations?: { title: string; where?: string; usual: string; here: string; why: string }[]
+  risks?: { level: 'low' | 'medium' | 'high'; title: string; detail?: string; mitigation?: string }[]
+  /** The code worth reading, as unified diff excerpts. */
+  code?: { title?: string; path: string; note?: string; diff: string }[]
+  diagrams?: { title: string; mermaid: string }[]
+  testing?: { done?: string[]; howTo?: string[] }
+  /** Where a reviewer should look hardest. */
+  reviewFocus?: string[]
+}
+
 /** Pushed by Claude through the in-process Glassbox MCP server. */
 export type GlassboxSignal =
   | { type: 'diagram'; id: string; title: string; mermaid: string }
@@ -31,6 +65,7 @@ export type GlassboxSignal =
   | { type: 'open'; target: OpenTarget; why?: string }
   /** A loader above the message box (show_progress), or an update to one. */
   | { type: 'loader'; loader: LoaderState }
+  | { type: 'overview'; overview: PrOverview }
 
 /** One loader: what it's for, how far along (percent, or unknown), and a line of detail. */
 export type LoaderState = { id: string; label: string; status: 'running' | 'done' | 'failed'; percent?: number; /** Step under way, of `steps`, for work with distinct parts. */ step?: number; steps?: number; detail?: string; started: number; updated: number; /** Glassbox is watching something to move it (a url, file or log). */ watching?: boolean }
@@ -42,7 +77,7 @@ export type OpenTarget =
   | { view: 'ripple'; path: string }
   | { view: 'preview'; url: string }
   | { view: 'erd'; entities?: string[]; query?: string }
-  | { view: 'tab'; tab: 'conversation' | 'plan' | 'map' | 'database' | 'diagrams' | 'flows' | 'live' | 'ripple' | 'terminal' | 'browser' | 'attachments' | 'showcase' | 'replay' | 'sketches' }
+  | { view: 'tab'; tab: 'conversation' | 'plan' | 'map' | 'database' | 'diagrams' | 'flows' | 'live' | 'ripple' | 'terminal' | 'browser' | 'attachments' | 'showcase' | 'replay' | 'sketches' | 'overview' }
 
 export type HostStatus = 'starting' | 'ready' | 'running' | 'stopped'
 
@@ -130,7 +165,7 @@ export type SessionEvent =
   | { kind: 'effort'; chosen?: Effort; applied?: Effort | null }
   | { kind: 'reviewer-state'; busy: boolean; pending: number; error?: string }
   /** `id`: an alert about one ongoing thing ("stuck"): a newer one replaces it, and alert-clear takes it away. */
-  | { kind: 'alert'; level: 'info' | 'warn' | 'error'; text: string; id?: string }
+  | { kind: 'alert'; level: 'info' | 'warn' | 'error'; text: string; id?: string; /** Gone after this (ms since 1970), e.g. a usage warning once its limit resets. */ until?: number; /** Not noted in the conversation (a passing notice). */ quiet?: boolean }
   | { kind: 'alert-clear'; id: string }
   | { kind: 'mode'; mode: string; base: string }
   | { kind: 'error'; message: string }
@@ -293,6 +328,8 @@ export type TicketActionResult = { ok: true; error?: undefined } | { ok?: false;
 /** Something Glassbox needs you signed in to: Claude, the GitHub CLI, or a claude.ai connector. */
 export type AccountItem = { id: string; name: string; kind: 'claude' | 'github' | 'connector'; status: 'ok' | 'signin' | 'missing' | 'error'; detail?: string }
 export type AccountsResult = { items: AccountItem[]; at: number }
+/** A sign-in running inside Glassbox: what the CLI said, the page to open, the code to enter there. */
+export type SignInState = { id: string; status: 'running' | 'done' | 'failed'; lines: string[]; url?: string; code?: string; asksForCode?: boolean; error?: string }
 
 /** The morning stand-up: the last working day, grouped by Jira epic. */
 export type StandupItem = { text: string; ticket?: { key: string; summary?: string; status?: string; url?: string }; repo: string }
@@ -352,9 +389,11 @@ export type Automation = {
   autoCommit: boolean
   /** Claude may start "fork" agents, which get a copy of the whole conversation (and the session's model). */
   agentForks: boolean
+  /** When Claude opens a pull request, it also writes the PR overview. */
+  prOverview: boolean
 }
 
 export type HoldPolicy = 'ask' | 'all' | 'offplan'
 
 // Anything that would spend tokens without being asked starts off (quick answers and the watchdog's nudges are model calls).
-export const AUTOMATION_DEFAULTS: Automation = { promptSuggestions: true, agentSummaries: false, nudges: false, autoMap: false, autoTicket: false, autoCommit: false, agentForks: false, quickAnswers: false, watchdog: false, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask', autoModel: true }
+export const AUTOMATION_DEFAULTS: Automation = { promptSuggestions: true, agentSummaries: false, nudges: false, autoMap: false, autoTicket: false, autoCommit: false, agentForks: false, prOverview: false, quickAnswers: false, watchdog: false, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask', autoModel: true }

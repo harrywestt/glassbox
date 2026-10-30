@@ -33,7 +33,7 @@ const PAGE = 150
  * session marked. Clicking a file opens its diff full size in the work area.
  */
 export function ChangesPanel() {
-  const { tab, s, openDiff, workPath, openRipple } = useSession()
+  const { tab, s, openDiff, workPath } = useSession()
   const [branches, setBranches] = useState<string[]>([])
   const [base, setBase] = useState<string | null>(null)
   const [diffMode, setDiffMode] = useState<DiffMode>('merge-base')
@@ -165,7 +165,6 @@ export function ChangesPanel() {
             {repo && diff && (
               <IconButton icon="type-hierarchy" title={showArch ? tr('changesPanel.hideArchitecture') : tr('changesPanel.showArchitecture')} active={showArch} onClick={() => setShowArch(!showArch)} />
             )}
-            {counted.length > 0 && <IconButton icon="radio-tower" title={tr('changesPanel.rippleTitle')} onClick={() => openRipple()} />}
             {repo && <IconButton icon="refresh" title={tr('changesPanel.refresh')} onClick={load} />}
           </>
         }

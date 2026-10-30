@@ -172,7 +172,7 @@ function Hint({ icon, children }: { icon: string; children: ReactNode }) {
   )
 }
 
-const needsSetup = (error?: string) => !error || /gh auth login|isn’t installed/i.test(error)
+const needsSetup = (error?: string) => !error || /Accounts|isn’t installed/i.test(error)
 
 const shortRepo = (repo: string) => repo.split('/').pop() ?? repo
 

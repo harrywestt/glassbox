@@ -9,8 +9,10 @@ const SIZE = 168
  * theme, which keeps the accent readable on dark and light backgrounds. Arrow keys move the
  * marker (left/right: hue; up/down: strength), and the hex field takes a colour typed or pasted.
  */
-export function ColourWheel({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
-  const [h, s] = hexToHsl(value)
+export function ColourWheel({ value, onChange, lightness }: { value: string; onChange: (hex: string) => void; lightness?: boolean }) {
+  const [h, s, l0] = hexToHsl(value)
+  // With the lightness slider the wheel keeps the lightness you set; without it, accents sit at 60%.
+  const l = lightness ? l0 : 0.6
   const [hex, setHex] = useState(value)
   const wheel = useRef<HTMLDivElement>(null)
   useEffect(() => setHex(value), [value])
@@ -21,7 +23,7 @@ export function ColourWheel({ value, onChange }: { value: string; onChange: (hex
     const y = e.clientY - r.top - r.height / 2
     const hue = (Math.atan2(y, x) * 180) / Math.PI + 90
     const sat = Math.min(1, Math.hypot(x, y) / (r.width / 2))
-    onChange(hslToHex((hue + 360) % 360, sat, 0.6))
+    onChange(hslToHex((hue + 360) % 360, sat, l))
   }
   const key = (e: KeyboardEvent) => {
     const step = e.shiftKey ? 15 : 5
@@ -29,7 +31,7 @@ export function ColourWheel({ value, onChange }: { value: string; onChange: (hex
     const m = moves[e.key]
     if (!m) return
     e.preventDefault()
-    onChange(hslToHex((h + m[0] + 360) % 360, Math.min(1, Math.max(0, s + m[1])), 0.6))
+    onChange(hslToHex((h + m[0] + 360) % 360, Math.min(1, Math.max(0, s + m[1])), l))
   }
   // The marker: the angle is the hue (red at the top), the distance the strength.
   const rad = ((h - 90) * Math.PI) / 180
@@ -55,6 +57,18 @@ export function ColourWheel({ value, onChange }: { value: string; onChange: (hex
       >
         <span className="colour-wheel-marker" style={{ left: mx, top: my, background: value }} />
       </div>
+      {lightness && (
+        <input
+          type="range"
+          className="colour-wheel-light"
+          aria-label={tr('colourWheel.lightness')}
+          min={0}
+          max={100}
+          value={Math.round(l0 * 100)}
+          style={{ ['--hue-mid' as string]: hslToHex(h, s, 0.5) }}
+          onChange={(e) => onChange(hslToHex(h, s, Number(e.target.value) / 100))}
+        />
+      )}
       <label className="colour-wheel-hex">
         <span>{tr('colourWheel.hex')}</span>
         <input

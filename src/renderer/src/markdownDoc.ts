@@ -5,6 +5,8 @@ import * as monaco from 'monaco-editor'
 import { absPath, mediaKind, mediaUrl } from './lib'
 import { monacoTheme } from './monaco'
 import type { ThemeTokens } from './theme'
+import { zoomDiagram } from './components/ZoomOverlay'
+import { tr } from '../../shared/i18n'
 
 /**
  * A Markdown file as a document (the Markdown viewer): the same Markdown as Claude's replies, plus
@@ -202,6 +204,17 @@ async function drawMermaid(pre: HTMLElement, source: string, theme: ThemeTokens)
       el.setAttribute('width', String(Math.floor(view.width * scale)))
       el.setAttribute('height', String(Math.floor(view.height * scale)))
     }
+    // Opens it filling the window, to pan and zoom like a sketch.
+    const open = document.createElement('button')
+    open.className = 'icon-btn md-mermaid-zoom'
+    open.title = tr('zoomOverlay.open')
+    open.setAttribute('aria-label', tr('zoomOverlay.open'))
+    open.innerHTML = '<i class="codicon codicon-screen-full"></i>'
+    open.addEventListener('click', (e) => {
+      e.stopPropagation()
+      zoomDiagram(tr('zoomOverlay.diagram'), svg)
+    })
+    box.append(open)
   } catch (err) {
     // Not a diagram Mermaid understands: show it as the code it is, with why.
     box.className = 'md-mermaid failed'

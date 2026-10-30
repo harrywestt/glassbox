@@ -24,7 +24,7 @@ export function editCounts(call: ToolCall) {
  * without clicking into anything. Click the header for the file's full diff.
  */
 export function EditCard({ call }: { call: ToolCall }) {
-  const { tab, s, openDiff, composerRef, openRipple, everyday } = useSession()
+  const { tab, s, openDiff, composerRef, everyday } = useSession()
   const [undo, setUndo] = useState<'idle' | 'confirm' | 'working' | 'done'>(() => (UNDONE.has(call.id) ? 'done' : 'idle'))
   const [undoError, setUndoError] = useState<string | null>(null)
   const [all, setAll] = useState(false)
@@ -68,11 +68,6 @@ export function EditCard({ call }: { call: ToolCall }) {
         <span className="small num"><span className="ok">+{added}</span> <span className="err">−{removed}</span></span>
         <Icon name="link-external" className="muted edit-open" />
       </button>
-      {!failed && !everyday && call.status === 'done' && (
-        <button className="icon-btn edit-undo" title={tr('editCard.whatWouldItAffect')} aria-label={tr('editCard.whatWouldItAffect')} onClick={() => openRipple(undefined, path)}>
-          <Icon name="radio-tower" />
-        </button>
-      )}
       {undo === 'done' ? (
         <span className="tag edit-undone">{tr('editCard.undone')}</span>
       ) : undo === 'confirm' ? (

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tool } from '@anthropic-ai/claude-agent-sdk'
 import { logsText, newProblems } from './browserLogs'
-import { markRecording } from './recorder'
+import { markRecording, type RecordCue, type RecordOptions } from './recorder'
 import { z } from 'zod'
 
 /**
@@ -125,6 +125,15 @@ const LOCATE = (ref: number) => `(() => {
   return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), vw: innerWidth, vh: innerHeight, name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim().slice(0, 60) }
 })()`
 
+/** A numbered control's box on screen (scrolled into view first), for a recording's highlight. */
+const BOX = (ref: number) => `(() => {
+  const el = document.querySelector('[data-gb="${ref}"]')
+  if (!el) return null
+  el.scrollIntoView({ block: 'center', inline: 'center' })
+  const r = el.getBoundingClientRect()
+  return { x: r.left, y: r.top, w: r.width, h: r.height, vw: innerWidth, vh: innerHeight }
+})()`
+
 const KEYS: Record<string, string> = { enter: 'Enter', escape: 'Escape', esc: 'Escape', tab: 'Tab', backspace: 'Backspace', delete: 'Delete', up: 'Up', down: 'Down', left: 'Left', right: 'Right', space: 'Space', pageup: 'PageUp', pagedown: 'PageDown', home: 'Home', end: 'End' }
 
 function press(wc: WC, key: string) {
@@ -213,7 +222,7 @@ async function stitchSlices(wc: WC, nativeImage: typeof Electron.nativeImage): P
 /** What else the browser tools hand on: each screenshot (for the UX reviewer), and video recording. */
 export type BrowserHooks = {
   shot?: (s: { path: string; url: string; title: string; review: boolean; note?: string }) => void
-  record?: { start: (wcId: number) => { started: number }; stop: (wcId: number) => Promise<string | null> }
+  record?: { start: (wcId: number, opts?: RecordOptions) => { started: number }; stop: (wcId: number) => Promise<string | null>; cue: (wcId: number, cue: RecordCue) => boolean }
 }
 
 export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: BrowserHooks = {}) {
@@ -358,19 +367,54 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
     ),
     tool(
       'browser_record',
-      'Record a video of a Browser tab: start before you go through a flow, stop after; stopping saves a WebM and gives its path (present_file it so the user can watch). Use it when the user wants a video (a bug reproduction, a walkthrough, evidence of a flow), not routinely. Stops by itself after 10 minutes.',
-      { action: z.enum(['start', 'stop']), tab: TAB },
-      async ({ action, tab }) => {
+      "Record a video of a Browser tab, made to be watched: start before a flow, stop after; stopping saves a WebM and gives its path (present_file it). Clicks show a pointer and ripple, typing and keys show captions, and still moments are cut. While recording you can add a caption (narration on screen), a title card (a chapter, e.g. each test case), a highlight around a numbered control (ref from browser_snapshot) to point something out, or pause and resume to leave set-up out. Use it when the user wants a video (a bug reproduction, a walkthrough, evidence), not routinely. Stops by itself after 10 minutes.",
+      {
+        action: z.enum(['start', 'stop', 'caption', 'title', 'highlight', 'pause', 'resume']),
+        tab: TAB,
+        text: z.string().max(140).optional().describe('caption: what to say on screen. title: the card\'s title. start: an opening title card. stop: a closing card'),
+        subtitle: z.string().max(140).optional().describe('title (or start/stop with text): a smaller line under the title'),
+        ref: z.number().int().positive().optional().describe('highlight: the numbered control to point out'),
+        seconds: z.number().positive().max(15).optional().describe('caption, title, highlight: how long it shows (default 3, title 2.5)'),
+        size: z.enum(['page', '720p', '1080p']).optional().describe("start: the video's frame (default page: the tab's own shape; 720p/1080p letterbox it for sharing)"),
+        fps: z.union([z.literal(12), z.literal(24), z.literal(30)]).optional().describe('start: frames per second (default 12; 24 or 30 for smoother scrolling and animation)'),
+        show_actions: z.boolean().optional().describe('start: show the pointer, click ripples and action captions (default true)'),
+        keep_still: z.boolean().optional().describe('start: keep moments where nothing changes (default false: cut them)')
+      },
+      async ({ action, tab, text, subtitle, ref, seconds, size, fps, show_actions, keep_still }) => {
         if (!hooks.record) return fail('Recording is not available here.')
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
+        const rec = hooks.record
+        const notRunning = () => fail('No recording is running in that tab. Start one with action start.')
         try {
           if (action === 'start') {
-            hooks.record.start(c.wc.id)
+            rec.start(c.wc.id, { size, fps, title: text, subtitle, showActions: show_actions, cursor: show_actions, keepStill: keep_still })
             return ok(`Recording ${where(c.wc)} Call browser_record with action stop when you're done.`)
           }
-          const path = await hooks.record.stop(c.wc.id)
-          return path ? ok(`Saved the recording to ${path}. Use present_file to show it.`) : fail('Nothing was recorded (no recording was running in that tab, or the page showed nothing).')
+          if (action === 'stop') {
+            // A closing card first, held for a moment so it's in the video.
+            if (text && rec.cue(c.wc.id, { type: 'title', text, subtitle, seconds: seconds ?? 2.5 })) await new Promise((r) => setTimeout(r, (seconds ?? 2.5) * 1000 + 200))
+            const path = await rec.stop(c.wc.id)
+            return path ? ok(`Saved the recording to ${path}. Use present_file to show it.`) : fail('Nothing was recorded (no recording was running in that tab, or the page showed nothing).')
+          }
+          if (action === 'pause' || action === 'resume') return rec.cue(c.wc.id, { type: action }) ? ok(action === 'pause' ? 'Paused: nothing is recorded until you resume.' : 'Recording again.') : notRunning()
+          if (action === 'caption') {
+            if (!text) return fail('Say what the caption says (text).')
+            return rec.cue(c.wc.id, { type: 'caption', text, seconds }) ? ok('Caption shown.') : notRunning()
+          }
+          if (action === 'title') {
+            if (!text) return fail('Give the title card its text.')
+            if (!rec.cue(c.wc.id, { type: 'title', text, subtitle, seconds })) return notRunning()
+            // The card is in the video while it shows: wait it out, so what comes next follows it.
+            await new Promise((r) => setTimeout(r, (seconds ?? 2.5) * 1000))
+            return ok('Title card shown.')
+          }
+          if (!ref) return fail('Say which control to highlight (ref, from browser_snapshot).')
+          const box = (await inTime(c.wc.executeJavaScript(BOX(ref)), PAGE_MS)) as { x: number; y: number; w: number; h: number; vw: number; vh: number } | null
+          if (!box) return fail(`No control [${ref}] on the page now. Take a new browser_snapshot.`)
+          const vw = Math.max(1, box.vw)
+          const vh = Math.max(1, box.vh)
+          return rec.cue(c.wc.id, { type: 'highlight', fx: box.x / vw, fy: box.y / vh, fw: box.w / vw, fh: box.h / vh, label: text, seconds }) ? ok('Highlighted.') : notRunning()
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e))
         }

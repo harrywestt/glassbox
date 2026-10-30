@@ -60,7 +60,8 @@ function SideEffects() {
         <div className="card-title">
           {tr('guardrailsPanel.outsideConversation')}
           <span className="spacer" />
-          <Segmented
+          {/* Nothing to filter until something has happened. */}
+          {effects.length > 0 && <Segmented
             value={risk}
             onChange={setRisk}
             options={[
@@ -69,7 +70,7 @@ function SideEffects() {
               { value: 'medium', label: tr('guardrailsPanel.riskMedium') },
               { value: 'low', label: tr('guardrailsPanel.riskLow') }
             ]}
-          />
+          />}
         </div>
         {shown.length === 0 ? (
           <Empty icon="shield" title={tr('guardrailsPanel.emptyTitle')}>{tr('guardrailsPanel.emptyBody')}</Empty>

@@ -1,15 +1,16 @@
 /* The database view: ask bar, what's showing, then the modules or the diagram. */
 .erd-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.erd-ask { flex: none; display: flex; align-items: center; gap: var(--s-2); margin: var(--s-3) var(--s-5) 0; padding: var(--s-1) var(--s-1) var(--s-1) var(--s-3); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+.erd-ask { flex: none; display: flex; align-items: center; gap: var(--s-2); margin: var(--s-3) var(--s-4) 0; padding: 0 var(--s-1) 0 var(--s-3); height: var(--h-lg); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); }
 .erd-ask:focus-within { border-color: var(--accent); }
-.erd-ask-icon { color: var(--accent); flex: none; }
-.erd-ask input { flex: 1; min-width: 0; height: var(--h-ctl); border: none; background: none; color: var(--fg); font: 400 14px var(--font); outline: none; }
+.erd-ask .btn { height: calc(var(--h-lg) - 8px); }
+.erd-ask-icon { color: var(--muted); flex: none; }
+.erd-ask input { flex: 1; min-width: 0; height: 100%; border: none; background: none; color: var(--fg); padding: 0; font: 400 13px var(--font); outline: none; }
 .erd-ask input::placeholder { color: var(--subtle); }
 .erd-ask-state { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--muted); white-space: nowrap; }
-.erd-bar { flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-5); min-width: 0; }
+.erd-bar { flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-4); min-width: 0; }
 .erd-bar-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .erd-toggle { display: inline-flex; align-items: center; gap: var(--s-2); color: var(--muted); white-space: nowrap; cursor: pointer; }
-.erd-why { flex: none; margin: 0 var(--s-5) var(--s-2); padding: var(--s-2) var(--s-3); border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--fg); line-height: 1.45; }
+.erd-why { flex: none; margin: 0 var(--s-4) var(--s-2); padding: var(--s-2) var(--s-3); border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--fg); line-height: 1.45; }
 .erd-why.err { background: color-mix(in srgb, var(--err) 10%, transparent); }
 .erd-body { position: relative; flex: 1; min-height: 0; display: flex; border-top: 1px solid var(--border); }
 .erd-empty { padding: var(--s-5); }

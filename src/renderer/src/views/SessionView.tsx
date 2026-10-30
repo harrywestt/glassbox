@@ -1,4 +1,4 @@
-import { Activity, createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Activity, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
 import { blockedOnYou, claudeInBrowser, LiveSessionContext, sameApartFromStreaming, useStableSession, type SessionState } from '../session'
 import { useScrollStrip } from '../components/useScrollStrip'
@@ -32,10 +32,8 @@ import { SourceControl } from '../panels/SourceControl'
 import { SketchTab } from '../work/SketchTab'
 import { ConnectorsPanel } from '../panels/ConnectorsPanel'
 import { SkillsPanel } from '../panels/SkillsPanel'
-import { ShowcasePanel } from '../panels/ShowcasePanel'
 import { RawPanel } from '../panels/RawPanel'
 import { ServicesPanel } from '../panels/ServicesPanel'
-import { ReviewPanel } from '../panels/ReviewPanel'
 import { ReplayPanel } from '../panels/ReplayPanel'
 import { DecisionsPanel } from '../panels/DecisionsPanel'
 import { GuardrailsPanel } from '../panels/GuardrailsPanel'
@@ -51,13 +49,13 @@ import { LiveScreen, type LiveNav } from '../live/LiveScreen'
 import { useGuardrails } from '../review'
 import { TicketPanel } from '../panels/TicketPanel'
 import { MapTab } from '../work/MapTab'
-import { RippleTab } from '../work/RippleTab'
 import { FlowTab } from '../work/FlowTab'
 import { tr } from '../../../shared/i18n'
 import { loadEffort } from '../session-ui/ModelPicker'
+import { OverviewTab, OVERVIEW_ASK } from '../work/OverviewTab'
 
 /** Places a component can ask to show. Each maps to a side tab, or to a work-area tab. */
-export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' | 'decisions' | 'guardrails' | 'services' | 'explorer' | 'context' | 'changes' | 'agents' | 'diagrams' | 'sketches' | 'connectors' | 'skills' | 'showcase' | 'raw' | 'git' | 'preview' | 'ticket' | 'live' | 'ripple' | 'flows'
+export type PanelId = 'map' | 'attachments' | 'activity' | 'replay' | 'review' | 'decisions' | 'guardrails' | 'services' | 'explorer' | 'context' | 'changes' | 'agents' | 'diagrams' | 'sketches' | 'connectors' | 'skills' | 'raw' | 'git' | 'preview' | 'ticket' | 'live' | 'ripple' | 'flows'
 
 /** The side panel: five tabs you use all the time, and the rest one click away in More. */
 type SideTab = 'route' | 'decisions' | 'changes' | 'ticket' | 'git' | 'context' | 'heatmap' | 'safety' | 'connectors' | 'skills' | 'raw'
@@ -90,7 +88,7 @@ function saveSide(cwd: string, tab: SideTab) {
     /* this run only */
   }
 }
-type MoreItem = { side: SideTab; label: string } | { work: 'ripple' | 'flows' | 'diagrams' | 'sketches' | 'showcase' | 'replay' | 'preview' | 'live' | 'attachments'; label: string }
+type MoreItem = { side: SideTab; label: string } | { work: 'flows' | 'diagrams' | 'sketches' | 'replay' | 'preview' | 'live' | 'attachments'; label: string }
 const MORE: { group: string; items: MoreItem[] }[] = [
   { group: tr('sessionView.more.lookCloser'), items: [{ side: 'safety', label: tr('sessionView.more.safety') }, { side: 'raw', label: tr('sessionView.more.raw') }] },
   { group: tr('sessionView.more.setUp'), items: [{ side: 'connectors', label: tr('sessionView.more.connectors') }, { side: 'skills', label: tr('sessionView.more.skills') }] }
@@ -129,9 +127,9 @@ const ROUTES: Partial<Record<PanelId, SideTab>> = {
  * The Everyday view keeps the conversation and what anyone would want from it (diagrams, decisions,
  * files, previews); the engineering views below only show when Claude brings one up.
  */
-const ENGINEERING_WORK = new Set(['map', 'ripple', 'flows', 'replay'])
+const ENGINEERING_WORK = new Set(['map', 'flows', 'replay'])
 const EVERYDAY_SIDE = new Set<SideTab>(['route', 'decisions', 'context', 'connectors', 'skills'])
-const EVERYDAY_WORK = new Set(['diagrams', 'sketches', 'showcase', 'attachments', 'preview'])
+const EVERYDAY_WORK = new Set(['diagrams', 'sketches', 'attachments', 'preview'])
 
 // A file dropped outside the drop area mustn't make the window navigate to it.
 window.addEventListener('dragover', (e) => e.preventDefault())
@@ -141,13 +139,11 @@ window.addEventListener('drop', (e) => e.preventDefault())
 export type WorkTab =
   | { id: 'map'; kind: 'map' }
   | { id: 'conversation'; kind: 'conversation' }
-  | { id: 'ripple'; kind: 'ripple'; module?: string; path?: string }
   | { id: 'flows'; kind: 'flows' }
   | { id: 'live'; kind: 'live' }
   | { id: 'diagrams'; kind: 'diagrams' }
   | { id: 'sketches'; kind: 'sketches' }
   | { id: 'replay'; kind: 'replay' }
-  | { id: 'showcase'; kind: 'showcase' }
   | { id: 'attachments'; kind: 'attachments' }
   | { id: 'erd'; kind: 'erd'; entities?: string[]; query?: string }
   | { id: 'terminal'; kind: 'terminal' }
@@ -156,6 +152,7 @@ export type WorkTab =
   | { id: string; kind: 'commit'; sha: string; title: string }
   | { id: 'preview'; kind: 'preview'; url?: string }
   | { id: 'plan'; kind: 'plan' }
+  | { id: 'overview'; kind: 'overview' }
 
 /** Timeline filter: 'all', 'main' (top-level thread only) or a subagent's tool_use id. */
 export type AgentFilter = 'all' | 'main' | string
@@ -170,8 +167,6 @@ type SessionUi = {
   openDiff: (d: { path: string; base: string | null; diffMode: DiffMode; source: 'session' | 'branch' }) => void
   /** Opens a commit (its files and their diffs) as a work tab. */
   openCommit: (sha: string, title: string) => void
-  /** Open the Ripple tab on a module (or the latest change). */
-  openRipple: (module?: string, path?: string) => void
   /** Other open sessions, so the map can show their crews faintly. */
   peers: { tab: Tab; s: SessionState }[]
   /** Path of the file or diff shown in the work area, if any (for highlighting lists). */
@@ -216,19 +211,18 @@ const fixedTabs = (qa: boolean): WorkTab[] => [CONVERSATION, qa ? BROWSER : LIVE
 const isFixed = (t: WorkTab, qa: boolean) => t.kind === 'conversation' || t.kind === (qa ? 'preview' : 'live')
 
 /** The views the + in the tab strip opens, with what each is for. */
-type ViewKind = 'plan' | 'terminal' | 'map' | 'erd' | 'ripple' | 'flows' | 'live' | 'diagrams' | 'sketches' | 'replay' | 'attachments' | 'preview' | 'showcase'
+type ViewKind = 'overview' | 'plan' | 'terminal' | 'map' | 'erd' | 'flows' | 'live' | 'diagrams' | 'sketches' | 'replay' | 'attachments' | 'preview'
 const VIEWS: { kind: ViewKind; label: string; note: string; everyday?: boolean }[] = [
+  { kind: 'overview', label: tr('sessionView.views.overview.label'), note: tr('sessionView.views.overview.note'), everyday: true },
   { kind: 'plan', label: tr('sessionView.views.plan.label'), note: tr('sessionView.views.plan.note'), everyday: true },
   { kind: 'map', label: tr('sessionView.views.map.label'), note: tr('sessionView.views.map.note') },
   { kind: 'terminal', label: tr('sessionView.views.terminal.label'), note: tr('sessionView.views.terminal.note') },
   { kind: 'erd', label: tr('sessionView.views.erd.label'), note: tr('sessionView.views.erd.note') },
-  { kind: 'ripple', label: tr('sessionView.views.ripple.label'), note: tr('sessionView.views.ripple.note') },
   { kind: 'flows', label: tr('sessionView.views.flows.label'), note: tr('sessionView.views.flows.note') },
   { kind: 'diagrams', label: tr('sessionView.views.diagrams.label'), note: tr('sessionView.views.diagrams.note'), everyday: true },
   { kind: 'sketches', label: tr('sessionView.views.sketches.label'), note: tr('sessionView.views.sketches.note'), everyday: true },
   { kind: 'attachments', label: tr('sessionView.views.attachments.label'), note: tr('sessionView.views.attachments.note'), everyday: true },
   { kind: 'preview', label: tr('sessionView.views.preview.label'), note: tr('sessionView.views.preview.note'), everyday: true },
-  { kind: 'showcase', label: tr('sessionView.views.showcase.label'), note: tr('sessionView.views.showcase.note'), everyday: true },
   { kind: 'replay', label: tr('sessionView.views.replay.label'), note: tr('sessionView.views.replay.note') }
 ]
 const viewTab = (kind: ViewKind): WorkTab => ({ id: kind, kind }) as WorkTab
@@ -303,6 +297,9 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const qa = tab.kind === 'qa'
   const [sideOpen, setSideOpen] = useState(!qa)
   const [moreOpen, setMoreOpen] = useState(false)
+  // How many side tabs fit across the panel; the rest move into More, like a browser's tab overflow.
+  const sideNav = useRef<HTMLElement>(null)
+  const [sideFit, setSideFit] = useState(SIDE_TABS.length)
   // The conversation, plus any views you keep open for this project.
   const [kept, setKeptState] = useState<ViewKind[]>(() => keptViews(tab.id))
   const [work, setWork] = useState<WorkTab[]>(() => (qa ? fixedTabs(true) : [...fixedTabs(false), ...keptViews(tab.id).filter((k) => k !== 'live').map(viewTab)]))
@@ -381,10 +378,8 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
       if (id === 'diagrams') return openWork({ id: 'diagrams', kind: 'diagrams' })
       if (id === 'sketches') return openWork({ id: 'sketches', kind: 'sketches' })
       if (id === 'live') return openWork({ id: 'live', kind: 'live' })
-      if (id === 'ripple') return openWork({ id: 'ripple', kind: 'ripple' })
       if (id === 'flows') return openWork({ id: 'flows', kind: 'flows' })
       if (id === 'replay') return openWork({ id: 'replay', kind: 'replay' })
-      if (id === 'showcase') return openWork({ id: 'showcase', kind: 'showcase' })
       if (id === 'preview') return openWork({ id: 'preview', kind: 'preview' })
       if (id === 'attachments') return openWork({ id: 'attachments', kind: 'attachments' })
       if (id === 'map') return openWork(MAP)
@@ -397,7 +392,6 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   )
 
   const editCount = session.files.filter((f) => ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'ShellEdit'].includes(f.tool)).length
-  // Ripple no longer opens by itself: it's the "What would this affect?" button on edits and in Changes.
 
   // The map earns its tab: when Claude draws a plan on it, or the work spans several modules.
   const [spread, setSpread] = useState(0)
@@ -451,9 +445,9 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
     if (webUp) autoOpen('preview', { id: 'preview', kind: 'preview' }, upCount.current)
   }, [webUp, autoOpen])
 
-  // New diagrams and showcases open as tabs without pulling you away from what you're reading.
+  // New diagrams open as tabs without pulling you away from what you're reading.
   const flowCount = Object.keys(session.flows ?? {}).length
-  // What Claude made for you opens by itself (without taking focus): diagrams, flows, a showcase.
+  // What Claude made for you opens by itself (without taking focus): diagrams, flows, sketches.
   const flowAt = Math.max(0, ...Object.values(session.flows ?? {}).map((f) => f.at))
   useEffect(() => {
     if (!everyday) autoOpen('flows', { id: 'flows', kind: 'flows' }, flowAt)
@@ -464,7 +458,24 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   const sketchCount = Object.keys(session.sketches ?? {}).length
   const sketchAt = Math.max(0, ...Object.values(session.sketches ?? {}).map((d) => d.at))
   useEffect(() => autoOpen('sketches', { id: 'sketches', kind: 'sketches' }, sketchAt), [sketchAt, autoOpen])
-  useEffect(() => autoOpen('showcase', { id: 'showcase', kind: 'showcase' }, session.showcase?.at ?? 0), [session.showcase?.at, autoOpen])
+  // With "Write a PR overview" on: once Claude has opened a pull request (gh pr create) and its turn is
+  // over, ask for the overview, unless it wrote one after opening it. Only for PRs opened while this is
+  // open, so reopening an old session doesn't ask again.
+  const mountedAt = useRef(Date.now())
+  const askedFor = useRef(new Set<string>())
+  useEffect(() => {
+    if (!appearance.automation.prOverview || session.status !== 'ready') return
+    const opened = Object.values(session.toolCalls).filter(
+      (c) => c.name === 'Bash' && c.status === 'done' && (c.endedAt ?? c.at) > mountedAt.current && /\bgh\s+pr\s+create\b/.test(String(c.input.command ?? '')) && /\/pull\/\d+/.test(String(c.result ?? ''))
+    )
+    const last = opened.sort((a, b) => a.at - b.at).at(-1)
+    if (!last || askedFor.current.has(last.id) || (session.overview?.at ?? 0) > last.at) return
+    askedFor.current.add(last.id)
+    void actions.send(tab.id, OVERVIEW_ASK, tr('overviewTab.writeDisplay'))
+  }, [session.toolCalls, session.status, session.overview?.at, appearance.automation.prOverview, actions, tab.id])
+  // A new PR overview opens beside the conversation.
+  const overviewAt = session.overview?.at ?? 0
+  useEffect(() => autoOpen('overview', { id: 'overview', kind: 'overview' }, overviewAt), [overviewAt, autoOpen])
 
   // Claude's browser tools: open a page in a Browser tab (and wait for it), or list the tabs.
   useEffect(
@@ -516,7 +527,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
     else if (t.view === 'file') w = { id: `file:${abs(t.path)}`, kind: 'file', path: abs(t.path), line: t.line, endLine: t.endLine }
     else if (t.view === 'diff') w = { id: `diff:session:${abs(t.path)}`, kind: 'diff', path: abs(t.path), base: null, diffMode: 'merge-base', source: 'session' }
     else if (t.view === 'map') w = MAP
-    else if (t.view === 'ripple') w = { id: 'ripple', kind: 'ripple', path: abs(t.path) }
+    else if (t.view === 'ripple') w = MAP
     else if (t.view === 'preview') {
       // Claude showing a page: in a new Browser tab, unless one already shows it.
       if (!browserTabs(tab.id).some((b) => b.url === t.url)) openInBrowser(tab.id, t.url)
@@ -571,7 +582,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
       show: (t) => {
         const path = abs(t.path)
         if (t.view === 'diff') openWork({ id: `diff:session:${path}`, kind: 'diff', path, base: null, diffMode: 'merge-base', source: 'session' })
-        else if (t.view === 'ripple') openWork({ id: 'ripple', kind: 'ripple', path })
+        else if (t.view === 'ripple') openWork(MAP)
         else openWork({ id: `file:${path}`, kind: 'file', path })
       },
       tell: (text) => composerRef.current?.insert(text),
@@ -590,7 +601,6 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
       openFile: (path) => openWork({ id: `file:${path}`, kind: 'file', path }),
       openDiff: (d) => openWork({ id: `diff:${d.source}:${d.path}`, kind: 'diff', ...d }),
       openCommit: (sha, title) => openWork({ id: `commit:${sha}`, kind: 'commit', sha, title }),
-      openRipple: (module, path) => openWork({ id: 'ripple', kind: 'ripple', module, path }),
       peers,
       workPath,
       filter,
@@ -629,6 +639,13 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   // The side panel slides open and shut: it stays mounted while it closes, and opens from no width.
   const [sideMounted, setSideMounted] = useState(sideOpen)
   const [sideShown, setSideShown] = useState(sideOpen)
+  // While the panel slides open or shut its contents keep their full width (no squashing); otherwise they follow the panel.
+  const [sliding, setSliding] = useState(false)
+  const firstShown = useRef(true)
+  useEffect(() => {
+    if (firstShown.current) return void (firstShown.current = false)
+    setSliding(true)
+  }, [sideShown])
   useEffect(() => {
     if (sideOpen) {
       setSideMounted(true)
@@ -670,7 +687,40 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
   if (waiting) count.route = { n: waiting, urgent: true }
   // Ticket shows once the branch names one (or you set a key); until the git info arrives it stays put rather than vanishing.
   const sideApplies = (id: SideTab) => (id === 'ticket' ? !!ticketKeyFromBranch(session.git?.branch) || hasTicketOverride(tab.cwd, session.git?.branch) || (side === 'ticket' && !session.git) : true)
-  const inMore = !SIDE_TABS.some((x) => x.id === side && (!everyday || EVERYDAY_SIDE.has(x.id)) && sideApplies(x.id))
+  const sideTabs = SIDE_TABS.filter((x) => (!everyday || EVERYDAY_SIDE.has(x.id)) && sideApplies(x.id))
+  // The ones that fit, keeping the open tab in the row even when it's one that would overflow.
+  const fitting = (() => {
+    const first = sideTabs.slice(0, sideFit)
+    if (first.some((x) => x.id === side) || !sideTabs.some((x) => x.id === side) || !first.length) return first
+    return [...first.slice(0, -1), sideTabs.find((x) => x.id === side)!]
+  })()
+  const overflow = sideTabs.filter((x) => !fitting.includes(x))
+  const inMore = !fitting.some((x) => x.id === side)
+  const sideKey = sideTabs.map((x) => x.id).join() + Object.values(count).map((c) => c?.n).join()
+  useLayoutEffect(() => {
+    const nav = sideNav.current
+    if (!nav) return
+    const measure = () => {
+      // Every tab is drawn (the overflowing ones invisibly), so all their widths are known.
+      const tabs = [...nav.querySelectorAll<HTMLElement>(':scope > .side-tab')]
+      const more = nav.querySelector<HTMLElement>(':scope > .side-more')
+      const hide = nav.querySelector<HTMLElement>(':scope > .icon-btn')
+      const cs = getComputedStyle(nav)
+      const gap = parseFloat(cs.columnGap) || 0
+      let room = nav.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (more?.offsetWidth ?? 0) - (hide?.offsetWidth ?? 0) - gap * 2
+      let n = 0
+      for (const t of tabs) {
+        room -= t.offsetWidth + gap
+        if (room < 0) break
+        n++
+      }
+      setSideFit((f) => (f === n ? f : n))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(nav)
+    return () => ro.disconnect()
+  }, [sideKey, sideMounted, sideOpen])
   // Whether each view has anything to show yet (the + list greys out the empty ones).
   const viewHas = (kind: ViewKind): boolean => {
     switch (kind) {
@@ -680,7 +730,6 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
       case 'erd':
         return session.git?.isRepo !== false
       case 'live':
-      case 'ripple':
         return editCount > 0
       case 'flows':
         return flowCount > 0
@@ -690,12 +739,12 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
         return sketchCount > 0
       case 'attachments':
         return attachmentCount > 0
-      case 'showcase':
-        return !!session.showcase
       case 'replay':
         return session.timeline.length > 0
       case 'plan':
         return !!session.plan || !!planRequest
+      case 'overview':
+        return !!session.overview
       case 'preview':
         return true
     }
@@ -766,7 +815,6 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               </button>
               <ErrorBoundary key={current.id} where={`view:${current.kind}`}>
               {current.kind === 'map' && <MapTab />}
-              {current.kind === 'ripple' && <RippleTab key={current.module ?? current.path ?? 'latest'} module={current.module} path={current.path} onPick={(m) => openWork({ id: 'ripple', kind: 'ripple', module: m })} />}
               {current.kind === 'flows' && <FlowTab />}
               <div className="chat" hidden={current.kind !== 'conversation'}>
                 {appearance.awayDigest && <AwayDigest active={active && current.kind === 'conversation'} />}
@@ -777,8 +825,8 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
               </div>
               {current.kind === 'diagrams' && <DiagramsPanel />}
               {current.kind === 'sketches' && <SketchTab />}
+              {current.kind === 'overview' && <OverviewTab />}
               {current.kind === 'replay' && <ReplayPanel />}
-              {current.kind === 'showcase' && <ShowcasePanel />}
               {current.kind === 'attachments' && <AttachmentsTab />}
               {current.kind === 'plan' && <PlanTab shown={planShown} />}
               {current.kind === 'terminal' && <TerminalTab />}
@@ -811,23 +859,46 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
           {sideMounted && (
             <>
               <div className={sideShown ? 'splitter' : 'splitter closed'} onMouseDown={startResize} />
-              <aside className={sideShown ? 'side' : 'side closed'} style={{ width: sideShown ? width : 0, ['--side-w' as string]: `${width}px` }} inert={!sideShown}>
-                <nav className="side-tabs" role="tablist" aria-label={tr('sessionView.sidePanel')}>
-                  {SIDE_TABS.filter((x) => (!everyday || EVERYDAY_SIDE.has(x.id)) && sideApplies(x.id)).map((x) => (
-                    <button key={x.id} role="tab" aria-selected={side === x.id} className={side === x.id ? 'side-tab active' : 'side-tab'} onClick={() => setSide(x.id)}>
+              <aside
+                className={`side${sideShown ? '' : ' closed'}${sliding ? ' sliding' : ''}`}
+                style={{ width: sideShown ? width : 0, ['--side-w' as string]: `${width}px` }}
+                inert={!sideShown}
+                onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === 'width' && setSliding(false)}
+              >
+                <nav className="side-tabs" role="tablist" aria-label={tr('sessionView.sidePanel')} ref={sideNav}>
+                  {sideTabs.map((x) => (
+                    <button
+                      key={x.id}
+                      role="tab"
+                      aria-selected={side === x.id}
+                      className={`side-tab${side === x.id ? ' active' : ''}${fitting.includes(x) ? '' : ' overflowed'}`}
+                      onClick={() => setSide(x.id)}
+                      tabIndex={fitting.includes(x) ? undefined : -1}
+                      aria-hidden={fitting.includes(x) ? undefined : true}
+                    >
                       {x.label}
                       {count[x.id] && <span className={count[x.id]!.urgent ? 'side-count urgent' : 'side-count'}>{count[x.id]!.n}</span>}
                     </button>
                   ))}
                   <div className="side-more">
                     <button className={inMore ? 'side-tab active' : 'side-tab'} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
-                      <span className="ellipsis">{inMore ? MORE_LABEL[side] : tr('sessionView.more.more')}</span>
+                      <span className="ellipsis">{inMore ? (MORE_LABEL[side] ?? SIDE_TABS.find((x) => x.id === side)?.label) : tr('sessionView.more.more')}</span>
                       <Icon name="chevron-down" />
                     </button>
                     {moreOpen && (
                       <>
                         <div className="menu-scrim" onMouseDown={() => setMoreOpen(false)} />
                         <div className="menu" role="menu">
+                          {overflow.length > 0 && (
+                            <div className="menu-group">
+                              <div className="menu-heading">{tr('sessionView.more.panels')}</div>
+                              {overflow.map((x) => (
+                                <button key={x.id} role="menuitem" className={x.id === side ? 'menu-item current' : 'menu-item'} onClick={() => (setMoreOpen(false), setSide(x.id))}>
+                                  {x.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           {/* Views already open as tabs aren't offered again. */}
                           {MORE.map((g) => ({ ...g, items: g.items.filter((i) => (!('work' in i) || !work.some((w) => w.id === i.work)) && (!everyday || ('side' in i ? EVERYDAY_SIDE.has(i.side) : EVERYDAY_WORK.has(i.work)))) })).filter((g) => g.items.length).map((g) => (
                             <div key={g.group} className="menu-group">
@@ -884,7 +955,8 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
       return <DecisionsPanel />
     case 'changes':
     case 'git':
-      // The pull request, then the files, then what the review found in them, then the branch's commits.
+      // Source control only: the pull request, what's uncommitted, the branch against main, its commits.
+      // (What a review found is in Decisions, beside what Claude decided and assumed.)
       return (
         <PanelActionsContext.Provider value="stacked">
           <div className="panel stack changes-stack">
@@ -892,7 +964,6 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
             {/* As VS Code's Source Control: commit, staged changes, changes. Then the whole branch against main, folded away. */}
             {s.git?.isRepo && <SourceControl />}
             <ChangesPanel />
-            <ReviewPanel compact />
             {s.git?.isRepo !== false && <GitPanel withPr={false} />}
           </div>
         </PanelActionsContext.Provider>
@@ -932,7 +1003,7 @@ function SideBody({ tab }: { tab: SideTab }): ReactNode {
   }
 }
 
-const WORK_ICON: Record<WorkTab['kind'], string> = { plan: 'checklist', terminal: 'terminal', erd: 'database', attachments: 'attach', map: 'type-hierarchy', ripple: 'radio-tower', flows: 'arrow-swap', conversation: 'comment-discussion', live: 'pulse', diagrams: 'type-hierarchy-sub', sketches: 'edit', replay: 'history', showcase: 'preview', file: 'file', diff: 'git-compare', commit: 'git-commit', preview: 'globe' }
+const WORK_ICON: Record<WorkTab['kind'], string> = { plan: 'checklist', overview: 'git-pull-request', terminal: 'terminal', erd: 'database', attachments: 'attach', map: 'type-hierarchy', flows: 'arrow-swap', conversation: 'comment-discussion', live: 'pulse', diagrams: 'type-hierarchy-sub', sketches: 'edit', replay: 'history', file: 'file', diff: 'git-compare', commit: 'git-commit', preview: 'globe' }
 
 function workTitle(t: WorkTab): string {
   switch (t.kind) {
@@ -944,8 +1015,6 @@ function workTitle(t: WorkTab): string {
       return tr('sessionView.work.terminal')
     case 'map':
       return tr('sessionView.work.map')
-    case 'ripple':
-      return tr('sessionView.work.ripple')
     case 'flows':
       return tr('sessionView.work.flow')
     case 'conversation':
@@ -956,10 +1025,10 @@ function workTitle(t: WorkTab): string {
       return tr('sessionView.work.diagrams')
     case 'sketches':
       return tr('sessionView.work.sketches')
+    case 'overview':
+      return tr('sessionView.work.overview')
     case 'replay':
       return tr('sessionView.work.replay')
-    case 'showcase':
-      return tr('sessionView.work.showcase')
     case 'file':
       return baseName(t.path)
     case 'diff':
@@ -1101,7 +1170,7 @@ function WorkTabs({
                       key={v.kind}
                       role="menuitem"
                       // Every view opens, even with nothing in it yet: its empty state is where you start it
-                      // (ask for a diagram, trace a flow, build the showcase).
+                      // (ask for a diagram, trace a flow).
                       className={open ? 'menu-item current' : v.has ? 'menu-item' : 'menu-item quiet'}
                       onClick={() => (setPicking(false), onOpenView(v.kind))}
                     >

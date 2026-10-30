@@ -28,17 +28,39 @@ export type AppAction =
   | { type: 'batch'; actions: AppAction[] }
 
 const KEY = 'glassbox.tabs'
+/** The last list that had tabs in it: a fall-back if the main copy is lost or unreadable. */
+const PREV = 'glassbox.tabs.prev'
 
-export function loadTabs(): AppState {
+type Saved = { tabs: Tab[]; active: string }
+const parse = (raw: string | null | undefined): Saved | null => {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { tabs: Tab[]; active: string } | null
-    if (saved?.tabs) {
-      // Each tab once (a duplicate would show the same session twice).
-      const tabs = saved.tabs.filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i)
-      return { tabs, active: saved.active ?? DASHBOARD, sessions: Object.fromEntries(tabs.map((t) => [t.id, newSession()])) }
-    }
+    const v = raw ? (JSON.parse(raw) as Saved) : null
+    return v && Array.isArray(v.tabs) ? v : null
   } catch {
-    /* start fresh */
+    return null
+  }
+}
+
+/**
+ * The tabs you had open. Kept three ways, read in turn: the page's storage, a backup of the last
+ * list with tabs in it, and a copy on disk the main process writes safely (temp file, then rename).
+ * A crash can lose the newest storage writes or leave one copy unreadable; it shouldn't lose all three.
+ */
+export function loadTabs(): AppState {
+  const local = (() => {
+    try {
+      return { main: localStorage.getItem(KEY), prev: localStorage.getItem(PREV) }
+    } catch {
+      return { main: null, prev: null }
+    }
+  })()
+  const main = parse(local.main)
+  // An empty list you closed down to stays empty; a missing or unreadable one falls back.
+  const saved = main ?? parse(local.prev) ?? parse(window.glassbox.tabs.loadSync())
+  if (saved) {
+    // Each tab once (a duplicate would show the same session twice).
+    const tabs = saved.tabs.filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i)
+    return { tabs, active: saved.active ?? DASHBOARD, sessions: Object.fromEntries(tabs.map((t) => [t.id, newSession()])) }
   }
   return { tabs: [], active: DASHBOARD, sessions: {} }
 }
@@ -46,11 +68,19 @@ export function loadTabs(): AppState {
 /** Persist open tabs, pointing each at its session id so it can be resumed on next launch. */
 export function saveTabs(state: AppState) {
   const tabs = state.tabs.map((t) => ({ ...t, resumeId: state.sessions[t.id]?.sessionId ?? t.resumeId, title: tabTitle(t, state.sessions[t.id]) }))
+  const json = JSON.stringify({ tabs, active: state.active })
   try {
-    localStorage.setItem(KEY, JSON.stringify({ tabs, active: state.active }))
+    localStorage.setItem(KEY, json)
+    if (tabs.length) localStorage.setItem(PREV, json)
   } catch {
-    /* not persisted this time */
+    /* the disk copy below still goes */
   }
+  void window.glassbox.tabs.save(json).catch(() => undefined)
+}
+
+/** What a save depends on: the tabs, which is open, and each one's session id (not every streamed word). */
+export function tabsSignature(state: AppState): string {
+  return JSON.stringify([state.active, state.tabs.map((t) => [t.id, t.title, t.cwd, state.sessions[t.id]?.sessionId ?? t.resumeId ?? '', tabTitle(t, state.sessions[t.id])])])
 }
 
 export function tabTitle(tab: Tab, session?: SessionState): string {

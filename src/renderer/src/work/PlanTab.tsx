@@ -9,6 +9,7 @@ import { tr } from '../../../shared/i18n'
 import { useThemeTokens } from '../App'
 import { enhance } from '../markdownDoc'
 import { answersText, CalloutBlock, DiffBlock, FilesBlock, mdBlocks, parsePlan, planAsMarkdown, planChanges, QuestionsBlock, SketchBlock, stepStatus, type Answers } from './planBlocks'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 export type PlanShown = { text: string; status?: NonNullable<SessionState['plan']>['status'] }
 
@@ -374,8 +375,9 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
                 ))}
               </details>
             )}
-            {segments.map((sg, i) =>
-              sg.kind === 'md' ? (
+            {segments.map((sg, i) => (
+              <ErrorBoundary key={`${i}:${sg.kind}`} where={`plan:${sg.kind}`}>
+              {sg.kind === 'md' ? (
                 md(sg.text, String(i))
               ) : sg.kind === 'sketch' ? (
                 <SketchBlock key={i} id={sg.id} version={sg.version} caption={sg.caption} picked={picks[sg.id]} onPick={waiting ? (label) => setPicks((p) => ({ ...p, [sg.id]: label })) : undefined} />
@@ -387,8 +389,9 @@ export function PlanTab({ shown }: { shown: PlanShown | null }) {
                 <CalloutBlock key={i} type={sg.type} html={renderMarkdown(sg.body, tab.cwd)} />
               ) : (
                 <QuestionsBlock key={i} items={sg.items} answers={answers} onAnswer={(q, a) => setAnswers((prev) => ({ ...prev, [q]: a }))} editable={!!waiting} />
-              )
-            )}
+              )}
+              </ErrorBoundary>
+            ))}
           </article>
         </div>
         {pop && (

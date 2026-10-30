@@ -33,6 +33,10 @@ export type LaunchFields = {
   notes?: string
   /** QA: quick (does it work) or deep (also every screen screenshotted for the UX reviewer). */
   depth?: 'quick' | 'deep'
+  /** QA: show a test plan to approve before testing (on unless you turn it off). */
+  qaPlan?: boolean
+  /** QA: record a video of each case in the Browser, as evidence. */
+  qaRecord?: boolean
 }
 
 export type PendingStart = { prompt: string; display: string; plan?: boolean; requirements?: Partial<Requirements> }
@@ -148,11 +152,17 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
             (keys.length ? `Read ${keys.join(', ')} with the Atlassian connector: description, acceptance criteria, comments, designs and linked issues. ` : '') +
             (pr ? `Read the PR with \`gh pr view ${pr}\` and \`gh pr diff ${pr}\`. ` : '') +
             'Look at the code for the screens, endpoints and rules involved (read only), so you know where to go and what should happen.',
-          '2. Write the test plan: call set_acceptance_criteria with one criterion per test case. Cover the happy paths, edge cases, validation and error messages, empty and loading states, permissions or roles where they matter, and anything nearby the change could break. Then call check_in with the plan in a few lines, asking me to approve or adjust it, and don’t run anything before I answer.',
+          f.qaPlan === false
+            ? '2. Write the test plan: call set_acceptance_criteria with one criterion per test case. Cover the happy paths, edge cases, validation and error messages, empty and loading states, permissions or roles where they matter, and anything nearby the change could break. Then start testing straight away.'
+            : '2. Present the test plan as your plan (ExitPlanMode), for me to approve. Lay it out as a Glassbox plan: a short line on what is being tested and where; the test cases as a numbered list, one per case (happy paths, edge cases, validation and error messages, empty and loading states, permissions or roles where they matter, and anything nearby the change could break); a <Files> block of the screens and endpoints involved; a risk <Callout> for anything that could touch shared data; and a <Questions> block for anything you need from me (test accounts, which environment, what is in scope), each with your recommended answer first. Don’t run anything before I approve. Once approved, call set_acceptance_criteria with one criterion per case, as approved (leave out any I skipped).',
           where
             ? `3. Open ${where} in the Glassbox Browser (browser_open). If it needs signing in, call check_in asking me to sign in in the Browser tab and to answer when I’m in. Never ask for a password and never type credentials yourself.`
             : '3. Start the app with start_app and wait until it’s up. If it needs signing in, call check_in asking me to sign in in the Browser tab and to answer when I’m in. Never ask for a password and never type credentials yourself.',
           '4. Run each case in the Glassbox Browser: browser_snapshot to read the page, browser_click and browser_type to use it, browser_eval to check details, browser_logs to catch console errors and failed requests the page doesn’t show (check it after every case: a 500 or an exception is a bug even when the screen looks fine), and browser_screenshot as evidence for anything that matters. Show progress with show_progress (step N of M, one step per case). As each case finishes, update its criterion: tested with the evidence (what you did and saw), or failing.',
+          '4b. Use more than one Browser tab when a case needs it: a second page alongside (an admin screen and the customer one, a link or email opened from the first, a list and its detail, before and after). Open it with browser_open and new_tab, pass its tab id to the other browser tools, and close the extras with browser_close when the case is done. The tabs share one set of sign-ins, so for two different accounts at once, call check_in rather than signing out yourself.',
+          ...(f.qaRecord
+            ? ['4c. Record every case as a video: browser_record with action start just before you begin it (text: the case\'s number and name, so the video opens on a title card), a caption for anything a viewer needs explained, a highlight on the result you\'re checking, and action stop once you have seen it (text: Passed or Failed, with a subtitle saying why). Put the saved video\'s path in that case\'s evidence, and link each video in the report.']
+            : []),
           ...(f.depth === 'deep'
             ? [
                 '4a. This is a deep test, so as well as checking each case works, take a browser_screenshot of every distinct screen and state you reach (with a note saying what it is): each step of a flow, empty, loading, error and success states, validation messages, dialogs and menus open. Use full_page for long pages. Each one goes to the UX reviewer, a separate agent that looks for bad UX, inconsistencies between screens and AI slop while you carry on. Don’t stop to review them yourself and don’t wait for it: keep testing.'
@@ -167,7 +177,8 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
         .join('\n\n')
       return {
         title: tr('launch.qaTitle', { name }).slice(0, 40),
-        start: { prompt, display: tr('launch.qaDisplay', { what: what.slice(0, 120), where: where ?? tr('launch.qaLocal') }) },
+        // In plan mode first (it reads, then presents the test plan), unless you've turned the plan off.
+        start: { prompt, display: tr('launch.qaDisplay', { what: what.slice(0, 120), where: where ?? tr('launch.qaLocal') }), plan: f.qaPlan !== false },
         requirements: keys.length ? { connectors: ['claude.ai Atlassian'] } : undefined
       }
     }

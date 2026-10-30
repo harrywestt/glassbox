@@ -50,12 +50,14 @@ export function Empty({ title, children, center }: { icon?: string; title: strin
   )
 }
 
-export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+/** A small switch between a few views; a count shows as the plain muted number every count uses, and not at all when it's 0. */
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string; count?: number }[]; onChange: (v: T) => void }) {
   return (
     <div className="segmented">
       {options.map((o) => (
         <button key={o.value} className={o.value === value ? 'active' : ''} onClick={() => onChange(o.value)}>
           {o.label}
+          {!!o.count && <span className="count">{o.count}</span>}
         </button>
       ))}
     </div>

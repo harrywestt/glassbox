@@ -1,7 +1,7 @@
 import type { HeatModule, MapGroups } from '../main/mapGroups'
 import type { MapAnswer, MapAskModule } from '../main/mapAsk'
 import { contextBridge, ipcRenderer, webFrame, webUtils, type IpcRendererEvent } from 'electron'
-import type { AccountsResult, ArchDiff, ModuleExplain, ProjectDecision, Standup,
+import type { AccountsResult, SignInState, ArchDiff, ModuleExplain, ProjectDecision, Standup,
   DiffMode,
   AccessMode,
   DiffResult,
@@ -30,6 +30,7 @@ import type { Architecture } from '../shared/architecture'
 import type { Erd, ErdFocus } from '../shared/erd'
 import type { FxRates } from '../main/fx'
 import type { BranchList, CommitEntry } from '../main/git'
+import type { RecordCue, RecordOptions } from '../main/recorder'
 
 type ShowcaseRequest = { name: string; base: string | null; notes: string; previousArtifactUrl?: string; linkIt?: boolean }
 
@@ -109,7 +110,8 @@ const api = {
     glassboxCommits: (): Promise<Record<string, { at: number }>> => invoke('git:glassboxCommits'),
     undoCommit: (cwd: string, sha: string): Promise<void> => invoke('git:undoCommit', cwd, sha),
     switchBranch: (cwd: string, branch: string, create?: boolean): Promise<void> => invoke('git:switch', cwd, branch, create),
-    diff: (cwd: string, ref: string, mode: DiffMode): Promise<DiffResult> => invoke('git:diff', cwd, ref, mode),
+    /** `committed`: only what the branch has committed, as its pull request would show. */
+    diff: (cwd: string, ref: string, mode: DiffMode, committed?: boolean): Promise<DiffResult> => invoke('git:diff', cwd, ref, mode, committed),
     fileAt: (cwd: string, ref: string, mode: DiffMode, path: string): Promise<string> => invoke('git:fileAt', cwd, ref, mode, path),
     /** A separate working copy of the repo on `branch` (created if new); returns its folder. */
     worktree: (cwd: string, branch: string): Promise<string> => invoke('git:worktree', cwd, branch),
@@ -168,7 +170,7 @@ const api = {
   voice: {
     prepare: (): Promise<void> => invoke('voice:prepare'),
     /** `live`: a quick pass while you're still talking (skipped if the model is busy). */
-    transcribe: (audio: Float32Array, live?: boolean): Promise<string> => invoke('voice:transcribe', audio, live),
+    transcribe: (audio: Float32Array, live?: boolean, offset?: number): Promise<string> => invoke('voice:transcribe', audio, live, offset),
     onProgress(callback: (p: { status: 'downloading' | 'loading' | 'ready'; progress?: number }) => void) {
       const listener = (_e: IpcRendererEvent, p: { status: 'downloading' | 'loading' | 'ready'; progress?: number }) => callback(p)
       ipcRenderer.on('glassbox:voice', listener)
@@ -199,13 +201,25 @@ const api = {
   },
   accounts: {
     get: (force?: boolean): Promise<AccountsResult> => invoke('accounts:get', force),
-    signIn: (id: string): Promise<void> => invoke('accounts:signIn', id)
+    signIn: (id: string): Promise<void> => invoke('accounts:signIn', id),
+    signInInput: (id: string, text: string): Promise<void> => invoke('accounts:signInInput', id, text),
+    signInCancel: (id: string): Promise<void> => invoke('accounts:signInCancel', id),
+    onSignIn(callback: (s: SignInState) => void) {
+      const listener = (_e: IpcRendererEvent, s: SignInState) => callback(s)
+      ipcRenderer.on('glassbox:signin', listener)
+      return () => void ipcRenderer.off('glassbox:signin', listener)
+    }
   },
   standup: (force?: boolean): Promise<Standup> => invoke('standup:get', force),
   /** The database schema, read from the code, and Claude's pick of the tables an area uses. */
   /** What Claude has cost: today, the week, and 14 days, by model, project and helper. */
   spend: {
     summary: (): Promise<import('../shared/events').SpendSummary> => invoke('spend:summary')
+  },
+  /** The open tabs' copy on disk (a fall-back if the page's own storage loses them in a crash). */
+  tabs: {
+    save: (json: string): Promise<void> => invoke('tabs:save', json),
+    loadSync: (): string | null => ipcRenderer.sendSync('tabs:load')
   },
   /** Keeping a plan: saved into the project, or added to the branch's pull request. */
   plan: {
@@ -216,6 +230,8 @@ const api = {
   projectStyle: (cwd: string): Promise<import('../main/projectStyle').ProjectStyle> => invoke('sketch:projectStyle', cwd),
   /** Where a sketch's HTML is served (sketch://, sandboxed). */
   sketch: {
+    /** The sketch drawn to a PNG file (in code: a hidden window and a screenshot). Returns its path. */
+    png: (url: string, width: number, title: string, how?: 'copy' | 'save'): Promise<string> => invoke('sketch:png', url, width, title, how),
     url: (html: string): Promise<string> => invoke('sketch:url', html)
   },
   erd: {
@@ -240,7 +256,7 @@ const api = {
   },
   /** The window encodes recordings (MediaRecorder): frames come in, the finished video goes back. */
   recorder: {
-    on(callback: (m: { kind: 'start'; id: string; fps: number } | { kind: 'frame'; id: string; jpeg: Uint8Array } | { kind: 'stop'; id: string } | { kind: 'mark'; id: string; label: string; fx?: number; fy?: number }) => void) {
+    on(callback: (m: { kind: 'start'; id: string; fps: number; opts?: RecordOptions } | { kind: 'frame'; id: string; jpeg: Uint8Array } | { kind: 'stop'; id: string } | { kind: 'mark'; id: string; label: string; fx?: number; fy?: number } | { kind: 'cue'; id: string; cue: RecordCue }) => void) {
       const listener = (_e: IpcRendererEvent, m: Parameters<typeof callback>[0]) => callback(m)
       ipcRenderer.on('glassbox:recorder', listener)
       return () => void ipcRenderer.off('glassbox:recorder', listener)

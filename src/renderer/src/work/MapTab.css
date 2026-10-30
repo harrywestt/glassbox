@@ -125,7 +125,7 @@ button.map-conn-file:hover:not(:disabled) { background: none; text-decoration: u
 .map-tab.inspecting .map-view { padding-right: calc(380px + var(--s-5) * 2); }
 
 /* Scope: this conversation's part of the project, or all of it. */
-.map-bar { flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-5) 0; min-width: 0; }
+.map-bar { flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4) 0; min-width: 0; }
 .map-bar-note { font-size: 12px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-tab:has(.map-bar) .map-inspect { top: 52px; }
 .map-empty-scope { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); max-width: 480px; margin: var(--s-6) auto; padding: 0 var(--s-5); line-height: 1.5; }

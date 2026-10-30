@@ -20,7 +20,8 @@ import { type UserQuestion,
   type FlowHop,
   type OpenTarget,
   type PlanMap,
-  type LoaderState
+  type LoaderState,
+  type PrOverview
 } from '../../shared/events'
 import { tr } from '../../shared/i18n'
 
@@ -223,12 +224,29 @@ function addSketch(all: Record<string, Sketch>, s: { id: string; title?: unknown
   const versions = same ? prev.versions : [...(prev?.versions ?? []), { html, width, note: typeof s.note === 'string' ? s.note : undefined, scheme, accent, at }]
   return { ...all, [s.id]: { id: s.id, title, versions, at } }
 }
+/**
+ * A PR overview from Claude, checked over (it may come back from a saved transcript): screens given
+ * as HTML become sketches of their own, so they show and version like any other.
+ */
+function withOverview(sketches: Record<string, Sketch>, input: Record<string, unknown>, at: number): { overview?: PrOverview & { at: number }; sketches: Record<string, Sketch> } {
+  if (typeof input.summary !== 'string') return { sketches }
+  const o = input as unknown as PrOverview
+  let all = sketches
+  const screens = (o.screens ?? []).map((sc, i) => {
+    if (sc.sketch || !sc.html) return sc
+    const id = `pr-screen-${i + 1}`
+    all = addSketch(all, { id, title: sc.title, html: sc.html, width: sc.width }, at)
+    return { title: sc.title, sketch: id }
+  })
+  const size = ['tiny', 'small', 'medium', 'large'].includes(o.size) ? o.size : 'medium'
+  return { overview: { ...o, size, screens, at }, sketches: all }
+}
 export type { FlowHop }
 export type Flow = { id: string; title: string; lanes: string[]; before?: FlowHop[]; after: FlowHop[]; at: number }
 export type PermissionRequest = Extract<SessionEvent, { kind: 'permission' }>
 /** Text or thinking currently streaming in, keyed by thread (main or a subagent's tool_use id). */
 export type Draft = { kind: 'text' | 'thinking'; text: string; agentId: string | null }
-export type Alert = { level: 'info' | 'warn' | 'error'; text: string; at: number; id?: string }
+export type Alert = { level: 'info' | 'warn' | 'error'; text: string; at: number; id?: string; until?: number }
 
 export interface SessionState {
   status: SessionStatus
@@ -257,6 +275,8 @@ export interface SessionState {
   pins: { path: string; reason?: string }[]
   diagrams: Record<string, Diagram>
   sketches: Record<string, Sketch>
+  /** Claude's overview of the pull request (pr_overview), the latest one. */
+  overview?: PrOverview & { at: number }
   flows: Record<string, Flow>
   decisions: DecisionEntry[]
   guardHits: GuardHit[]
@@ -622,8 +642,8 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       // An alert about one ongoing thing replaces the last one about it, rather than piling up, and
       // is noted in the conversation only the first time.
       const again = !!event.id && state.alerts.some((x) => x.id === event.id)
-      const alerts = [...state.alerts.filter((x) => !event.id || x.id !== event.id).slice(-4), { level: event.level, text: event.text, at, id: event.id }]
-      return again ? { ...state, alerts } : { ...state, alerts, timeline: [...state.timeline, { kind: 'note', text: event.text, tone: event.level === 'error' ? 'error' : event.level === 'info' ? 'info' : 'warn', at }] }
+      const alerts = [...state.alerts.filter((x) => !event.id || x.id !== event.id).slice(-4), { level: event.level, text: event.text, at, id: event.id, until: event.until }]
+      return again || event.quiet ? { ...state, alerts } : { ...state, alerts, timeline: [...state.timeline, { kind: 'note', text: event.text, tone: event.level === 'error' ? 'error' : event.level === 'info' ? 'info' : 'warn', at }] }
     }
     case 'alert-clear':
       return { ...state, alerts: state.alerts.filter((x) => x.id !== event.id) }
@@ -646,6 +666,10 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       if (s.type === 'showcase') return { ...state, showcase: { ...s, artifactUrl: s.artifactUrl ?? (state.showcase?.path === s.path ? state.showcase.artifactUrl : undefined), at } }
       if (s.type === 'open') return { ...state, open: { n: (state.open?.n ?? 0) + 1, target: s.target, why: s.why, at } }
       if (s.type === 'loader') return { ...state, loaders: { ...state.loaders, [s.loader.id]: s.loader } }
+      if (s.type === 'overview') {
+        const o = withOverview(state.sketches ?? {}, s.overview as unknown as Record<string, unknown>, at)
+        return o.overview ? { ...state, overview: o.overview, sketches: o.sketches } : state
+      }
       return { ...state, pins: [...state.pins.filter((p) => p.path !== s.path), { path: s.path, reason: s.reason }] }
     }
     case 'hook': {
@@ -847,6 +871,10 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
             next.diagrams = { ...next.diagrams, [input.id]: { id: input.id, title: String(input.title ?? input.id), mermaid: String(input.mermaid ?? ''), at } }
           }
           if (block.name === 'mcp__glassbox__show_sketch' && typeof input.id === 'string') next.sketches = addSketch(next.sketches ?? {}, { ...input, id: input.id }, at)
+          if (block.name === 'mcp__glassbox__pr_overview') {
+            const o = withOverview(next.sketches ?? state.sketches ?? {}, input, at)
+            if (o.overview) (next.overview = o.overview), (next.sketches = o.sketches)
+          }
           if (block.name === 'mcp__glassbox__show_flow') {
             const flow = parseFlow(input, at)
             if (flow) next.flows = { ...next.flows, [flow.id]: flow }
