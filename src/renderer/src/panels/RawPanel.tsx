@@ -42,8 +42,8 @@ export function RawPanel() {
           value={view}
           onChange={setView}
           options={[
-            { value: 'events', label: tr('rawPanel.events', { n: s.raw.length }) },
-            { value: 'stderr', label: tr('rawPanel.stderr', { n: s.stderr.length }) }
+            { value: 'events', label: tr('rawPanel.events'), count: s.raw.length },
+            { value: 'stderr', label: tr('rawPanel.stderr'), count: s.stderr.length }
           ]}
         />
       </div>

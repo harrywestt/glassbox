@@ -87,7 +87,7 @@ export function SideTaskSteps({ task }: { task: SideTask }) {
           <div key={i} className="side-step">
             <Icon name={toolIcon(st.tool)} className="muted" />
             <span className="grow ellipsis">{describeTool({ id: String(i), name: st.tool, input: st.input ?? {}, status: 'done', at: st.at } as ToolCall)}</span>
-            <span className="muted small num">{new Date(st.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
+            <span className="muted small num">{new Date(st.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
           </div>
         ) : (
           <div key={i} className="side-step note-step small">{st.text}</div>

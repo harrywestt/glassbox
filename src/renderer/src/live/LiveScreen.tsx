@@ -261,7 +261,7 @@ function useFlags(s: SessionState, looked: LookedAtData, rel: (p: string) => str
         at: b.at,
         title: tr('live.flags.blindTitle', { file: baseName(b.path), count: b.callers.length }),
         detail: tr('live.flags.blindDetail', { callers: b.callers.slice(0, 3).map((c) => baseName(c)).join(', ') + (b.callers.length > 3 ? tr('live.flags.andMore', { n: b.callers.length - 3 }) : '') }),
-        show: { label: tr('live.flags.showCallers'), target: { view: 'ripple', path: b.path } },
+        show: { label: tr('live.flags.showCallers'), target: { view: 'file', path: b.path } },
         tell: tr('live.flags.blindTell', { file: rel(b.path), callers: b.callers.map(rel).join(', ') })
       })
     for (const u of looked.files.filter((f) => f.unread >= 3))

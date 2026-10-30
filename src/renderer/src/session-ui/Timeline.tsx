@@ -16,6 +16,9 @@ import { FileCard } from '../components/FileCard'
 import { Select } from '../components/Select'
 import { fileKind, KIND_ICON, splitAttachments } from '../attachments'
 import { tr } from '../../../shared/i18n'
+import { BackgroundList } from './BackgroundList'
+import { WorkingMark } from './WorkingMark'
+import { useAppearance } from '../appearance'
 
 const TOOL_ICONS: Record<string, string> = {
   Read: 'file', Write: 'new-file', Edit: 'edit', MultiEdit: 'edit', NotebookEdit: 'notebook', Bash: 'terminal', PowerShell: 'terminal-powershell',
@@ -311,6 +314,7 @@ function lastActivity(calls: SessionState['toolCalls']): number {
 
 function Working() {
   const { tab, s } = useSession()
+  const spinner = useAppearance().spinner
   const [now, setNow] = useState(Date.now())
   // Agents still working in the background keep the line going after Claude's own turn ends.
   const background = Object.values(s.agents).filter((a) => a.status === 'running')
@@ -340,8 +344,9 @@ function Working() {
         ? (tasks[0]?.description || (background[0] ? background[0].type : '') || tr('timeline.backgroundTaskUnnamed'))
         : tr('timeline.waitingMany', { n: tasks.length + background.length })
     const progress = tasks.length === 0 && background.length === 1 ? background[0].progress : undefined
+    const listed = (s.backgroundTasks ?? []).length
     return (
-      <div className="row">
+      <div className="row idle-wait-row">
         <div className="working idle-wait" role="status" aria-live="off">
           <Icon name="watch" className="idle-wait-icon" />
           <span className="idle-wait-text">
@@ -349,24 +354,26 @@ function Working() {
             {progress && <span className="muted"> · {progress}</span>}
           </span>
           <span className="working-meta">{clock(took)}</span>
-          {ids.length > 0 && (
+          {ids.length > 1 && (
             <button className="link small idle-wait-stop" onClick={() => ids.forEach((id) => void window.glassbox.session.stopTask(tab.id, id).catch(() => {}))} title={tr('timeline.stopBackgroundTip')}>
-              {ids.length > 1 ? tr('timeline.stopAll') : tr('timeline.stopBackground')}
+              {tr('timeline.stopAll')}
+            </button>
+          )}
+          {ids.length === 1 && listed < 2 && (
+            <button className="link small idle-wait-stop" onClick={() => ids.forEach((id) => void window.glassbox.session.stopTask(tab.id, id).catch(() => {}))} title={tr('timeline.stopBackgroundTip')}>
+              {tr('timeline.stopBackground')}
             </button>
           )}
         </div>
+        {/* Several: each one named, with its own Stop. */}
+        {listed > 1 && <BackgroundList compact />}
       </div>
     )
   }
   return (
     <div className="row">
       <div className="working" role="status" aria-live="off">
-        {/* A six-spoked spark, turning slowly while Claude works. */}
-        <svg className="working-spark" viewBox="0 0 14 14" aria-hidden>
-          {[0, 60, 120].map((a) => (
-            <line key={a} x1="7" y1="1.5" x2="7" y2="12.5" transform={`rotate(${a} 7 7)`} />
-          ))}
-        </svg>
+        <WorkingMark kind={spinner} />
         <span className="working-word">{tr('timeline.workingWord', { word })}</span>
         <span className="working-meta">
           {clock(took)}
@@ -396,7 +403,7 @@ function Welcome() {
       <span className="welcome-icon"><Logo size={44} /></span>
       <h2>{tr('timeline.newSession')}</h2>
       <p className="muted">
-        {tr('timeline.in')} <span className="mono">{tab.cwd}</span>
+        {tr('timeline.in')} <strong className="welcome-folder" title={tab.cwd}>{baseName(tab.cwd)}</strong>
       </p>
       <p className="muted small">
         {s.status === 'ready'
@@ -1099,7 +1106,8 @@ function StepTime({ at, endedAt, running }: { at: number; endedAt?: number; runn
   return (
     <span className="step-time" title={took === undefined ? tr('timeline.started', { time: dateTime(at) }) : tr(running ? 'timeline.startedRunningFor' : 'timeline.startedTook', { time: dateTime(at), took: formatDuration(took) })}>
       <span className="step-time-at">{timeOfDay(at)}</span>
-      {took !== undefined && <span className={running ? 'step-time-took live' : 'step-time-took'}>{formatDuration(took)}</span>}
+      {/* Under a second isn't worth a number on every row. */}
+      {took !== undefined && (running || took >= 1000) && <span className={running ? 'step-time-took live' : 'step-time-took'}>{formatDuration(took)}</span>}
     </span>
   )
 }

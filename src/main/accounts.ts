@@ -1,16 +1,15 @@
-import { execFile, spawn } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, shell } from 'electron'
 import { type Query } from '@anthropic-ai/claude-agent-sdk'
 import { claudeExecutable, query } from './claude'
-import type { AccountItem, AccountsResult } from '../shared/events'
+import type { AccountItem, AccountsResult, SignInState } from '../shared/events'
 import { tr } from '../shared/i18n'
 
 /**
  * Everything Glassbox needs you signed in to, in one place: Claude, the GitHub CLI, and the
- * claude.ai connectors (Jira through Atlassian first). Status only; signing in happens in the
- * tool that owns the login (a terminal for the CLIs, claude.ai for connectors).
+ * claude.ai connectors (Jira through Atlassian first), and signing in to each.
  */
 
 const CONNECTORS_URL = 'https://claude.ai/settings/connectors'
@@ -95,27 +94,66 @@ export function getAccounts(force = false): Promise<AccountsResult> {
   return inflight
 }
 
-/** Open wherever that account signs in: a terminal for the Claude and GitHub CLIs, claude.ai for connectors. */
-export async function signIn(id: string): Promise<void> {
+/**
+ * Signing in, inside Glassbox: the Claude and GitHub CLIs run here (with Glassbox's own PATH, so it
+ * works without a terminal set up for them), and what they say comes back to the Accounts panel: the
+ * page to open, the one-time code to enter there, and a box for a code the page hands back. Connectors
+ * sign in on claude.ai.
+ */
+const signIns = new Map<string, { child: ChildProcess; state: SignInState }>()
+
+export function signIn(id: string, send: (s: SignInState) => void): void {
   cached = null
-  if (id === 'claude') return openTerminal(tr('mainAccounts.signInClaude'), claudeExe(), ['auth', 'login'])
-  if (id === 'github') return openTerminal(tr('mainAccounts.signInGitHub'), 'gh', ['auth', 'login', '--web', '--hostname', 'github.com'])
   if (id === 'github-install') return void shell.openExternal('https://cli.github.com')
   if (id.startsWith('connector:')) return void shell.openExternal(CONNECTORS_URL)
+  if (id !== 'claude' && id !== 'github') return
+  signIns.get(id)?.child.kill()
+  const [file, args] = id === 'claude' ? [claudeExe(), ['auth', 'login']] : ['gh', ['auth', 'login', '--web', '--hostname', 'github.com', '--git-protocol', 'https']]
+  const state: SignInState = { id, status: 'running', lines: [] }
+  const update = (patch: Partial<SignInState>) => {
+    Object.assign(state, patch)
+    send({ ...state, lines: [...state.lines] })
+  }
+  // No terminal, so the CLIs don't wait for keys only a terminal has (gh's "press Enter").
+  const child = spawn(file, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, GH_PROMPT_DISABLED: '1', NO_COLOR: '1', FORCE_COLOR: '0' } })
+  signIns.set(id, { child, state })
+  const read = (chunk: Buffer) => {
+    const text = clean(chunk.toString('utf8'))
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    if (!lines.length) return
+    const all = [...state.lines, ...lines].slice(-40)
+    const joined = all.join('\n')
+    const url = joined.match(/https:\/\/[^\s'"<>]+/g)?.pop() ?? state.url
+    const code = joined.match(/one-time code\W*([A-Z0-9]{4}-[A-Z0-9]{4})/i)?.[1] ?? state.code
+    // The CLI waits for a code pasted from the page (Claude's "Paste code here if prompted").
+    const asksForCode = state.asksForCode || /paste code/i.test(joined)
+    update({ lines: all, url, code, asksForCode })
+  }
+  child.stdout?.on('data', read)
+  child.stderr?.on('data', read)
+  child.on('error', (e) => update({ status: 'failed', error: (e as NodeJS.ErrnoException).code === 'ENOENT' ? tr('mainAccounts.cliMissing', { name: id === 'claude' ? 'Claude' : 'GitHub CLI (gh)' }) : e.message }))
+  child.on('exit', (code) => {
+    signIns.delete(id)
+    cached = null
+    if (state.status === 'running') update({ status: code === 0 ? 'done' : 'failed', error: code === 0 ? undefined : state.lines.slice(-2).join(' ') || tr('mainAccounts.signInFailed') })
+  })
+  // A sign-in left waiting gives up after a while, rather than running for ever.
+  setTimeout(() => signIns.get(id)?.child === child && (child.kill(), update({ status: 'failed', error: tr('mainAccounts.signInTimedOut') })), 10 * 60_000)
 }
 
-function openTerminal(title: string, file: string, args: string[]) {
-  const q = (s: string) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s)
-  if (process.platform === 'win32') {
-    // A visible console, left open so any code the login shows can be read.
-    spawn('cmd.exe', ['/c', 'start', `"${title}"`, 'cmd', '/k', [file, ...args].map(q).join(' ')], { detached: true, windowsVerbatimArguments: true, stdio: 'ignore' }).unref()
-  } else if (process.platform === 'darwin') {
-    // A Terminal window, so the sign-in code and prompts can be seen (spawning it hidden shows nothing).
-    const sh = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
-    const command = [file, ...args].map(sh).join(' ')
-    const apple = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-    spawn('osascript', ['-e', `tell application "Terminal" to do script "${apple}"`, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref()
-  } else {
-    spawn(file, args, { detached: true, stdio: 'ignore' }).unref()
-  }
+/** A line typed into the sign-in (the code a sign-in page hands back). */
+export function signInInput(id: string, text: string) {
+  signIns.get(id)?.child.stdin?.write(`${text.trim()}\n`)
+}
+
+export function signInCancel(id: string) {
+  const s = signIns.get(id)
+  if (!s) return
+  signIns.delete(id)
+  s.child.kill()
+}
+
+/** Terminal colours and links (OSC 8) taken out, so the text and addresses read cleanly. */
+function clean(s: string): string {
+  return s.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
 }

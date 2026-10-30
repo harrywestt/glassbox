@@ -20,6 +20,37 @@ function loadQaWhere(cwd: string): QaWhere {
   }
   return { env: 'local', urls: [] }
 }
+/** Whether QA sessions start with a test plan to approve (remembered across sessions; on by default). */
+function loadQaPlan(): boolean {
+  try {
+    return localStorage.getItem('glassbox.qaPlan') !== 'off'
+  } catch {
+    return true
+  }
+}
+/** Whether QA sessions record a video of each case (remembered; off by default: videos are large). */
+function loadQaRecord(): boolean {
+  try {
+    return localStorage.getItem('glassbox.qaRecord') === 'on'
+  } catch {
+    return false
+  }
+}
+function saveQaRecord(on: boolean) {
+  try {
+    localStorage.setItem('glassbox.qaRecord', on ? 'on' : 'off')
+  } catch {
+    /* this time only */
+  }
+}
+function saveQaPlan(on: boolean) {
+  try {
+    localStorage.setItem('glassbox.qaPlan', on ? 'on' : 'off')
+  } catch {
+    /* this time only */
+  }
+}
+
 function saveQaWhere(cwd: string, env: 'local' | 'url', url?: string) {
   const prev = loadQaWhere(cwd)
   const urls = url ? [url, ...prev.urls.filter((u) => u !== url)].slice(0, 6) : prev.urls
@@ -54,7 +85,7 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
   const qaWhere = useMemo(() => (cwd ? loadQaWhere(cwd) : { env: 'local' as const, urls: [] }), [cwd])
   useEffect(() => {
     if (kind !== 'qa') return
-    setF((x) => ({ ...x, env: qaWhere.env, url: x.url?.trim() ? x.url : qaWhere.urls[0] ?? '' }))
+    setF((x) => ({ ...x, env: qaWhere.env, url: x.url?.trim() ? x.url : qaWhere.urls[0] ?? '', qaPlan: x.qaPlan ?? loadQaPlan(), qaRecord: x.qaRecord ?? loadQaRecord() }))
   }, [kind, qaWhere])
 
   useEffect(() => {
@@ -121,7 +152,11 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
         fields = { ...f, branch }
       }
       const { title, start, requirements } = buildLaunch(kind, fields)
-      if (kind === 'qa') saveQaWhere(cwd, f.env ?? 'local', f.env === 'url' ? f.url?.trim() : undefined)
+      if (kind === 'qa') {
+        saveQaWhere(cwd, f.env ?? 'local', f.env === 'url' ? f.url?.trim() : undefined)
+        saveQaPlan(f.qaPlan !== false)
+        saveQaRecord(f.qaRecord === true)
+      }
       onLaunch({ cwd: dir, kind, title, start: start ? { ...start, requirements } : undefined, deep: kind === 'qa' && f.depth === 'deep' })
     } catch (err) {
       setError(String(err).replace(/^Error: /, ''))
@@ -260,11 +295,17 @@ export function NewSessionDialog({ initialCwd, onLaunch, onClose }: { initialCwd
                 <Segmented<'quick' | 'deep'> value={f.depth ?? 'quick'} onChange={(depth) => set({ depth })} options={[{ value: 'quick', label: tr('newSessionDialog.qaQuick') }, { value: 'deep', label: tr('newSessionDialog.qaDeep') }]} />
                 <span className="muted small">{f.depth === 'deep' ? tr('newSessionDialog.qaDeepHint') : tr('newSessionDialog.qaQuickHint')}</span>
               </div>
+              <label className="check">
+                <input type="checkbox" checked={f.qaPlan !== false} onChange={(e) => set({ qaPlan: e.target.checked })} /> {tr('newSessionDialog.qaPlan')}
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={f.qaRecord === true} onChange={(e) => set({ qaRecord: e.target.checked })} /> {tr('newSessionDialog.qaRecord')}
+              </label>
               <label className="field">
                 <span>{tr('newSessionDialog.qaNotes')}</span>
                 <textarea rows={2} placeholder={tr('newSessionDialog.qaNotesPlaceholder')} value={f.notes ?? ''} onChange={(e) => set({ notes: e.target.value })} />
               </label>
-              <p className="muted small">{tr('newSessionDialog.qaHint')}</p>
+              <p className="muted small">{f.qaPlan === false ? tr('newSessionDialog.qaHintNoPlan') : tr('newSessionDialog.qaHint')}</p>
             </>
           )}
           {kind === 'blank' && <p className="muted small">{tr('newSessionDialog.blankHint', { folder: cwd ? baseName(cwd) : tr('newSessionDialog.folderYouPick') })}</p>}

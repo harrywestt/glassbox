@@ -3,17 +3,33 @@ import { tr } from '../../shared/i18n'
 import { AUTOMATION_DEFAULTS, type Automation } from '../../shared/events'
 import { isHex, readableOn } from './colour'
 
-export type ThemePreference = 'system' | 'dark' | 'light'
+export type ThemePreference = 'system' | 'dark' | 'light' | 'midnight' | 'dusk' | 'forest' | 'ember' | 'paper' | 'blossom' | 'carbon' | 'mint' | 'custom'
+/** A theme you made: the four colours the rest is worked out from. */
+export type CustomTheme = { base: 'dark' | 'light'; bg: string; surface: string; fg: string; accent: string }
 export type ChatWidth = 'full' | 'wide' | 'comfortable'
 export type TableStyle = 'striped' | 'grid' | 'minimal'
+/** How the panels sit over a moving background: from clear glass to fully solid. */
+export type PanelFrost = 'clear' | 'frosted' | 'heavy' | 'solid'
+export type BackdropKind = 'none' | 'lava' | 'stars' | 'fireflies' | 'waves' | 'aurora' | 'snow' | 'ripples'
+export type Spinner = 'spark' | 'orbit' | 'heartbeat' | 'equaliser' | 'shapeshift' | 'snake' | 'ripple' | 'bounce'
 
 export type Appearance = {
   theme: ThemePreference
-  accent: string // an ACCENTS id, or a colour you picked (#rrggbb)
+  /** Your own theme, once you've made one (kept when you switch away from it). */
+  customTheme?: CustomTheme
+  accent: string // an ACCENTS id, 'theme' (a named theme's own), or a colour you picked (#rrggbb)
   uiScale: number // whole-app zoom, 0.9 – 1.25
   chatSize: number // conversation text, px
   chatWidth: ChatWidth
   tableStyle: TableStyle
+  /** The animation beside "Working…" while Claude works. */
+  spinner: Spinner
+  /** A slow, faint moving background behind the whole app. Off unless picked. */
+  backdrop: BackdropKind
+  /** How strongly the background shows, 1 (faint) to 4 (strong). */
+  backdropStrength: 1 | 2 | 3 | 4
+  /** Frosted: the panels let the background faintly through. Solid: it shows only around and behind them. */
+  backdropPanels: PanelFrost
   /** Desktop notifications (and a flashing taskbar button) when a session needs you or finishes. Off unless turned on. */
   notifications: boolean
   /** "While you were away": a digest of what changed when you come back to a session. On unless turned off. */
@@ -37,7 +53,9 @@ export const CHAT_SIZES = [13, 14, 15, 16, 18]
 const WIDTHS: Record<ChatWidth, string> = { full: 'none', wide: '1200px', comfortable: '860px' }
 
 const KEY = 'glassbox.appearance'
-const DEFAULTS: Appearance = { theme: 'system', accent: 'blue', uiScale: 1, chatSize: 15, chatWidth: 'full', tableStyle: 'striped', notifications: false, awayDigest: true, automation: AUTOMATION_DEFAULTS }
+/** The accent Glassbox starts with. */
+export const DEFAULT_ACCENT = '#49c1e9'
+const DEFAULTS: Appearance = { theme: 'system', accent: DEFAULT_ACCENT, uiScale: 1, chatSize: 15, chatWidth: 'full', tableStyle: 'striped', spinner: 'spark', backdrop: 'none', backdropStrength: 2, backdropPanels: 'frosted', notifications: false, awayDigest: false, automation: AUTOMATION_DEFAULTS }
 
 function load(): Appearance {
   try {
@@ -79,7 +97,7 @@ export function setAppearance(change: Partial<Appearance>) {
 }
 
 export function resetAppearance() {
-  setAppearance(DEFAULTS)
+  setAppearance({ ...DEFAULTS, customTheme: current.customTheme })
 }
 
 export function useAppearance(): Appearance {

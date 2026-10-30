@@ -49,9 +49,7 @@ export function ReplayPanel() {
 
   return (
     <div className="panel">
-      <PanelHeader title={tr('replayPanel.title')}>
-        <span className="muted small">{tr('replayPanel.position', { pos: pos + 1, total: events.length })}</span>
-      </PanelHeader>
+      <PanelHeader title={tr('replayPanel.title')} />
       <div className="replay-controls">
         <IconButton icon="debug-step-back" title={tr('replayPanel.previous')} onClick={() => step(-1)} />
         <IconButton icon={playing ? 'debug-pause' : 'play'} title={playing ? tr('replayPanel.pause') : tr('replayPanel.playFromHere')} onClick={() => (setFollow(false), setPlaying(!playing))} />
@@ -64,6 +62,7 @@ export function ReplayPanel() {
           value={pos}
           onChange={(e) => (setFollow(false), setPlaying(false), setPos(Number(e.target.value)))}
         />
+        <span className="replay-pos">{tr('replayPanel.position', { pos: pos + 1, total: events.length })}</span>
         <button className={follow ? 'chip-btn on' : 'chip-btn'} onClick={() => setFollow(!follow)} title={tr('replayPanel.liveTitle')}>
           {tr('replayPanel.live')}
         </button>

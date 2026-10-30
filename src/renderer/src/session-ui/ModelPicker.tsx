@@ -67,7 +67,7 @@ export function ModelPicker() {
   return (
     <div className="model-picker">
       <button className={open ? 'chip-btn on' : 'chip-btn'} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={title}>
-        <Icon name={busy ? 'loading' : 'sparkle'} className={busy ? 'codicon-modifier-spin' : undefined} /> {name}
+        <Icon name={busy ? 'loading' : 'hubot'} className={busy ? 'codicon-modifier-spin' : undefined} /> {name}
  <Icon name="chevron-up" />
       </button>
       {open && (

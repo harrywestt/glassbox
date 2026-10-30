@@ -28,7 +28,7 @@ import { type UserQuestion,
   type ReviewModel
 } from '../shared/events'
 import type { Effort } from '../shared/events'
-import { showcaseDir, skillDeckDir } from './showcase'
+import { showcaseDir } from './showcase'
 import { loadExtras, saveExtras, type SessionExtras } from './sessionExtras'
 import { cachedScan, importTargets, warmScan } from './architecture'
 import { isPublicEntry } from '../shared/architecture'
@@ -1217,6 +1217,9 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       kind: 'alert',
       id: `limit-${window}`,
       level: step >= 95 ? 'warn' : 'info',
+      // A passing notice: in Route (not the conversation), gone after 5 minutes or once the limit resets.
+      quiet: true,
+      until: Math.min(Date.now() + 5 * 60_000, resets?.getTime() ?? Infinity),
       text: at ? tr('mainAgentHost.limitNear', { percent: Math.round(used ?? step), window: label, at }) : tr('mainAgentHost.limitNearNoTime', { percent: Math.round(used ?? step), window: label })
     })
   }
@@ -1361,13 +1364,6 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   private onFileChange: HookCallback = async (input) => {
     void this.refreshGit()
-    // A showcase deck written without showcase_ready (the pr-showcase skill, say) still shows in the Showcase view.
-    if (input.hook_event_name === 'PostToolUse' && input.tool_name === 'Write') {
-      const p = String((input.tool_input as { file_path?: string } | undefined)?.file_path ?? '')
-      const n = p.replace(/\\/g, '/').toLowerCase()
-      if (n.endsWith('.html') && [showcaseDir(), skillDeckDir()].some((d) => n.startsWith(d.replace(/\\/g, '/').toLowerCase() + '/')))
-        this.emit({ kind: 'glassbox', signal: { type: 'showcase', path: p, title: basename(p).replace(/\.html$/i, '').replace(/[-_]+/g, ' ') } })
-    }
     if (input.hook_event_name === 'PostToolUse' && (input.tool_name === 'Bash' || input.tool_name === 'PowerShell')) {
       const before = await this.shellSnaps.get(input.tool_use_id)
       this.shellSnaps.delete(input.tool_use_id)
@@ -1472,10 +1468,6 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       }
     }
     if (input.tool_name.startsWith('mcp__glassbox__')) this.turnShown.add(input.tool_name.slice('mcp__glassbox__'.length))
-    // Decks go through build_showcase so they land in the Showcase view, not a skill's own flow.
-    const skill = input.tool_name === 'Skill' ? String((input.tool_input as { skill?: string } | undefined)?.skill ?? '') : ''
-    if (/showcase/i.test(skill))
-      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'In Glassbox, showcases are built with the build_showcase tool: call it now (with a name, and any notes from the user) and follow the instructions it returns, then call showcase_ready.' } }
     // Claude's own questions (AskUserQuestion): asked in the box under the conversation, in every
     // permission mode, and the answers go back with the tool call the way the CLI's prompt sends them.
     if (input.tool_name === 'AskUserQuestion') {

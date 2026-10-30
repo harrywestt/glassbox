@@ -39,9 +39,9 @@ export function AttachmentsTab() {
           value={who}
           onChange={setWho}
           options={[
-            { value: 'all', label: tr('attachmentsTab.all', { count: all.length }) },
-            { value: 'you', label: tr('attachmentsTab.fromYouCount', { count: mine }) },
-            { value: 'claude', label: tr('attachmentsTab.fromClaudeCount', { count: claude }) }
+            { value: 'all', label: tr('attachmentsTab.all'), count: all.length },
+            { value: 'you', label: tr('attachmentsTab.fromYouCount'), count: mine },
+            { value: 'claude', label: tr('attachmentsTab.fromClaudeCount'), count: claude }
           ]}
         />
         <span className="spacer" />

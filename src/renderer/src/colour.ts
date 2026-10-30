@@ -47,11 +47,18 @@ export function contrast(a: string, b: string): number {
  * The colour you picked, lightened (dark theme) or darkened (light theme) just enough that text in
  * it reads on the background (4.5:1). Hue and strength stay yours.
  */
-export function readableOn(hex: string, background: string, base: 'dark' | 'light'): string {
+export function readableOn(hex: string, background: string, base: 'dark' | 'light', target = 4.5): string {
   const [h, s, l0] = hexToHsl(hex)
   let l = l0
-  for (let i = 0; i < 40 && contrast(hslToHex(h, s, l), background) < 4.5; i++) l = base === 'dark' ? Math.min(0.95, l + 0.02) : Math.max(0.05, l - 0.02)
+  for (let i = 0; i < 50 && contrast(hslToHex(h, s, l), background) < target; i++) l = base === 'dark' ? Math.min(0.95, l + 0.02) : Math.max(0.05, l - 0.02)
   return hslToHex(h, s, l)
+}
+
+/** `a` moved towards `b` by `t` (0–1), as hex. */
+export function mix(a: string, b: string, t: number): string {
+  const x = hexToRgb(a)
+  const y = hexToRgb(b)
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('')}`
 }
 
 /** Text on an accent-filled button: whichever of near-black and white reads better. */

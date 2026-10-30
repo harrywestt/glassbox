@@ -327,7 +327,6 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
                   onClick={() => h.cwd && actions.openSession(h.cwd, { resumeId: h.sessionId, title: h.customTitle ?? h.summary })}
                   title={h.firstPrompt ?? h.summary}
                 >
-                  <Icon name={open ? 'comment-discussion' : 'history'} className={open ? 'accent' : 'muted'} />
                   <div className="grow history-main">
                     <div className="ellipsis">{h.customTitle ?? h.summary}</div>
                     <div className="muted small ellipsis">
@@ -354,7 +353,6 @@ function HistoryList({ history, tabs, sessions }: { history: SDKSessionInfo[] | 
                     <Icon name={pinned.has(h.sessionId) ? 'pinned' : 'pin'} />
                   </button>
                   <span className="muted small">{timeAgo(h.lastModified)}</span>
-                  <Icon name="chevron-right" className="muted" />
                 </div>
               )
             })}

@@ -66,10 +66,10 @@ let busy: Promise<unknown> = Promise.resolve()
 let running = 0
 
 /** Transcribes 16 kHz mono samples. `live`: a quick pass while you're still talking, skipped if the model is busy. */
-export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgress) => void, live = false): Promise<string> {
+export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgress) => void, live = false, offset = 0): Promise<string> {
   if (live && running) return ''
   running++
-  const turn = busy.then(() => run(audio, onProgress, live))
+  const turn = busy.then(() => run(audio, onProgress, live, offset))
   busy = turn.catch(() => undefined)
   try {
     return await turn
@@ -87,21 +87,27 @@ export async function transcribe(audio: Float32Array, onProgress: (p: VoiceProgr
  * While you talk, finished pieces are transcribed once and kept: each live pass only redoes the
  * piece you're still speaking, so the live words stay quick however long you go on.
  */
-const live = { length: 0, done: new Map<string, string>() }
+const live = { end: 0, done: new Map<string, string>() }
 
-async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void, isLive: boolean): Promise<string> {
+/**
+ * `offset`: where this clip starts in the whole recording (samples at 16 kHz). Live passes send only
+ * the recent stretch, so pieces are remembered by their place in the whole recording: a piece of an
+ * earlier window must never stand in for different audio that happens to sit at the same place in
+ * a later one (that's what made long dictation turn into unrelated sentences after ~25 seconds).
+ */
+async function run(audio: Float32Array, onProgress: (p: VoiceProgress) => void, isLive: boolean, offset: number): Promise<string> {
   // Too short to be speech, or effectively silent: Whisper hallucinates on these, so skip them.
   if (audio.length < 16_000 * 0.8 || !hasSpeech(audio)) return ''
   // The final transcript uses the larger model once it's ready (until its first download finishes, the small one).
   const asr = !isLive && automation().voiceAccurate && ready.has(FINAL_MODEL) ? await loadModel(FINAL_MODEL) : await prepareVoice(onProgress)
-  // A new recording starts the live pieces afresh.
-  if (!isLive || audio.length < live.length) live.done.clear()
-  live.length = isLive ? audio.length : 0
+  // A new recording (it ends earlier than the last live pass did) starts the live pieces afresh.
+  if (!isLive || offset + audio.length < live.end) live.done.clear()
+  live.end = isLive ? offset + audio.length : 0
   const pieces = segments(audio)
   const texts: string[] = []
   for (let i = 0; i < pieces.length; i++) {
     const { from, to } = pieces[i]
-    const key = `${from}:${to}`
+    const key = `${offset + from}:${offset + to}`
     const last = i === pieces.length - 1
     // Live: a finished piece is transcribed once; the one still being spoken every pass.
     if (isLive && !last && live.done.has(key)) {

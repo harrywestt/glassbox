@@ -178,8 +178,8 @@ export function relPath(cwd: string, path: string): string {
 
 export const newId = () => crypto.randomUUID()
 
-/** 14:05:09: a time of day, from one shared formatter (toLocaleTimeString makes a new one each call). */
-const TIME = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+/** 14:05: a time of day, from one shared formatter (toLocaleTimeString makes a new one each call). Seconds are in the hover (dateTime). */
+const TIME = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' })
 const DATE_TIME = new Intl.DateTimeFormat([], { dateStyle: 'short', timeStyle: 'medium' })
 export const timeOfDay = (at: number) => TIME.format(at)
 /** The date and time, as toLocaleString gives it. */

@@ -119,10 +119,10 @@ export function planAsMarkdown(text: string): string {
 /** A sketch, inline in the plan at the column's width; click it to open it in Sketches (to pick or comment). */
 export function SketchBlock({ id, version, caption, picked, onPick }: { id: string; version?: number; caption?: string; /** The option you picked in it, if it offers some. */ picked?: string; onPick?: (label: string) => void }) {
   const { s, showPanel } = useSession()
-  const sketch = s.sketches?.[id]
-  if (!sketch) return <div className="plan-block plan-missing muted small">{tr('planBlocks.noSketch', { id })}</div>
-  const v = sketch.versions[Math.min(sketch.versions.length, Math.max(1, version ?? sketch.versions.length)) - 1]
   const [zoomed, setZoomed] = useState(false)
+  const sketch = s.sketches?.[id]
+  if (!sketch?.versions?.length) return <div className="plan-block plan-missing muted small">{tr('planBlocks.noSketch', { id })}</div>
+  const v = sketch.versions[Math.min(sketch.versions.length, Math.max(1, version ?? sketch.versions.length)) - 1]
   // A sketch with options to choose between is clicked to pick; the zoom button still zooms.
   const pickable = !!onPick && /data-pick=/.test(v.html)
   return (
@@ -151,7 +151,7 @@ export function SketchBlock({ id, version, caption, picked, onPick }: { id: stri
   )
 }
 
-function SketchFrame({ version, onPick }: { version: Parameters<typeof useSketchUrl>[0]; onPick?: (label: string) => void }) {
+export function SketchFrame({ version, onPick }: { version: Parameters<typeof useSketchUrl>[0]; onPick?: (label: string) => void }) {
   const { url } = useSketchUrl(version)
   const box = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLIFrameElement>(null)

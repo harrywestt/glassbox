@@ -22,7 +22,22 @@
     "manage": "Manage",
     "install": "Install",
     "connect": "Connect",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "signedIn": "Signed in",
+    "signInFailed": "Sign-in didn’t finish.",
+    "dismiss": "Dismiss",
+    "signingIn": "Signing in",
+    "enterCode": "Enter this code on the GitHub page:",
+    "codeCopied": "Code copied, page opened",
+    "copyAndOpen": "Copy code and open GitHub",
+    "finishInBrowser": "Finish signing in on the page that opened in your browser.",
+    "openPage": "Open the sign-in page again",
+    "starting": "Starting sign-in…",
+    "pasteCode": "Paste the code the page gives you",
+    "send": "Send",
+    "sendAgain": "Send another",
+    "waiting": "Waiting for you to finish",
+    "cancel": "Cancel"
   },
   "activityPanel": {
     "title": "Now",
@@ -147,7 +162,96 @@
     "previewNewModule": "New module",
     "previewNewTests": "New tests",
     "customColour": "Pick your own colour",
-    "customColourNote": "Drag round the wheel for the colour and out from the centre for its strength. Glassbox lightens or darkens it just enough to stay readable in each theme."
+    "customColourNote": "Drag round the wheel for the colour and out from the centre for its strength. Glassbox lightens or darkens it just enough to stay readable in each theme.",
+    "spinner": "Working animation",
+    "spinnerNote": "Beside “Working…” while Claude works.",
+    "spinners": {
+      "spark": "Spark",
+      "orbit": "Orbit",
+      "heartbeat": "Heartbeat",
+      "equaliser": "Equaliser",
+      "shapeshift": "Shapeshift",
+      "snake": "Snake",
+      "ripple": "Ripple",
+      "bounce": "Bounce"
+    },
+    "themes": {
+      "system": "Match Windows",
+      "dark": "Glassbox dark",
+      "light": "Glassbox light",
+      "midnight": "Midnight",
+      "dusk": "Dusk",
+      "forest": "Forest",
+      "ember": "Ember",
+      "carbon": "Carbon",
+      "paper": "Paper",
+      "blossom": "Blossom",
+      "mint": "Mint",
+      "custom": "Your theme"
+    },
+    "themeAccent": "{theme}’s own accent",
+    "makeTheme": "Make your own",
+    "custom": {
+      "bg": "Background",
+      "surface": "Panels",
+      "fg": "Text",
+      "accent": "Accent"
+    },
+    "customHardToRead": "Text will be hard to read on this background.",
+    "customReadable": "Use readable text",
+    "backdrop": "Background",
+    "backdropNote": "Faint movement behind the panels.",
+    "backdrops": {
+      "none": "None",
+      "lava": "Lava lamp",
+      "stars": "Shooting stars",
+      "fireflies": "Fireflies",
+      "waves": "Waves",
+      "aurora": "Aurora",
+      "snow": "Snowfall",
+      "ripples": "Ripples"
+    },
+    "backdropStrength": "Strength",
+    "strength": {
+      "1": "Faint",
+      "2": "Soft",
+      "3": "Clear",
+      "4": "Strong"
+    },
+    "backdropPanels": "Panels",
+    "frost": {
+      "clear": "Clear",
+      "frosted": "Frosted",
+      "heavy": "Heavy frost",
+      "solid": "Solid"
+    },
+    "startFrom": "Start from",
+    "editTheme": "Edit your theme",
+    "useTheme": "Use this theme",
+    "cancel": "Cancel",
+    "keepReadable": "Keep text readable",
+    "keepReadableNote": "Text and the accent adjust as you change the backgrounds.",
+    "contrastTip": "Contrast {ratio}:1",
+    "grade": {
+      "good": "Easy to read",
+      "ok": "Readable",
+      "bad": "Hard to read"
+    },
+    "previewLabel": "Preview of your theme",
+    "sample": {
+      "conversation": "Conversation",
+      "live": "Live",
+      "ask": "Add refunds to the order page",
+      "reply": "Refunds now work from the order page. Anything over £100 waits for a manager.",
+      "meta": "2 files changed · 11:32",
+      "passed": "Tests passed",
+      "warning": "1 warning",
+      "failed": "1 failed",
+      "message": "Message Claude",
+      "send": "Send",
+      "changes": "Changes",
+      "link": "Open on GitHub"
+    }
   },
   "architecture": {
     "reading": "Reading",
@@ -195,9 +299,9 @@
     "megabytes": "{n} MB"
   },
   "attachmentsTab": {
-    "all": "All {count}",
-    "fromYouCount": "From you {count}",
-    "fromClaudeCount": "From Claude {count}",
+    "all": "All",
+    "fromYouCount": "From you",
+    "fromClaudeCount": "From Claude",
     "attachFiles": "Attach files",
     "noFiles": "No files yet",
     "noFilesBody": "Files you attach to a message (the paperclip, or drop them anywhere on this window) and files Claude makes for you collect here.",
@@ -550,10 +654,10 @@
   },
   "decisionsPanel": {
     "title": "Decisions",
-    "filterAll": "All {n}",
-    "filterQuestions": "Questions {n}",
-    "filterAssumptions": "Assumptions {n}",
-    "filterDecisions": "Decisions {n}",
+    "filterAll": "All",
+    "filterQuestions": "Questions",
+    "filterAssumptions": "Assumptions",
+    "filterDecisions": "Decisions",
     "nothingInFilter": "Nothing in this filter.",
     "emptyTitle": "No decisions yet.",
     "emptyBody": "Claude's choices, assumptions and questions appear here as it makes them."
@@ -830,7 +934,7 @@
   "gitHubSection": {
     "connectTitle": "Connect GitHub to see your pull requests",
     "cliUnavailable": "The GitHub CLI isn’t available.",
-    "connectBody": "Glassbox reads GitHub through your GitHub CLI sign-in, so no token is stored here. Refresh the dashboard once you’re signed in.",
+    "connectBody": "Glassbox reads GitHub through the GitHub CLI’s sign-in, so no token is stored here.",
     "unreachableTitle": "GitHub couldn’t be reached",
     "somethingWrong": "Something went wrong.",
     "unreachableBody": "Check your connection, then refresh the dashboard. Running `gh auth status` in a terminal shows whether the CLI can reach GitHub.",
@@ -938,7 +1042,7 @@
     "stoppedBy": "Stopped by guardrails",
     "blocked": "Blocked: {label}",
     "askedYou": "Asked you: {label}",
-    "outsideConversation": "What Claude has done outside the conversation",
+    "outsideConversation": "Outside the conversation",
     "riskAll": "All",
     "riskHigh": "High",
     "riskMedium": "Medium",
@@ -1091,7 +1195,10 @@
     "couldNotConnect": "Couldn’t connect",
     "needsSignIn": "Needs sign-in",
     "signInClaude": "Sign in to Claude",
-    "signInGitHub": "Sign in to GitHub"
+    "signInGitHub": "Sign in to GitHub",
+    "cliMissing": "{name} isn’t installed, so Glassbox can’t sign you in to it.",
+    "signInFailed": "Sign-in didn’t finish.",
+    "signInTimedOut": "Sign-in timed out. Start it again when you’re ready."
   },
   "mainAdmin": {
     "notSupported": "Running as administrator is only available in the installed app on Windows.",
@@ -1157,9 +1264,9 @@
     "tooLarge": "File is {size} bytes; too large to preview."
   },
   "mainGithub": {
-    "ghMissing": "The GitHub CLI isn’t installed. Install it from cli.github.com, then run `gh auth login`.",
+    "ghMissing": "The GitHub CLI isn’t installed. Install it from cli.github.com, then sign in from Accounts.",
     "tooSlow": "GitHub took too long to respond",
-    "signedOut": "You’re signed out of the GitHub CLI. Sign in with `gh auth login`.",
+    "signedOut": "You’re signed out of GitHub. Sign in from Accounts, at the top of the dashboard.",
     "repoNotFound": "not found, or your account can’t see it",
     "couldNotReach": "Couldn’t reach GitHub: {error}",
     "repoError": "{repo}: {error}",
@@ -1344,7 +1451,7 @@
       "error": "Couldn’t find that: {error}",
       "dismiss": "Dismiss"
     },
-    "showMe": "Show me",
+    "showMe": "Show",
     "bar": {
       "thisConversation": "This conversation",
       "wholeProject": "Whole project",
@@ -1529,7 +1636,8 @@
     "actualSize": "Actual size",
     "dimensions": "{width} × {height}",
     "actualSizeClickToFit": "Actual size. Click to fit.",
-    "clickForActualSize": "Click for actual size."
+    "clickForActualSize": "Click for actual size.",
+    "hint": "Drag to pan, scroll to zoom, 1 for actual size, 0 to fit"
   },
   "modelPicker": {
     "default": "Default model",
@@ -1655,12 +1763,15 @@
     "qaUrlPlaceholder": "https://qa.example.com",
     "qaNotes": "Notes (optional)",
     "qaNotesPlaceholder": "Test accounts to use, data that already exists, things to leave alone",
-    "qaHint": "Claude writes a test plan for you to approve first, asks you to sign in in the Browser if it needs to, and asks before anything it can’t undo. It can’t change the project’s code.",
+    "qaHint": "Claude reads the ticket and code, then shows its test plan in the Plan view for you to approve or change. It asks you to sign in in the Browser if it needs to, asks before anything it can’t undo, and can’t change the project’s code.",
     "qaDepth": "How thorough",
     "qaQuick": "Quick",
     "qaDeep": "Deep",
     "qaQuickHint": "Checks each case works.",
-    "qaDeepHint": "Also screenshots every screen and state; a second agent reviews them for bad UX, inconsistencies and AI slop while the testing carries on."
+    "qaDeepHint": "Also screenshots every screen and state; a second agent reviews them for bad UX, inconsistencies and AI slop while the testing carries on.",
+    "qaPlan": "Show me a test plan to approve first",
+    "qaHintNoPlan": "Claude writes its test cases and starts testing straight away. It asks you to sign in in the Browser if it needs to, asks before anything it can’t undo, and can’t change the project’s code.",
+    "qaRecord": "Record a video of each test case"
   },
   "panZoom": {
     "zoomOut": "Zoom out (-)",
@@ -1669,7 +1780,7 @@
     "zoomIn": "Zoom in (+)",
     "fit": "Fit to view (0)",
     "actualSizeTip": "Actual size (1)",
-    "actualSize": "100%",
+    "actualSize": "1:1",
     "hint": "Drag to pan, scroll to zoom, double-click to zoom in"
   },
   "permissionDialog": {
@@ -1839,8 +1950,8 @@
   "rawPanel": {
     "title": "Raw",
     "filterPlaceholder": "Filter events (any text)…",
-    "events": "Events ({n})",
-    "stderr": "stderr ({n})",
+    "events": "Events",
+    "stderr": "stderr",
     "pausedNew_one": "Paused while you read: {count} new event",
     "pausedNew_other": "Paused while you read: {count} new events",
     "paused": "Paused while you read",
@@ -2073,7 +2184,8 @@
       "raw": "Raw events",
       "setUp": "Set up",
       "connectors": "Connectors",
-      "skills": "Skills"
+      "skills": "Skills",
+      "panels": "Panels"
     },
     "moreLabel": {
       "changes": "Changes",
@@ -2138,6 +2250,10 @@
       "sketches": {
         "label": "Sketches",
         "note": "Rough pages Claude draws to show an idea or a problem: pick an option or comment on a part"
+      },
+      "overview": {
+        "label": "PR overview",
+        "note": "The pull request at a glance: what changed, risks, screens"
       }
     },
     "work": {
@@ -2155,7 +2271,8 @@
       "diffChanges": "{name} changes",
       "browser": "Browser",
       "plan": "Plan",
-      "sketches": "Sketches"
+      "sketches": "Sketches",
+      "overview": "PR overview"
     },
     "dropToAttach": "Drop to attach",
     "dropNote": "They go with your next message to Claude",
@@ -2452,7 +2569,8 @@
     "runTestsDisplay": "Run the tests",
     "askToRun": "Ask Claude to run them",
     "recentRuns": "Recent test runs",
-    "runTitle": "{time}: {summary}"
+    "runTitle": "{time}: {summary}",
+    "output": "Output"
   },
   "tests": {
     "passed": "{passed} passed",
@@ -2463,7 +2581,7 @@
   "ticketPanel": {
     "noTicket": "No ticket in this branch name.",
     "openInJira": "Open in Jira",
-    "change": "Change",
+    "change": "Other ticket",
     "refresh": "Refresh",
     "loading": "Loading",
     "gettingFromJira": "Getting {key} from Jira…",
@@ -2873,7 +2991,8 @@
   },
   "colourWheel": {
     "label": "Colour wheel: left and right change the colour, up and down its strength",
-    "hex": "Hex"
+    "hex": "Hex",
+    "lightness": "Lightness"
   },
   "sketchTab": {
     "emptyTitle": "No sketches yet",
@@ -2887,21 +3006,54 @@
     "subjectPart": "this part",
     "subjectInOption": "{what} in “{option}”",
     "subjectInSection": "{what} under “{section}”",
-    "pickMessage": "I pick “{option}” from {where}.",
-    "commentMessage": "On {where}, about {subject}: {note}",
     "hintHand": "Drag to pan, scroll to zoom, click to press or pick",
     "hintComment": "Click any part to comment on it",
     "hintUse": "Using the page: click and type as normal",
     "modeHand": "Hand: drag to pan, click to press or pick (H)",
-    "modeComment": "Comment on a part (C)",
+    "modeComment": "Comment on a part, or label it (C)",
     "modeUse": "Use the page (U)",
     "copyHtml": "Copy the HTML",
     "picked": "You picked “{option}”",
     "commentOn": "About {subject}",
     "pickNote": "Add a note (optional)",
-    "commentNote": "What about it?",
-    "send": "Send to Claude",
-    "cancel": "Cancel (Esc)"
+    "commentNote": "What about it? (e.g. “this is the Save button”)",
+    "cancel": "Cancel (Esc)",
+    "copyPng": "Copy as an image (PNG)",
+    "savePng": "Save as a PNG",
+    "copiedPng": "Copied as an image",
+    "savedPng": "Saved {file}",
+    "hintMove": "Drag any part to move it where it should go",
+    "hintDraw": "Drag out a box where something new should go",
+    "modeMove": "Move a part (M)",
+    "modeDraw": "Draw a box for something new (D)",
+    "drawNote": "What goes here?",
+    "addNote": "Add note",
+    "addNoteTip": "Adds it to the notes below; nothing goes to Claude until you send them (Enter)",
+    "moveDown": "{px}px down",
+    "moveUp": "{px}px up",
+    "moveRight": "{px}px right",
+    "moveLeft": "{px}px left",
+    "and": " and ",
+    "movedNote": "Move {subject} {how}",
+    "movedNear": ", onto or beside {near}",
+    "drewIn": "A new {w}×{h} box under “{section}”",
+    "drew": "A new {w}×{h} box at {x}, {y}",
+    "inVersion": " (version {n})",
+    "onVersion": "On version {n}",
+    "notesTitle_one": "1 note",
+    "notesTitle_other": "{count} notes",
+    "notesHint": "Numbered as pinned on the sketch. Nothing is sent until you send them.",
+    "clearNotes": "Clear",
+    "sendAll_one": "Send note",
+    "sendAll_other": "Send all {count}",
+    "removeNote": "Remove this note",
+    "noteEmpty": "Add words (optional)",
+    "noteText": "Note {n}",
+    "notesHead_one": "A note on {where}, numbered as pinned on it:",
+    "notesHead_other": "{count} notes on {where}, numbered as pinned on it:",
+    "notesHeadVersions_one": "A note on the sketch “{title}”:",
+    "notesHeadVersions_other": "{count} notes on the sketch “{title}”, numbered as pinned on it:",
+    "notesAsk": "Change the sketch to match (a new version), and say if any of it would not work."
   },
   "mainUx": {
     "label": "UX review of screenshots",
@@ -3056,7 +3208,10 @@
     "autoTicket": "Load tickets automatically",
     "autoTicketNote": "Read the ticket from Jira when the Ticket panel opens, and keep it fresh. Each read is a small Claude agent.",
     "agentForks": "Let agents copy the conversation",
-    "agentForksNote": "Allow “fork” agents, which start with the whole conversation and run on the session’s model. Off: Claude starts fresh agents with a written brief, which is far cheaper in long sessions."
+    "agentForksNote": "Allow “fork” agents, which start with the whole conversation and run on the session’s model. Off: Claude starts fresh agents with a written brief, which is far cheaper in long sessions.",
+    "groupMotion": "Motion",
+    "prOverview": "Write a PR overview",
+    "prOverviewNote": "When Claude opens a pull request, it also writes its overview: what changed, risks, screens and how to test it."
   },
   "planBlocks": {
     "sketch": "Sketch",
@@ -3096,5 +3251,107 @@
     "picked": "you picked {option}",
     "pickHint": "click an option to pick it",
     "fileDone": "Edited since you approved the plan"
+  },
+  "backgroundList": {
+    "title": "In the background",
+    "stop": "Stop",
+    "stopTip": "Stop this one; Claude carries on without it",
+    "kind": {
+      "command": "command",
+      "agent": "agent",
+      "remoteAgent": "cloud agent",
+      "workflow": "workflow",
+      "monitor": "watcher",
+      "other": "task"
+    }
+  },
+  "zoomOverlay": {
+    "open": "Open full size (pan and zoom)",
+    "close": "Close (Esc)",
+    "diagram": "Diagram"
+  },
+  "overviewTab": {
+    "title": "PR overview",
+    "emptyTitle": "No PR overview yet",
+    "emptyBody": "Claude writes one from the branch’s changes: what changed and why, screens, risks, and anything a reviewer should know.",
+    "write": "Write overview",
+    "writeDisplay": "Write the PR overview",
+    "copy": "Copy as Markdown",
+    "toPr": "Add to the pull request’s description",
+    "again": "Write it again",
+    "done": {
+      "copied": "Copied",
+      "added": "Added to the pull request",
+      "failed": "Couldn’t update the pull request"
+    },
+    "size": {
+      "tiny": "Tiny change",
+      "small": "Small change",
+      "medium": "Medium change",
+      "large": "Large change"
+    },
+    "assets": "Assets",
+    "noteKind": {
+      "breaking": "Breaking",
+      "migration": "Migration",
+      "config": "Config",
+      "dependency": "Dependency",
+      "security": "Security",
+      "performance": "Performance",
+      "follow-up": "Follow-up",
+      "other": "Note"
+    },
+    "usually": "Usually",
+    "here": "Here",
+    "why": "Why",
+    "risk": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "testing": "Testing",
+    "testsPassed": "Tests passed",
+    "testsFailed": "Tests failed",
+    "decisions": "Decisions made",
+    "focus": "Where to look",
+    "numbers": "At a glance",
+    "writing": "Claude is writing the overview",
+    "reading": "Reading the pull request",
+    "elapsed": "{s}s",
+    "close": "Close",
+    "change": {
+      "added": "New",
+      "removed": "Removed"
+    },
+    "screensCount_one": "{count} screen",
+    "screensCount_other": "{count} screens",
+    "theChange": "The change",
+    "whatItDoes": "What it does",
+    "howItWorks": "How it works",
+    "checkBefore": "Check before merging",
+    "deviation": "Differs from the codebase",
+    "filesChanged_one": "file changed",
+    "filesChanged_other": "files changed",
+    "noTestRun": "No test run seen",
+    "noRisk": "None",
+    "andMore": "and {count} more",
+    "riskLevel": "Risk level",
+    "linesChanged": "lines changed",
+    "riskKind": "Risk",
+    "band": {
+      "high": "Must check",
+      "medium": "Worth checking",
+      "rest": "Good to know"
+    },
+    "limitedBy": "What limits it",
+    "alreadyTested": "Already tested",
+    "checkYourself": "Check it yourself",
+    "filesCount_one": "{count} file",
+    "filesCount_other": "{count} files",
+    "position": "{n} of {total}",
+    "previous": "Previous",
+    "next": "Next",
+    "changesCount_one": "{count} change",
+    "changesCount_other": "{count} changes"
   }
 }

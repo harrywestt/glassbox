@@ -189,8 +189,10 @@ export function useVoice() {
         for (let i = t.parts.length - 1; i >= 0 && got < want; i--) tail.unshift(t.parts[i]), (got += t.parts[i].length)
         const recent = join(tail)
         const trimmed = got < t.length
+        // Where this stretch starts in the whole take, at 16 kHz: the main process keys pieces by it.
+        const offset = Math.round(((t.length - got) * SAMPLE_RATE) / t.rate)
         void to16k(recent, t.rate)
-          .then((clip) => window.glassbox.voice.transcribe(clip, true))
+          .then((clip) => window.glassbox.voice.transcribe(clip, true, offset))
           .then((text) => take.current === t && text && setPartial(trimmed ? `…${text}` : text))
           .catch(() => undefined)
           .finally(() => (t.busy = false))

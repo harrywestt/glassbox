@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { THEMES, useTheme, type ThemeTokens } from './theme'
 import { ErrorBoundary, logError } from './components/ErrorBoundary'
-import { appReducer, DASHBOARD, hostKind, loadTabs, rememberView, saveTabs, type AppAction, type SessionViewMode } from './tabs'
+import { appReducer, DASHBOARD, hostKind, loadTabs, rememberView, saveTabs, type AppAction, type SessionViewMode, tabsSignature } from './tabs'
 import { disposeTerminal } from './work/TerminalTab'
 import { TitleBar } from './components/TitleBar'
 import { Dashboard } from './views/Dashboard'
@@ -18,6 +18,9 @@ import { bangContext, type CommentTarget } from './session'
 import { commentPrompt } from './review'
 import { tr } from '../../shared/i18n'
 import { startRecorder } from './recorder'
+import { ZoomOverlay } from './components/ZoomOverlay'
+import { Backdrop, backdropStrength } from './components/Backdrop'
+import { useAppearance } from './appearance'
 
 const ThemeContext = createContext<ThemeTokens>(THEMES['glassbox-dark'])
 export const useThemeTokens = () => useContext(ThemeContext)
@@ -102,10 +105,20 @@ export function App() {
   // Browser recordings are encoded here, whichever view is showing.
   useEffect(() => startRecorder(), [])
 
+  // Saved when the tabs themselves change (not on every streamed word, which kept putting it off).
+  const tabsKey = tabsSignature(state)
+  const latest = useRef(state)
+  latest.current = state
   useEffect(() => {
-    const t = setTimeout(() => saveTabs(state), 300)
+    const t = setTimeout(() => saveTabs(latest.current), 300)
     return () => clearTimeout(t)
-  }, [state])
+  }, [tabsKey])
+  // And once more as the window goes, whatever is pending.
+  useEffect(() => {
+    const flush = () => saveTabs(latest.current)
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [])
 
   // Sessions start lazily, the first time their tab is shown, so restored tabs don't all spawn at launch.
   useEffect(() => {
@@ -205,7 +218,8 @@ export function App() {
         actions.closeTab(stateRef.current.active)
       } else if (e.key.toLowerCase() === 't') {
         e.preventDefault()
-        setLauncher({ cwd: stateRef.current.tabs.find((t) => t.id === stateRef.current.active)?.cwd })
+        // Starts on the project you use most, not whichever tab happens to be open.
+        setLauncher({})
       }
     }
     window.addEventListener('keydown', onKey)
@@ -213,13 +227,15 @@ export function App() {
   }, [actions, cycleTabs])
 
   const activeTab = state.tabs.find((t) => t.id === state.active)
+  const appearance = useAppearance()
 
   return (
     <ThemeContext.Provider value={theme.tokens}>
       <ActionsContext.Provider value={actions}>
         <div className="app">
           <TitleBar state={state} dispatch={dispatch} />
-          <div className="app-body">
+          <div className={appearance.backdrop !== 'none' ? 'app-body has-backdrop' : 'app-body'} style={backdropStrength(appearance.backdropStrength, appearance.backdropPanels)}>
+            <Backdrop kind={appearance.backdrop} />
             <div className="view" hidden={state.active !== DASHBOARD}>
               <Dashboard tabs={state.tabs} sessions={state.sessions} visible={state.active === DASHBOARD} active={state.active} />
             </div>
@@ -231,6 +247,7 @@ export function App() {
           </div>
           <Tooltips />
           <AdminPrompt />
+          <ZoomOverlay />
           {launcher && (
             <NewSessionDialog
               initialCwd={launcher.cwd}

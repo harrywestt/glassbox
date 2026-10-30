@@ -9,7 +9,9 @@ import { SideTasks } from '../session-ui/SideTasks'
 import { toolIcon } from '../session-ui/Timeline'
 import { describeTool } from '../session-ui/describe'
 import { TestsSummary } from '../session-ui/TestSignals'
+import { testRuns } from '../tests'
 import { tr } from '../../../shared/i18n'
+import { BackgroundList } from '../session-ui/BackgroundList'
 
 const shortSummary = (c: ToolCall) => {
   const p = c.input.file_path ?? c.input.notebook_path
@@ -56,11 +58,13 @@ export function ActivityPanel() {
     return v >= 60 ? `${Math.floor(v / 60)}m ${v % 60}s` : `${v}s`
   }
 
+  const shownAlerts = s.alerts.filter((x) => x.level === 'error' || now < (x.until ?? x.at + 5 * 60_000))
   return (
     <div className="panel">
       <PanelHeader title={tr('activityPanel.title')} />
       <div className="panel-scroll">
-        {s.alerts.map((a) => (
+        {/* Notices clear themselves: errors stay until dismissed, anything else goes after 5 minutes. */}
+        {shownAlerts.map((a) => (
           <div key={a.at} className="callout callout-warn">
             <Icon name="warning" />
             <span className="grow">{a.text}</span>
@@ -149,6 +153,11 @@ export function ActivityPanel() {
 
         <TestsNow />
 
+        {(s.backgroundTasks ?? []).length > 0 && (
+          <Section id="background" title={tr('backgroundList.title')} meta={<span className="count">{(s.backgroundTasks ?? []).length}</span>}>
+            <BackgroundList />
+          </Section>
+        )}
         {running.length + agents.length > 0 && <Section id="running" title={tr('activityPanel.running')} meta={<span className="count">{running.length + agents.length}</span>}>
           {agents.map((a) => (
             <div key={a.id} className="list-row clickable" onClick={() => (setFilter(a.id), showPanel('agents'))}>
@@ -191,7 +200,7 @@ export function ActivityPanel() {
             ))}
           </Section>
         )}
-        {!task && !agentLists.length && !s.plan && !recent.length && !running.length && !agents.length && !s.alerts.length && !waitingOnYou.length && !s.permissions.length && (
+        {!task && !agentLists.length && !s.plan && !recent.length && !running.length && !agents.length && !shownAlerts.length && !(s.backgroundTasks ?? []).length && !waitingOnYou.length && !s.permissions.length && (
           <Empty icon="pulse" title={s.status === 'running' ? tr('activityPanel.starting') : tr('activityPanel.nothingYet')}>
             {tr('activityPanel.emptyBody')}
           </Empty>
@@ -215,9 +224,8 @@ function took(ms: number): string {
 /** Test status while Claude works; hidden until the first test run. */
 function TestsNow() {
   const { s, everyday } = useSession()
-  const any = useMemo(() => Object.values(s.toolCalls).some((c) => (c.name === 'Bash' || c.name === 'PowerShell') && /test/i.test(String(c.input.command ?? ''))), [s.toolCalls])
-  if (everyday) return null
-  if (!any) return null
+  // Only once there's a test run to show (the same runs the summary lists), never an empty section.
+  if (everyday || !testRuns(s).length) return null
   return (
     <Section id="tests" title={tr('activityPanel.tests')}>
       <TestsSummary compact />

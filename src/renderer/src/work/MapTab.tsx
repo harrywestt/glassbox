@@ -293,7 +293,7 @@ type Crew = { key: string; who: string; say: string; mod: string; kind: 'main' |
  * underneath winds the whole map back to any earlier moment.
  */
 export function MapTab() {
-  const { tab, s: session, peers, markFile, openRipple, openDiff, openFile, composerRef, openPlan } = useSession()
+  const { tab, s: session, peers, markFile, openDiff, openFile, composerRef, openPlan } = useSession()
   // The map redraws when Claude's work changes, not for every word of its reply.
   const s = useSettledSession(session)
   const writes = s.files.filter((f) => f.tool === 'Write').length
@@ -695,7 +695,7 @@ export function MapTab() {
         void ask(askText)
       }}
     >
-      <Icon name={asking ? 'loading' : 'sparkle'} className={asking ? 'codicon-modifier-spin accent' : 'accent'} />
+      <Icon name={asking ? 'loading' : 'search'} className={asking ? 'codicon-modifier-spin' : 'muted'} />
       {asking ? (
         <span className="map-ask-busy">
           {tr('mapTab.ask.finding', { q: asking.q })} <span className="muted">{elapsed(Date.now() - asking.since)}</span>
@@ -766,17 +766,17 @@ export function MapTab() {
       )}
       {mode === 'conv' && !groups && !busyGrouping && heat.length >= 2 && s.status !== 'running' && (
         <button className="link small map-group-btn" onClick={() => setRegroupN((n) => n + 1)} title={tr('mapTab.bar.groupTitle')}>
-          <Icon name="sparkle" /> {tr('mapTab.bar.group')}
+          <Icon name="group-by-ref-type" /> {tr('mapTab.bar.group')}
         </button>
       )}
       {arch.canName && (
         <button className="link small map-group-btn" disabled={naming} onClick={nameGroups} title={tr('mapTab.bar.nameTitle')}>
-          <Icon name={naming ? 'loading' : 'sparkle'} className={naming ? 'codicon-modifier-spin' : undefined} /> {naming ? tr('mapTab.bar.naming') : tr('mapTab.bar.name')}
+          <Icon name={naming ? 'loading' : 'tag'} className={naming ? 'codicon-modifier-spin' : undefined} /> {naming ? tr('mapTab.bar.naming') : tr('mapTab.bar.name')}
         </button>
       )}
       {mode === 'conv' && (groups || busyGrouping) && (
         <span className="map-grouped" title={groups ? tr('mapTab.bar.groupedTitle') : undefined}>
-          <Icon name={busyGrouping ? 'loading' : 'sparkle'} className={busyGrouping ? 'codicon-modifier-spin' : undefined} />
+          <Icon name={busyGrouping ? 'loading' : 'group-by-ref-type'} className={busyGrouping ? 'codicon-modifier-spin' : undefined} />
           {busyGrouping ? tr('mapTab.bar.grouping') : tr('mapTab.bar.grouped')}
           {groups && !busyGrouping && (
             <button className="link small" onClick={() => setRegroupN((n) => n + 1)}>
@@ -906,7 +906,6 @@ export function MapTab() {
           decisions={decisionsFor(arch, selBox, s)}
           onClose={() => setSel(null)}
           onBound={(mark) => markFile(`${arch.root}/${selBox.path}`, mark)}
-          onRipple={() => openRipple(selBox.id)}
           onOpen={(path, changed) => (changed ? openDiff({ path, base: null, diffMode: 'merge-base', source: 'session' }) : openFile(path))}
           onAsk={(text) => composerRef.current?.insert(text)}
         />
@@ -1272,7 +1271,6 @@ function Inspector({
   onHover,
   onClose,
   onBound,
-  onRipple,
   onOpen,
   onAsk
 }: {
@@ -1288,7 +1286,6 @@ function Inspector({
   onHover: (other: string | null) => void
   onClose: () => void
   onBound: (mark: Bound | null) => void
-  onRipple: () => void
   onOpen: (path: string, changed: boolean) => void
   onAsk: (text: string) => void
 }) {
@@ -1466,7 +1463,7 @@ function Inspector({
           )}
           {unexplained && !explaining && (uses.length > 0 || usedBy.length > 0) && (
             <button className="link small map-explain-btn" onClick={() => { setWhy(null); setExplainN((n) => n + 1) }} title={tr('mapTab.inspect.explainTitle')}>
-              <Icon name="sparkle" /> {tr('mapTab.inspect.explain')}
+              <Icon name="comment-discussion" /> {tr('mapTab.inspect.explain')}
             </button>
           )}
           {whyError && <div className="map-inspect-note">{tr('mapTab.inspect.whyError', { error: whyError })}</div>}
@@ -1493,11 +1490,6 @@ function Inspector({
         <button className="btn primary" onClick={() => onAsk(`About ${where}: `)} title={tr('mapTab.inspect.askTitle', { where: box.path ? `${box.path}/` : tr('mapTab.inspect.projectRoot') })}>
           {tr('mapTab.inspect.askClaude')}
         </button>
-        {usedBy.length > 0 && (
-          <button className="btn" onClick={onRipple} title={tr('mapTab.inspect.rippleTitle')}>
-            {tr('mapTab.inspect.ripple')}
-          </button>
-        )}
         {!box.external && box.files > 0 && box.tests === 0 && (
           <button className="btn" onClick={() => onAsk(`Add tests for ${where} covering `)} title={tr('mapTab.inspect.askTestsTitle')}>
             {tr('mapTab.inspect.askTests')}

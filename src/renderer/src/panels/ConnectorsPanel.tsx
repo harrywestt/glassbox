@@ -54,9 +54,6 @@ export function ConnectorsPanel() {
         </div>
         <IconButton icon="refresh" title={tr('connectorsPanel.refresh')} onClick={() => void window.glassbox.session.refresh(tab.id)} />
       </div>
-      <div className="hint small muted">
-        <Icon name="pin" /> <strong>{tr('connectorsPanel.hintRequire')}</strong> {tr('connectorsPanel.hintBody')}
-      </div>
       <div className="panel-scroll flush">
         {s.mcp.length === 0 && <Empty icon="plug" title={tr('connectorsPanel.loading')} />}
         {groups.map(([title, list]) =>
@@ -78,16 +75,15 @@ export function ConnectorsPanel() {
                       <span className="grow connector-name">
                         <span className="ellipsis">{connectorName(m.name)}</span>
                         <span className={`small ${m.status === 'connected' ? 'muted' : st.cls}`}>{m.status === 'connected' && m.tools?.length ? tr('connectorsPanel.tools', { n: m.tools.length }) : st.label}</span>
-                        
                       </span>
-                      <button
+                      {/* Require only means something for a connector that's working (or already required). */}
+                      {(m.status === 'connected' || isReq) && <button
                         className={isReq ? 'chip-btn on' : 'chip-btn'}
-                        disabled={m.status !== 'connected' && !isReq}
                         onClick={() => require(m.name)}
                         title={isReq ? tr('connectorsPanel.requiredTitle') : tr('connectorsPanel.requireTitle')}
                       >
                         <Icon name={isReq ? 'pinned' : 'pin'} /> {isReq ? tr('connectorsPanel.required') : tr('connectorsPanel.require')}
-                      </button>
+                      </button>}
                       <Toggle checked={m.status !== 'disabled'} onChange={(on) => void toggle(m.name, on)} title={busy === m.name ? tr('connectorsPanel.updating') : tr('connectorsPanel.onForSession')} />
                     </div>
                     {open === m.name && (

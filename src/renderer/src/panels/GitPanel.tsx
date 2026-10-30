@@ -8,6 +8,7 @@ import { timeAgo } from '../lib'
 import { tr } from '../../../shared/i18n'
 
 import { getAppearance } from '../appearance'
+import { OVERVIEW_ASK } from '../work/OverviewTab'
 
 /** Whether new sessions commit Claude's changes at the end of each turn (Settings, Automation; off by default: a model writes the commit messages). */
 export function loadAutoCommit(): boolean {
@@ -198,7 +199,7 @@ ${tr('gitPanel.openOnGithub')}`}>
       ) : res.none ? (
         <div className="pr-none">
           <span className="muted small">{s.git?.branch ? tr('gitPanel.noPr', { branch: s.git.branch }) : tr('gitPanel.noPrThisBranch')}</span>
-          <button className="btn" onClick={() => composerRef.current?.insert('Push this branch and open a pull request for it. ')}>
+          <button className="btn" onClick={() => composerRef.current?.insert(`Push this branch and open a pull request for it. Then: ${OVERVIEW_ASK} `)}>
             {tr('gitPanel.askClaudeToOpen')}
           </button>
         </div>

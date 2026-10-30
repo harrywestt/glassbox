@@ -21,7 +21,8 @@ export function TitleBar({ state, dispatch }: Props) {
   const tallies = state.tabs.map((t) => tallyOf(state.sessions[t.id]))
   const overall = tallies.includes('wait') ? 'wait' : tallies.includes('live') ? 'live' : tallies.includes('ok') ? 'ok' : 'idle'
 
-  const newTab = () => actions.showLauncher((state.tabs.find((t) => t.id === state.active) ?? state.tabs.at(-1))?.cwd)
+  // The new-session screen starts on the project you use most.
+  const newTab = () => actions.showLauncher()
 
   return (
     <header className="titlebar">

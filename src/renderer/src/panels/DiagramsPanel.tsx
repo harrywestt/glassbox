@@ -129,7 +129,7 @@ function MermaidView({ diagram }: { diagram: Diagram }) {
     <>
       <div className="preview-bar">
         <strong className="ellipsis grow">{diagram.title}</strong>
-        <span className="muted small">{tr('diagramsPanel.updated', { time: new Date(diagram.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}</span>
+        <span className="muted small">{tr('diagramsPanel.updated', { time: new Date(diagram.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) })}</span>
         {full && <IconButton icon="close" title={tr('diagramsPanel.close')} onClick={() => setFull(false)} />}
       </div>
       {error && <div className="note note-error">{tr('diagramsPanel.renderError', { error })}</div>}

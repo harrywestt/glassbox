@@ -11,9 +11,33 @@ import { app, webContents, type BrowserWindow } from 'electron'
 /** Recordings stop by themselves after this long. */
 const MAX_MS = 10 * 60_000
 const FPS = 12
-const MAX_WIDTH = 1600
+const MAX_WIDTH = 1920
 
-type Active = { id: string; wcId: number; started: number; timer: NodeJS.Timeout; limit: NodeJS.Timeout; latest?: Electron.NativeImage; sent?: Electron.NativeImage; done?: (path: string | null) => void; win: BrowserWindow; sig?: Buffer }
+/** How a recording looks, chosen when it starts. */
+export type RecordOptions = {
+  /** The video's size: the page's own shape, or a standard frame with the page letterboxed in it. */
+  size?: 'page' | '720p' | '1080p'
+  fps?: 12 | 24 | 30
+  /** A title card the video opens on. */
+  title?: string
+  subtitle?: string
+  /** Ripples and captions for each click, keypress and bit of typing (default on). */
+  showActions?: boolean
+  /** A pointer that glides to each click (default on). */
+  cursor?: boolean
+  /** Keep the still moments in (default: they're cut, so the video doesn't sit through thinking time). */
+  keepStill?: boolean
+}
+
+/** Something put into the video as it records. Positions are shares of the page's view (0 to 1). */
+export type RecordCue =
+  | { type: 'caption'; text: string; seconds?: number }
+  | { type: 'title'; text: string; subtitle?: string; seconds?: number }
+  | { type: 'highlight'; fx: number; fy: number; fw: number; fh: number; label?: string; seconds?: number }
+  | { type: 'pause' }
+  | { type: 'resume' }
+
+type Active = { id: string; wcId: number; started: number; timer: NodeJS.Timeout; limit: NodeJS.Timeout; latest?: Electron.NativeImage; latestAt: number; capturing?: boolean; nudges: number; nudgeKey?: string; sent?: Electron.NativeImage; done?: (path: string | null) => void; win: BrowserWindow; sig?: Buffer }
 
 /** Something Claude did in a recorded tab: a click (where, as a share of the page's view) or a caption. */
 export type RecordMark = { label: string; fx?: number; fy?: number }
@@ -40,38 +64,62 @@ export function isRecording(wcId: number): { started: number } | null {
   return a ? { started: a.started } : null
 }
 
-export function startRecording(win: BrowserWindow | undefined, wcId: number): { started: number } {
+/** Puts a caption, title card or highlight into a tab's recording, or pauses and resumes it. */
+export function cueRecording(wcId: number, cue: RecordCue): boolean {
+  const a = active.get(wcId)
+  if (!a || a.win.isDestroyed()) return false
+  a.win.webContents.send('glassbox:recorder', { kind: 'cue', id: a.id, cue })
+  return true
+}
+
+export function startRecording(win: BrowserWindow | undefined, wcId: number, opts: RecordOptions = {}): { started: number } {
   const existing = active.get(wcId)
   if (existing) return { started: existing.started }
   const wc = webContents.fromId(wcId)
   if (!wc || wc.isDestroyed()) throw new Error('That Browser tab is not open.')
   if (!win || win.isDestroyed()) throw new Error('Glassbox has no window open.')
   const id = `rec${++seq}`
+  const fps = opts.fps ?? FPS
   const a: Active = {
     id,
     wcId,
     win,
     started: Date.now(),
+    latestAt: 0,
+    nudges: 0,
     // Frames go to the window at a steady rate (the newest one, when it changed).
     timer: setInterval(() => {
+      // A tab that isn't showing (another view, another window on top) paints rarely or not at all, so
+      // the frames stop coming: then it's asked to draw afresh and captured directly (without the
+      // redraw, a hidden page hands back its last picture, from before whatever just changed).
+      if (Date.now() - a.latestAt > 250 && !a.capturing && !wc.isDestroyed()) {
+        a.capturing = true
+        void nudge(wc, a)
+          .then(() => wc.capturePage())
+          .then((img) => {
+            if (!img.isEmpty() && Date.now() - a.latestAt > 250) a.latest = img
+          })
+          .catch(() => undefined)
+          .finally(() => (a.capturing = false))
+      }
       if (!a.latest || a.latest === a.sent || win.isDestroyed()) return
       a.sent = a.latest
       // A frame that looks the same as the last (a blinking caret, a spinner's tick) isn't news: the
       // recording can pause through it rather than keep every second Claude spends thinking.
-      const sig = a.latest.resize({ width: 48, quality: 'good' }).toBitmap()
-      if (a.sig && sig.length === a.sig.length && meanDiff(sig, a.sig) < 1.2) return
+      const sig = a.latest.resize({ width: 240, quality: 'good' }).toBitmap()
+      if (a.sig && sig.length === a.sig.length && changedShare(sig, a.sig) < 0.0004) return
       a.sig = sig
       const img = a.latest.getSize().width > MAX_WIDTH ? a.latest.resize({ width: MAX_WIDTH }) : a.latest
       win.webContents.send('glassbox:recorder', { kind: 'frame', id, jpeg: img.toJPEG(82) })
-    }, 1000 / FPS),
+    }, 1000 / fps),
     limit: setTimeout(() => void stopRecording(win, wcId), MAX_MS)
   }
   active.set(wcId, a)
   byId.set(id, a)
   // Encoding happens in the window: keep its timers running at full speed while recording.
   win.webContents.setBackgroundThrottling(false)
-  win.webContents.send('glassbox:recorder', { kind: 'start', id, fps: FPS })
-  wc.beginFrameSubscription(false, (image) => (a.latest = image))
+  win.webContents.send('glassbox:recorder', { kind: 'start', id, fps, opts })
+  wc.beginFrameSubscription(false, (image) => ((a.latest = image), (a.latestAt = Date.now())))
   // A still page sends no new frames: ask for one now so the video starts with a picture.
   wc.invalidate()
   wc.once('destroyed', () => void stopRecording(win, wcId))
@@ -87,7 +135,10 @@ export function stopRecording(win: BrowserWindow | undefined, wcId: number): Pro
   clearTimeout(a.limit)
   const wc = webContents.fromId(wcId)
   try {
-    if (wc && !wc.isDestroyed()) wc.endFrameSubscription()
+    if (wc && !wc.isDestroyed()) {
+      wc.endFrameSubscription()
+      if (a.nudgeKey) void wc.removeInsertedCSS(a.nudgeKey).catch(() => {})
+    }
   } catch {
     /* already ended */
   }
@@ -114,9 +165,23 @@ export function recordingEncoded(id: string, data: ArrayBuffer | null): string |
   return path
 }
 
-/** The average difference between two small bitmaps, per channel (0 to 255). */
-function meanDiff(a: Buffer, b: Buffer): number {
-  let sum = 0
-  for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i])
-  return sum / a.length
+/**
+ * Makes a hidden page draw afresh: an invisible style change (a transparent outline, toggled) is
+ * the one thing that gets a page Chromium thinks is out of sight to repaint before it's captured.
+ */
+async function nudge(wc: Electron.WebContents, a: Active) {
+  const old = a.nudgeKey
+  a.nudgeKey = await wc.insertCSS(`html { outline: ${++a.nudges % 2}px solid transparent !important; }`, { cssOrigin: 'user' }).catch(() => undefined)
+  if (old) void wc.removeInsertedCSS(old).catch(() => {})
+}
+
+/**
+ * The share of pixels that visibly changed between two small bitmaps (BGRA). Counting changed
+ * pixels, rather than averaging the difference, catches a quiet change (a pale panel opening on a
+ * pale page) that an average washes out, while a blinking caret is still too few pixels to count.
+ */
+function changedShare(a: Buffer, b: Buffer): number {
+  let changed = 0
+  for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 24) changed++
+  return changed / (a.length / 4)
 }

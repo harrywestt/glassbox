@@ -12,7 +12,8 @@ const MAX = 8
  *
  * An SVG is zoomed by resizing it; anything else gives its `size` and is scaled. `onTap` and
  * `onHover` get a click (a press that didn't drag) and the pointer in content coordinates, for
- * content under the panning surface (a sketch's page); double-click then doesn't zoom.
+ * content under the panning surface (a sketch's page); double-click then doesn't zoom. With
+ * `onDrag`, a drag goes to it (start, move, end, in content coordinates) instead of panning.
  */
 export function PanZoom({
   children,
@@ -22,6 +23,8 @@ export function PanZoom({
   fitWidth,
   onTap,
   onHover,
+  onDrag,
+  maxFit = MAX,
   className,
   hint
 }: {
@@ -33,6 +36,9 @@ export function PanZoom({
   fitWidth?: boolean
   onTap?: (x: number, y: number) => void
   onHover?: (at: { x: number; y: number } | null) => void
+  /** The most fitting may zoom in (1: a small picture isn't blown up past its own size). */
+  maxFit?: number
+  onDrag?: (phase: 'start' | 'move' | 'end', from: { x: number; y: number }, to: { x: number; y: number }) => void
   className?: string
   /** What the corner hint says, when it isn't the diagram one. */
   hint?: string
@@ -42,7 +48,7 @@ export function PanZoom({
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 })
   const viewRef = useRef(view)
   viewRef.current = view
-  const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null)
+  const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean; from: { x: number; y: number } } | null>(null)
   const sizeRef = useRef(size)
   sizeRef.current = size
 
@@ -63,24 +69,36 @@ export function PanZoom({
     n.svg.setAttribute('height', String(n.h * view.k))
   }, [view.k, contentKey])
 
+  // A fit asked for while the view had no size yet (opened in a background tab, or still laying
+  // out): done as soon as it has one, instead of zooming out to the 10% floor.
+  const pendingFit = useRef(false)
   const fit = useCallback(() => {
     const b = box.current?.getBoundingClientRect()
     const n = natural()
-    if (!b || !n) return
+    if (!b || !n || b.width < 80 || b.height < 60) return void (pendingFit.current = true)
+    pendingFit.current = false
     const { w, h } = n
     if (fitWidth) {
       const k = Math.min(1, Math.max(MIN, (b.width - 48) / w))
       return setView({ k, x: (b.width - w * k) / 2, y: 24 })
     }
-    const k = Math.min(MAX, Math.max(MIN, Math.min((b.width - 48) / w, (b.height - 48) / h)))
+    const k = Math.min(maxFit, Math.max(MIN, Math.min((b.width - 48) / w, (b.height - 48) / h)))
     setView({ k, x: (b.width - w * k) / 2, y: (b.height - h * k) / 2 })
-  }, [fitWidth])
+  }, [fitWidth, maxFit])
 
   // Fit when the diagram changes (after Mermaid has put the SVG in).
   useLayoutEffect(() => {
     const t = setTimeout(fit, 60)
     return () => clearTimeout(t)
   }, [contentKey])
+
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const ro = new ResizeObserver(() => pendingFit.current && fit())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fit])
 
   const zoomAt = (factor: number, cx?: number, cy?: number) =>
     setView((v) => {
@@ -135,7 +153,7 @@ export function PanZoom({
         onPointerDown={(e) => {
           if (e.button !== 0) return
           ;(e.target as Element).setPointerCapture?.(e.pointerId)
-          drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
+          drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false, from: at(e) }
           box.current?.classList.add('dragging')
         }}
         onPointerMove={(e) => {
@@ -143,6 +161,11 @@ export function PanZoom({
           if (!d) return onHover?.(at(e))
           // A press that wanders a few pixels is still a click.
           if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return
+          if (onDrag) {
+            if (!d.moved) onDrag('start', d.from, d.from)
+            d.moved = true
+            return onDrag('move', d.from, at(e))
+          }
           d.moved = true
           setView((v) => ({ ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y }))
         }}
@@ -150,6 +173,7 @@ export function PanZoom({
           const d = drag.current
           drag.current = null
           box.current?.classList.remove('dragging')
+          if (d?.moved && onDrag) onDrag('end', d.from, at(e))
           if (d && !d.moved && onTap) {
             const p = at(e)
             onTap(p.x, p.y)
