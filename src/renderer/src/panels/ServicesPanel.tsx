@@ -17,10 +17,10 @@ const STATUS: Record<ServiceStatus, { label: string; cls: string }> = {
 }
 
 const SETUP_PROMPT =
-  'Set up .glassbox/services.json so the Glassbox Run button starts everything this project needs for local development. Inspect the repo first (package.json scripts, docker-compose, launch settings, READMEs, CLAUDE.md) to find the real commands, working directories, ports, URLs and ready log lines, and set dependsOn so infrastructure starts first. Each Glassbox session runs its own copy, so give every app service its usual "port" and use the port placeholders (see the services instructions) instead of hard-coding ports; leave shared infrastructure without one. Then summarise what you configured.'
+  'Set up this project’s Glassbox services (save_services; Glassbox keeps them outside the repo, so don’t write a file for them) so the Glassbox Run button starts everything this project needs for local development. Inspect the repo first (package.json scripts, docker-compose, launch settings, READMEs, CLAUDE.md) to find the real commands, working directories, ports, URLs and ready log lines, and set dependsOn so infrastructure starts first. Each Glassbox session runs its own copy, so give every app service its usual "port" and use the port placeholders (see the services instructions) instead of hard-coding ports; leave shared infrastructure without one. Then summarise what you configured.'
 
 const PER_SESSION_PROMPT =
-  'Update .glassbox/services.json so each Glassbox session can run its own copy of the app services side by side: give every app service its usual "port", and replace hard-coded ports in its command, env and url with the port placeholders from the services instructions (its own port, and other services’ ports where one calls another). Find how each tool takes a port (flags like --port or --urls, or env vars like PORT or ASPNETCORE_URLS). Leave shared infrastructure (databases, docker compose) without a port. Summarise what changed.'
+  'Update this project’s Glassbox services (read them with get_services, save with save_services) so each Glassbox session can run its own copy of the app services side by side: give every app service its usual "port", and replace hard-coded ports in its command, env and url with the port placeholders from the services instructions (its own port, and other services’ ports where one calls another). Find how each tool takes a port (flags like --port or --urls, or env vars like PORT or ASPNETCORE_URLS). Leave shared infrastructure (databases, docker compose) without a port. Summarise what changed.'
 
 export function ServicesPanel() {
   const { tab, s, runSide, showPanel } = useSession()
@@ -64,7 +64,7 @@ export function ServicesPanel() {
       {!snapshot.exists ? (
         <div className="services-empty">
           <span className="muted" title={tr('servicesPanel.noServicesTitle')}>{tr('servicesPanel.noServices')}</span>
-          <button className="btn quiet" disabled={!canSend} onClick={() => runSide({ kind: 'services', title: tr('servicesPanel.setUpServices'), prompt: SETUP_PROMPT, tools: [...READ_TOOLS, 'Write', 'Edit'] })}>
+          <button className="btn quiet" disabled={!canSend} onClick={() => runSide({ kind: 'services', title: tr('servicesPanel.setUpServices'), prompt: SETUP_PROMPT, tools: [...READ_TOOLS, 'ToolSearch'] })}>
             {tr('servicesPanel.askSetUp')}
           </button>
         </div>
@@ -116,7 +116,7 @@ export function ServicesPanel() {
                 <button
                   className="link small"
                   disabled={!canSend}
-                  onClick={() => runSide({ kind: 'services', title: tr('servicesPanel.perSessionPorts'), prompt: PER_SESSION_PROMPT, tools: [...READ_TOOLS, 'Write', 'Edit'] })}
+                  onClick={() => runSide({ kind: 'services', title: tr('servicesPanel.perSessionPorts'), prompt: PER_SESSION_PROMPT, tools: [...READ_TOOLS, 'ToolSearch'] })}
                 >
                   {tr('servicesPanel.askSetUpPorts')}
                 </button>
@@ -130,7 +130,7 @@ export function ServicesPanel() {
                 onChange={(e) => setChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && change.trim() && canSend) {
-                    runSide({ kind: 'services', title: tr('servicesPanel.changeServices'), prompt: `Update .glassbox/services.json: ${change.trim()}. Check the repo for the real commands, ports and ready log lines.`, tools: [...READ_TOOLS, 'Write', 'Edit'] })
+                    runSide({ kind: 'services', title: tr('servicesPanel.changeServices'), prompt: `Update this project’s Glassbox services (get_services, then save_services): ${change.trim()}. Check the repo for the real commands, ports and ready log lines.`, tools: [...READ_TOOLS, 'ToolSearch'] })
                     setChange('')
                   }
                 }}

@@ -1,13 +1,14 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import type { GlassboxSignal } from '../shared/events'
-import { SERVICES_FILE, type ProjectServices } from './services'
+import { servicesFile, type ProjectServices } from './services'
 import { BROWSER_TOOL_NAMES, browserTools, type BrowserBridge, type BrowserHooks } from './browserTools'
 import type { UxReviewer } from './uxReviewer'
 import { Loaders } from './loaders'
 import { describeStyle, projectStyle } from './projectStyle'
 import { keepSketch, latestSketch, readSketch, setLatestSketch, sketchSnapshot, sketchUrl, withAssets } from './sketch'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { componentId, deleteLibrary, listLibrary, saveLibrary, sourceHash } from './library'
 import { isAbsolute, resolve as resolvePath } from 'node:path'
 
 export const GLASSBOX_TOOLS = [
@@ -36,6 +37,11 @@ export const GLASSBOX_TOOLS = [
   'mcp__glassbox__open_tab',
   'mcp__glassbox__app_status',
   'mcp__glassbox__start_app',
+  'mcp__glassbox__get_services',
+  'mcp__glassbox__save_component',
+  'mcp__glassbox__list_components',
+  'mcp__glassbox__delete_component',
+  'mcp__glassbox__save_services',
   'mcp__glassbox__app_logs',
   'mcp__glassbox__stop_app',
   ...BROWSER_TOOL_NAMES
@@ -66,7 +72,7 @@ The user may attach "Glassbox session requirements" (files marked must-read, mus
 
 // Read-only so plan mode allows them (they only update the Glassbox UI). Deferred behind tool search
 // like any connector's tools, so their schemas don't ride along with every request.
-const ALWAYS_LOAD = { annotations: { readOnlyHint: true } }
+const READ_ONLY = { annotations: { readOnlyHint: true } }
 
 const ok = (text: string) => ({ content: [{ type: 'text' as const, text }] })
 
@@ -92,7 +98,7 @@ export function createGlassboxServer(
   /** The session's loaders, kept across its restarts (a background task gets its own). */
   sessionLoaders?: Loaders,
   /** The UX reviewer: a second agent that looks over screenshots in the background. */
-  ux?: Pick<UxReviewer, 'add' | 'status' | 'flush'>
+  ux?: Pick<UxReviewer, 'add' | 'addReference' | 'status' | 'flush'>
 ) {
   const loaders = sessionLoaders ?? new Loaders(cwd ?? process.cwd(), (loader) => emit({ type: 'loader', loader }))
   return createSdkMcpServer({
@@ -124,13 +130,14 @@ export function createGlassboxServer(
           emit({ type: 'diagram', id, title, mermaid })
           return ok(`Diagram "${title}" is now visible in Glassbox.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'show_sketch',
         'Show a rough HTML sketch in the Glassbox Sketches view, to put an idea or a problem in front of the user: layouts to choose between, a screen as it is against as it should be, a rough table, a small interactive prototype. The user pans and zooms it, clicks options, and comments on parts of it; their pick or comment comes back to you as a message. Reusing an id adds a new version (they can step back through versions), so revise rather than making near-duplicates.\n\n' +
           'Write a self-contained fragment (no doctype needed): inline <style> and <script> are fine; nothing loads from the network (no CDN fonts, images or libraries; draw with HTML, CSS or inline SVG), but image and font files on disk can be used (see below). Any width works. Colours are set as CSS variables (--bg, --surface, --surface2, --elevated, --border, --fg, --muted, --subtle, --accent, --accent-fg, --ok, --warn, --err, --info, --radius) and plain elements are already styled with them. By default they are THE PROJECT\'S OWN colours, read from its stylesheets and Tailwind config, so a proposed screen looks like the app it is for (this tool\'s answer says what it found); use the variables rather than your own hex so the sketch stays on-brand, and match the project\'s layout, density and components as you saw them in its code. Where the project has no colours, Glassbox\'s are used. A chart palette --cat-1 to --cat-8 (for categories, in order) is there too. Every colour (accent, ok, warn, err, info, cat-1 to cat-8) has classes .text-<colour> (coloured text), .fill-<colour> (a soft tint with a matching border, e.g. a card or row) and .solid-<colour> (a strong fill, e.g. a button or tag). Set scheme to match, dark or light (Glassbox\'s look) only when the sketch is about Glassbox itself or the user asks. Keep it rough and quick: it is a sketch, not the product. Classes ready to use: .row (side by side, wrapping) and .col (stacked), .grow, .card (a panel), .box (a dashed placeholder for "image here", "chart here"), .note (an annotation), .bad and .good (mark a problem or the fix), .label (a small tag), .muted, .small, button.primary.\n\n' +
           'To let the user choose, put data-pick="Option A" (a short name) on each option\'s container: clicking one sends you "I pick Option A". Lay options side by side in a .row at the given width, each with a heading saying what is different.\n\n' +
+          'Make it work when that helps (the user clicks through it): attributes need no script. data-open="#refund" on a button opens the element with that id (a .modal with a .panel inside, a .drawer, a .popover menu, or a <dialog>); data-close closes the one it is in (or the selector given); Esc and a click on a modal\'s backdrop close it too. data-toggle="#menu" shows or hides. Tabs: a data-tabs bar of buttons each with data-tab="panel-id". Flows across screens: sections with data-screen="checkout" (the first shows) and buttons with data-goto="confirm". data-toast="Saved" shows a toast. Overlays start hidden. Write a script for anything else. Check each state with sketch_snapshot and click.\n\n' +
           'Glassbox\'s styles below sit underneath the sketch\'s own, so a class you define (.note, .card…) always wins; bare: true drops them altogether. Real images and fonts: refer to files on disk in src, href or CSS url() (a path relative to the project, an absolute path, or file://), e.g. a screenshot you took or the app\'s own font files; Glassbox brings them along (nothing loads from the network). Revisions: send html_file (a file you wrote) or edits (find and replace on the previous version) instead of the whole page again. stylesheet picks which CSS file the project colours come from. bare: true leaves out Glassbox\'s plain-element styles and classes. Check your work with sketch_snapshot.',
         {
           id: z.string().describe('Stable slug, e.g. "settings-layout"; the same id again is a new version'),
@@ -181,22 +188,25 @@ export function createGlassboxServer(
           const style = projectStyle(root, sheet)
           const drawnIn = !scheme || scheme === 'project' ? describeStyle(style) : null
           // What it looks like, so Claude sees what it drew (and any script errors) without asking.
-          let picture: { png: Buffer; height: number; from: number; to: number; logs: string[] } | null = null
+          let picture: Awaited<ReturnType<typeof sketchSnapshot>> | null = null
           if (look !== false) {
             const set = style.light ?? style.dark
             const vars = set && (!scheme || scheme === 'project') ? { base: style.light ? 'light' : 'dark', ...set } : {}
             picture = await sketchSnapshot(`${sketchUrl(page, root)}?t=${encodeURIComponent(JSON.stringify(vars))}${plain ? '&b=1' : ''}`, w ?? 1200).catch(() => null)
           }
-          const cut = picture && picture.to < picture.height ? ` The picture stops at ${picture.to}px of ${picture.height}px; see the rest with sketch_snapshot and top.` : ''
+          const cut =
+            (picture?.next ? ` The picture stops at ${picture.next}px of ${picture.height}px; see the rest with sketch_snapshot and top.` : '') +
+            (picture && picture.width > (w ?? 1200) ? ` Its content spills to ${picture.width}px wide, past the page's ${w ?? 1200}px (the picture and the Sketches view show all of it).` : '') +
+            (picture && picture.scale < 0.75 ? ` The picture is scaled to ${Math.round(picture.scale * 100)}%; to read small text, look at a part with sketch_snapshot (selector, or top and height).` : '')
           const text =
             `Sketch "${title}" (id ${id}) is in the Sketches view${drawnIn ? `, drawn in ${drawnIn}` : !scheme || scheme === 'project' ? ", in Glassbox's colours (no project colours were found)" : ''}.` +
               (assets.found ? ` ${assets.found} local file${assets.found === 1 ? '' : 's'} brought along.` : '') +
               (assets.missing.length ? ` Not found (shown broken): ${assets.missing.slice(0, 5).join(', ')}.` : '') +
-              (picture ? ` The picture is how it draws, ${w ?? 1200}px wide and ${picture.height}px tall.${cut}${picture.logs.length ? ` Console: ${picture.logs.join(' | ')}` : ' No console errors.'}` : '') +
-              ` Embed it in a plan with <Sketch id="${id}" />. Revise with edits (find and replace on this version) or html_file rather than the whole page; if your copy of show_sketch doesn't list edits, html_file, stylesheet or bare, it has changed since you loaded it: look it up again with tool search. Call open_tab sketches if the user should look now. Their pick or comment will arrive as a message. [sketch-ref:${ref}]`
+              (picture ? ` The picture is how it draws, ${Math.max(w ?? 1200, picture.width)}px wide and ${picture.height}px tall.${cut}${picture.logs.length ? ` Console: ${picture.logs.join(' | ')}` : ' No console errors.'}` : '') +
+              ` Revise with edits or html_file, not the whole page (if your show_sketch has no edits parameter, look it up again with tool search). [sketch-ref:${ref}]`
           return picture ? { content: [{ type: 'text' as const, text }, { type: 'image' as const, data: picture.png.toString('base64'), mimeType: 'image/png' }] } : ok(text)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'pr_overview',
@@ -225,13 +235,22 @@ export function createGlassboxServer(
           emit({ type: 'overview', overview })
           return ok('The PR overview is in Glassbox\'s PR overview view. The user can copy it or add it to the pull request description from there.')
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'sketch_snapshot',
-        'See a sketch you made: a picture of the whole page as it is drawn (in the project colours), and anything its console or scripts reported while it loaded. Use it to check layout, overflow and that images and fonts loaded.',
-        { id: z.string().describe('The sketch id'), width: z.number().int().min(320).optional().describe('Draw it at this width instead of its own'), top: z.number().int().min(0).optional().describe('For a long page: start this many px down (each picture covers up to 8000px)') },
-        async ({ id, width, top }) => {
+        'See a sketch you made, as it is drawn (in the project colours), and anything its console or scripts reported while it loaded. With no area: the whole page in one picture, scaled to fit. To read detail (a diagram\'s labels, small text), look at one part at full size: selector (one element, e.g. "svg" or "#erd"), or top, left, height and area_width in page pixels. Use it to check layout, overflow and that images and fonts loaded.',
+        {
+          id: z.string().describe('The sketch id'),
+          width: z.number().int().min(320).optional().describe('Draw the page at this width instead of its own'),
+          selector: z.string().optional().describe('Show just this element (the first match), at full size'),
+          click: z.array(z.string()).optional().describe('CSS selectors to click first, in order (e.g. ["#open-refund"] to see the modal open, or a data-goto button to see the next screen)'),
+          top: z.number().int().min(0).optional().describe('Show the part from this many px down (2400px of it unless height is given)'),
+          left: z.number().int().min(0).optional().describe('Show the part from this many px across'),
+          height: z.number().int().min(50).optional().describe('How tall a part to show, in px'),
+          area_width: z.number().int().min(50).optional().describe('How wide a part to show, in px (default: to the right edge)')
+        },
+        async ({ id, width, selector, click, top, left, height, area_width }) => {
           const root = cwd ?? process.cwd()
           const v = latestSketch(root, id)
           const page = v ? readSketch(v.ref) : null
@@ -240,15 +259,77 @@ export function createGlassboxServer(
           const set = style.light ?? style.dark
           const vars = set ? { base: style.light ? 'light' : 'dark', ...set } : {}
           const url = `${sketchUrl(page, root)}?t=${encodeURIComponent(JSON.stringify(vars))}${v.bare ? '&b=1' : ''}`
-          const shot = await sketchSnapshot(url, width ?? v.width, top ?? 0)
+          const shot = await sketchSnapshot(url, width ?? v.width, { selector, top, left, height, width: area_width }, click ?? []).catch((e: unknown) => (e instanceof Error ? e.message : String(e)))
+          if (typeof shot === 'string') return { ...ok(shot), isError: true }
+          const r = shot.region
+          const whole = r.x === 0 && r.y === 0 && r.w >= shot.width && r.h >= shot.height
           return {
             content: [
               { type: 'image' as const, data: shot.png.toString('base64'), mimeType: 'image/png' },
-              { type: 'text' as const, text: `Drawn at ${width ?? v.width}px wide, ${shot.height}px tall; this picture shows ${shot.from}px to ${shot.to}px.${shot.to < shot.height ? ` Pass top: ${shot.to} for the next part.` : ''}${shot.logs.length ? `\nConsole:\n${shot.logs.join('\n')}` : ' Nothing in the console.'}` }
+              {
+                type: 'text' as const,
+                text:
+                  `Drawn at ${width ?? v.width}px wide; the page is ${shot.width}×${shot.height}px. ` +
+                  (whole ? 'This picture is all of it' : `This picture shows x ${r.x}–${r.x + r.w}, y ${r.y}–${r.y + r.h}`) +
+                  (shot.scale < 1 ? `, scaled to ${Math.round(shot.scale * 100)}% (look at a smaller part to read detail).` : ', at full size.') +
+                  (shot.next ? ` Pass top: ${shot.next} for the next part.` : '') +
+                  (click?.length ? ` Clicked ${click.length - shot.missed.length} of ${click.length} first${shot.missed.length ? `; not found: ${shot.missed.join(', ')}` : ''}.` : '') +
+                  (shot.logs.length ? `\nConsole:\n${shot.logs.join('\n')}` : ' Nothing in the console.')
+              }
             ]
           }
         },
-        ALWAYS_LOAD
+        READ_ONLY
+      ),
+      // The project's component library (in Glassbox, not the repo): copies of the app's real components, for building screens.
+      tool(
+        'save_component',
+        "Save a copy of one of the app's real components to the project's component library in Glassbox (kept outside the repo), so the user can build screens from it in the Screens view. Read the component's source first and recreate it faithfully as one HTML fragment with its own <style> (class names prefixed so they don't clash), using the project's colours as CSS variables (var(--accent), var(--bg), var(--surface), var(--fg), var(--muted), var(--border), var(--radius)) and real copy. Nothing loads from the network. kind 'shell' is the app's frame (header, sidebar, page padding) with the empty content area marked data-slot; screens can start from it. Saving the same name again replaces it. Only when the user asks for components.",
+        {
+          name: z.string().min(1).describe('What developers call it, e.g. "Primary button", "Order card"'),
+          html: z.string().min(1).describe('The component as an HTML fragment with its own <style>'),
+          kind: z.enum(['component', 'shell', 'icon']).optional().describe("'shell' for the app's frame (with a data-slot element for the content); 'icon' for one of the app's icons (an inline SVG using currentColor, width 24)"),
+          variants: z.array(z.object({ name: z.string(), html: z.string() })).optional().describe('Other looks of it (secondary, disabled, error…), each as its own HTML'),
+          source: z.string().optional().describe('The source file it copies, relative to the project'),
+          usage: z.string().optional().describe('How code uses it, e.g. "<Button variant=\"primary\">" from "@/components/Button"'),
+          width: z.number().int().min(16).max(4000).optional().describe('The width it is usually drawn at (a shell: the app width, e.g. 1440)'),
+          height: z.number().int().min(16).max(6000).optional().describe("A shell's height, e.g. 900")
+        },
+        async ({ name, html, kind, variants, source, usage, width, height }) => {
+          const root = cwd ?? process.cwd()
+          if (kind === 'shell' && !/\bdata-slot\b/.test(html)) return { ...ok('A shell needs the element where a screen\'s content goes marked data-slot. Nothing was saved.'), isError: true }
+          const saved = saveLibrary(root, 'components', { id: kind === 'shell' || kind === 'icon' ? `${kind}-${componentId(name)}` : componentId(name), name, kind: kind ?? 'component', html: withAssets(html, root).html, variants: variants?.map((v) => ({ ...v, html: withAssets(v.html, root).html })), source, sourceHash: sourceHash(root, source), usage, width, height })
+          // What it looks like in the project's colours, so Claude can check it against the real one.
+          const style = projectStyle(root)
+          const set = style.light ?? style.dark
+          const vars = set ? { base: style.light ? 'light' : 'dark', ...set } : {}
+          const page = `<style>body { margin: 0; padding: 16px; }</style>${html}${(variants ?? []).map((v) => `<div style="margin-top: 16px">${v.html}</div>`).join('')}`
+          const picture = await sketchSnapshot(`${sketchUrl(page, root)}?t=${encodeURIComponent(JSON.stringify(vars))}&b=1`, Math.max(320, (width ?? 600) + 32)).catch(() => null)
+          const text = `Saved "${name}" (${saved.kind}${variants?.length ? `, ${variants.length} variant${variants.length === 1 ? '' : 's'}` : ''}) to the component library. It's in the Screens view.${picture ? ` The picture is how it draws.${picture.logs.length ? ` Console: ${picture.logs.join(' | ')}` : ''}` : ''}`
+          return picture ? { content: [{ type: 'text' as const, text }, { type: 'image' as const, data: picture.png.toString('base64'), mimeType: 'image/png' }] } : ok(text)
+        }
+      ),
+      tool(
+        'list_components',
+        "The project's component library in Glassbox: each component's name, kind, variants and the source file it copies.",
+        {},
+        async () => {
+          const list = listLibrary(cwd ?? process.cwd(), 'components')
+          if (!list.length) return ok('The component library is empty.')
+          return ok(list.map((c) => `- ${c.name} (${c.kind}${c.variants?.length ? `; variants: ${c.variants.map((v) => v.name).join(', ')}` : ''})${c.source ? ` from ${c.source}` : ''}`).join('\n'))
+        }
+      ),
+      tool(
+        'delete_component',
+        'Remove a component from the project\'s component library, by name.',
+        { name: z.string() },
+        async ({ name }) => {
+          const root = cwd ?? process.cwd()
+          const hit = listLibrary(root, 'components').find((c) => c.name.toLowerCase() === name.toLowerCase())
+          if (!hit) return { ...ok(`No component called "${name}".`), isError: true }
+          deleteLibrary(root, 'components', hit.id)
+          return ok(`Removed "${hit.name}".`)
+        }
       ),
       tool(
         'delete_sketch',
@@ -260,7 +341,7 @@ export function createGlassboxServer(
           emit({ type: 'sketch-delete', id })
           return ok(`Sketch "${id}" removed.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'show_flow',
@@ -281,7 +362,7 @@ export function createGlassboxServer(
           emit({ type: 'flow', id, title, lanes, before, after })
           return ok(`Flow "${title}" is now visible in Glassbox.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'set_current_task',
@@ -302,7 +383,7 @@ export function createGlassboxServer(
           emit({ type: 'task', summary, steps })
           return ok('Task updated.')
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'pin_file',
@@ -312,7 +393,7 @@ export function createGlassboxServer(
           emit({ type: 'pin', path, reason })
           return ok(`Pinned ${path}.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'log_decision',
@@ -328,7 +409,7 @@ export function createGlassboxServer(
           if (kind !== 'question') onDecision?.({ kind, title, detail, files })
           return ok(kind === 'question' ? `Logged. The user has been shown your question: "${title}". Carry on with anything that doesn't depend on the answer.` : 'Logged.')
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'set_acceptance_criteria',
@@ -345,7 +426,7 @@ export function createGlassboxServer(
           )
         },
         async ({ criteria }) => ok(`Checklist updated: ${criteria.filter((c) => c.status === 'tested').length} of ${criteria.length} tested.`),
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'report_finding',
@@ -359,7 +440,7 @@ export function createGlassboxServer(
           suggestion: z.string().optional().describe('Suggested fix, code or prose')
         },
         async () => ok('Finding recorded.'),
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'check_in',
@@ -371,7 +452,7 @@ export function createGlassboxServer(
           options: z.array(z.string()).optional().describe('Up to 4 concrete choices the user can pick from')
         },
         async (q) => ok(`The user answered: ${await checkIn(q)}`),
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       // Putting things in front of the user. Each switches the user's view, so they're for when
       // looking at the thing is the point (you're explaining it, or asking about it).
@@ -388,7 +469,7 @@ export function createGlassboxServer(
           emit({ type: 'open', target: { view: 'file', path, line, endLine }, why })
           return ok(`Opened ${path} for the user.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'present_file',
@@ -404,7 +485,7 @@ export function createGlassboxServer(
           const full = isAbsolute(path) ? path : resolve(cwd ?? process.cwd(), path)
           return existsSync(full) ? ok(`Shown to the user: ${path}`) : { ...ok(`There's no file at ${path}. Create it first, or pass the path it was actually saved to.`), isError: true }
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'open_diff',
@@ -414,7 +495,7 @@ export function createGlassboxServer(
           emit({ type: 'open', target: { view: 'diff', path }, why })
           return ok(`Opened the diff of ${path} for the user.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'show_on_map',
@@ -427,7 +508,7 @@ export function createGlassboxServer(
           emit({ type: 'open', target: { view: 'map', paths }, why })
           return ok('The map is showing those modules.')
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'show_plan_on_map',
@@ -456,7 +537,7 @@ export function createGlassboxServer(
             .describe('Only connections your plan adds or removes, not existing ones it keeps')
         },
         async ({ modules, connections }) => ok(`The plan is on the map: ${modules.length} module${modules.length === 1 ? '' : 's'}${connections?.length ? `, ${connections.length} connection change${connections.length === 1 ? '' : 's'}` : ''}.`),
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'show_database',
@@ -470,7 +551,7 @@ export function createGlassboxServer(
           emit({ type: 'open', target: { view: 'erd', entities, query: area }, why })
           return ok('The database view is open.')
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'show_progress',
@@ -503,7 +584,7 @@ export function createGlassboxServer(
           loaders.set({ id, label, status: status ?? 'running', ...given })
           return ok(watch && (status ?? 'running') === 'running' ? `Showing "${label}". Glassbox is watching it and will mark it done.` : `"${label}" is ${status ?? 'running'}.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'open_preview',
@@ -513,7 +594,7 @@ export function createGlassboxServer(
           emit({ type: 'open', target: { view: 'preview', url }, why })
           return ok(`Opened ${url} in the Browser.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       tool(
         'open_tab',
@@ -523,9 +604,49 @@ export function createGlassboxServer(
           emit({ type: 'open', target: { view: 'tab', tab }, why })
           return ok(`Showing ${tab}.`)
         },
-        ALWAYS_LOAD
+        READ_ONLY
       ),
       ...(app ? appTools(app, emit) : []),
+      // How the project's services start: Glassbox keeps it, so Claude reads and changes it here, not as a file in the repo.
+      tool(
+        'get_services',
+        "How this project's services are set up in Glassbox (what the Run button and start_app start), as JSON; or that none are yet.",
+        {},
+        async () => {
+          const f = servicesFile(cwd ?? process.cwd())
+          return ok(existsSync(f) ? readFileSync(f, 'utf8') : 'No services are set up for this project yet. Set them up with save_services.')
+        }
+      ),
+      tool(
+        'save_services',
+        "Save how this project's services start (the whole list, replacing what was there). Glassbox keeps it outside the repo, per project folder. Give every app service its usual port and write ${port} (its own) and ${port:name} (another service's) in command, env and url instead of fixed ports; leave shared infrastructure (databases, docker compose) without one.",
+        {
+          services: z
+            .array(
+              z.object({
+                name: z.string().min(1),
+                command: z.string().min(1).describe('The command to run, e.g. "npm run dev -- --port ${port}"'),
+                cwd: z.string().optional().describe('Folder to run it in, relative to the project'),
+                port: z.number().int().positive().optional().describe('The port it normally uses'),
+                env: z.record(z.string(), z.string()).optional(),
+                url: z.string().optional().describe('Where to open it, e.g. "http://localhost:${port}"'),
+                readyPattern: z.string().optional().describe('A regular expression its output matches once it is ready'),
+                dependsOn: z.array(z.string()).optional().describe('Services to start first'),
+                autostart: z.boolean().optional()
+              })
+            )
+            .describe('Every service, in order')
+        },
+        async ({ services }) => {
+          const names = new Set(services.map((x) => x.name))
+          const missing = services.flatMap((x) => (x.dependsOn ?? []).filter((d) => !names.has(d)).map((d) => `${x.name} depends on "${d}", which isn't in the list`))
+          if (missing.length) return { ...ok(`Not saved: ${missing.join('; ')}.`), isError: true }
+          const f = servicesFile(cwd ?? process.cwd())
+          writeFileSync(f, JSON.stringify({ services }, null, 2))
+          app?.().load()
+          return ok(`Saved ${services.length} service${services.length === 1 ? '' : 's'}: ${services.map((x) => x.name).join(', ')}. The Run button and start_app use them now.`)
+        }
+      ),
       ...(browser ? browserTools(browser.bridge, browser.shotsDir, browser.hooks) : []),
       ...(ux
         ? [
@@ -535,9 +656,14 @@ export function createGlassboxServer(
               {
                 images: z.array(z.string()).optional().describe('Image files to review (png, jpg, webp)'),
                 note: z.string().optional().describe('What these screens are, for the reviewer'),
+                reference: z.string().optional().describe('Instead of reviewing them, keep these images as the reference for a kind of screen (e.g. "list page"): established pages new screens of that kind are compared with'),
                 wait: z.boolean().optional().describe('Wait for the reviews to finish and return every finding so far')
               },
-              async ({ images, note, wait }) => {
+              async ({ images, note, reference, wait }) => {
+                if (reference) {
+                  const kept = (images ?? []).filter((p) => ux.addReference({ path: p, note, kind: reference })).length
+                  return ok(`Kept ${kept} as the reference for "${reference}": screens sent for review from now on are compared with it.`)
+                }
                 const queued = (images ?? []).filter((p) => ux.add({ path: p, note })).length
                 if (!wait) return ok(images?.length ? `Sent ${queued} of ${images.length} for review${queued < images.length ? ' (the rest were already sent, missing, or not images)' : ''}. Findings arrive in Findings as they're ready; carry on.` : `Reviewed ${ux.status().reviewed} screenshots so far, ${ux.status().pending} waiting.`)
                 await ux.flush()
@@ -545,7 +671,7 @@ export function createGlassboxServer(
                 const list = st.findings.map((f) => `- [${f.severity}] ${f.title}${f.page ? ` (${f.page})` : ''}${f.detail ? `: ${f.detail}` : ''}${f.suggestion ? ` Suggested: ${f.suggestion}` : ''}${f.image ? ` [screenshot: ${f.image}]` : ''}`).join('\n')
                 return ok(`${st.reviewed} screenshots reviewed${st.pending ? `, ${st.pending} still waiting (stopped waiting)` : ''}. ${st.findings.length ? `UX findings:\n${list}` : 'No UX findings.'}`)
               },
-              ALWAYS_LOAD
+              READ_ONLY
             )
           ]
         : []),
@@ -556,7 +682,7 @@ export function createGlassboxServer(
 /** The session's services as a short status list, with each one's URL. */
 function describeServices(p: ProjectServices): string {
   const snap = p.snapshot()
-  if (!snap.exists) return `This project has no ${SERVICES_FILE.replace(/\\/g, '/')} yet, so Glassbox doesn't know how to run it. Create one (see your instructions), then call start_app.`
+  if (!snap.exists) return "This project has no services set up in Glassbox yet, so it doesn't know how to run it. Set them up with save_services (see your instructions), then call start_app."
   if (snap.error) return `The services file couldn't be read: ${snap.error}`
   if (!snap.services.length) return 'The services file lists no services.'
   return snap.services
@@ -581,7 +707,7 @@ function appTools(app: () => ProjectServices, emit: (signal: GlassboxSignal) => 
       "Show this session's app services (from the Glassbox services file): which are running, their ports and URLs.",
       {},
       async () => ok(describeServices(app())),
-      ALWAYS_LOAD
+      READ_ONLY
     ),
     tool(
       'start_app',
@@ -605,7 +731,7 @@ function appTools(app: () => ProjectServices, emit: (signal: GlassboxSignal) => 
         }
         return ok(`${describeServices(p)}\n\nNo web service is running, so there's nothing to preview. Use app_logs to see why a service didn't start.`)
       },
-      ALWAYS_LOAD
+      READ_ONLY
     ),
     tool(
       'app_logs',
@@ -615,7 +741,7 @@ function appTools(app: () => ProjectServices, emit: (signal: GlassboxSignal) => 
         const out = app().logs(service)
         return ok(out.length ? out.slice(-(lines ?? 80)).join('\n') : `No output from ${service} yet.`)
       },
-      ALWAYS_LOAD
+      READ_ONLY
     ),
     tool(
       'stop_app',
@@ -627,7 +753,7 @@ function appTools(app: () => ProjectServices, emit: (signal: GlassboxSignal) => 
         else await p.stopAll()
         return ok(describeServices(p))
       },
-      ALWAYS_LOAD
+      READ_ONLY
     )
   ]
 }

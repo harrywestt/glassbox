@@ -29,6 +29,7 @@ import {
   type Stage
 } from './model'
 import './live.css'
+import { usePendingAsks } from '../session-ui/AskDock'
 
 /** Where Live sends you to look at something, and how "Tell Claude" reaches the message box. */
 export type LiveNav = {
@@ -61,6 +62,7 @@ export function LiveScreen({ tab, s: stable, nav, active }: Props) {
   const forStage = useMemo(() => s, [s.writing, s.writingNow, s.held, s.toolCalls, s.agents, s.permissions, s.userQuestions, s.checkins]) // eslint-disable-line react-hooks/exhaustive-deps
   const forLooked = useMemo(() => s, [s.toolCalls, s.files, s.instructions]) // eslint-disable-line react-hooks/exhaustive-deps
   const blocked = blockedOnYou(s)
+  const asks = usePendingAsks()
   const looked = useLookedAt(tab.cwd, s)
   const flags = useFlags(s, looked, rel, now)
   const [dismissed, dismiss] = useDismissed(s.sessionId ?? tab.id)
@@ -87,7 +89,8 @@ export function LiveScreen({ tab, s: stable, nav, active }: Props) {
             {open.length > 1 && <span className="live-note">{tr('live.needs.riskiest')}</span>}
           </header>
           <div className="live-scroll">
-            {open.length === 0 && <p className="live-empty">{tr('live.needs.none')}</p>}
+            {/* Questions Claude left for you wait under the message box; say so, rather than that nothing needs you. */}
+            {open.length === 0 && <p className="live-empty">{asks.length ? tr('live.needs.questions', { count: asks.length }) : tr('live.needs.none')}</p>}
             {open.map((f) => (
               <FlagRow key={f.id} f={f} now={now} nav={nav} asked={asked[f.id]} onAsk={() => ask(f.id)} onDismiss={() => dismiss(f.id)} />
             ))}

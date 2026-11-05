@@ -44,6 +44,23 @@ export function activeBrowserTab(sid: string): string | null {
   return get(sid).active
 }
 
+/*
+ * Claude's clicks and keys in a Browser tab are real input, so the page takes the window's focus.
+ * When it has only just taken it (Claude's input, not you clicking into the page earlier), focus
+ * goes back to where you were: typing a message carries on uninterrupted.
+ */
+// (A page taking focus this way fires nothing on the webview, but what you were in loses it.)
+let lastFocus: HTMLElement | null = null
+let lostAt = 0
+if (typeof document !== 'undefined' && window.glassbox?.browser?.onRefocus) {
+  document.addEventListener('focusin', (e) => (e.target as HTMLElement).tagName !== 'WEBVIEW' && (lastFocus = e.target as HTMLElement), true)
+  document.addEventListener('focusout', (e) => (e.target as HTMLElement).tagName !== 'WEBVIEW' && (lostAt = Date.now()), true)
+  window.glassbox.browser.onRefocus(() => {
+    if (document.activeElement?.tagName !== 'WEBVIEW' || Date.now() - lostAt > 1500) return
+    if (lastFocus?.isConnected) lastFocus.focus({ preventScroll: true })
+  })
+}
+
 /** Open a page: in a new tab, or (newTab false) in the current one. Returns the tab's id. */
 export function openInBrowser(sid: string, url: string, newTab = true): string {
   const s = get(sid)

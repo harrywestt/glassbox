@@ -137,6 +137,8 @@ export type SessionEvent =
   | { kind: 'limit'; hit: boolean; resetsAt?: number; type?: string; continueAt?: number }
   /** You took back a message before Claude read it (to edit it). */
   | { kind: 'withdrawn'; uuid: string }
+  /** You stopped Claude mid-turn (Stop). */
+  | { kind: 'interrupted' }
   /** You held an edit (Live's Hold it): Claude is stopped on it until you let it land or turn it down. */
   | { kind: 'held'; toolUseId: string }
   | { kind: 'hold-done'; toolUseId: string; allowed: boolean }
@@ -372,6 +374,8 @@ export type Automation = {
   voiceAccurate: boolean
   /** Keep the microphone open for two minutes after speaking, so the next hold starts at once. */
   micWarm: boolean
+  /** Your words for dictation (names, acronyms): each spelled your way, and what the speech model tends to hear instead. */
+  voiceWords: VoiceWord[]
   /** When an edit waits for you before it lands: only when you press Hold, every edit, or edits to files the plan doesn't name. */
   holdEdits: HoldPolicy
   /** New sessions pick the model for each message (Opus, Sonnet or Haiku) rather than using one for everything. */
@@ -397,4 +401,7 @@ export type Automation = {
 export type HoldPolicy = 'ask' | 'all' | 'offplan'
 
 // Anything that would spend tokens without being asked starts off (quick answers and the watchdog's nudges are model calls).
-export const AUTOMATION_DEFAULTS: Automation = { promptSuggestions: true, agentSummaries: false, nudges: false, autoMap: false, autoTicket: false, autoCommit: false, agentForks: false, prOverview: false, quickAnswers: false, watchdog: false, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, holdEdits: 'ask', autoModel: true }
+/** A word of yours for dictation: how it's written, and what the speech model hears instead ("SKU", heard as "skew"). */
+export type VoiceWord = { word: string; heard: string[] }
+
+export const AUTOMATION_DEFAULTS: Automation = { promptSuggestions: true, agentSummaries: false, nudges: false, autoMap: false, autoTicket: false, autoCommit: false, agentForks: false, prOverview: false, quickAnswers: false, watchdog: false, watchdogNudgeMinutes: 10, watchdogStopMinutes: 15, voiceAccurate: true, micWarm: true, voiceWords: [], holdEdits: 'ask', autoModel: true }

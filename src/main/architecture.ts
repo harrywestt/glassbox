@@ -8,14 +8,15 @@ import { organise } from './mapLayout'
 import { automation } from './automation'
 import { clientCalls, matchCalls, serverRoutes, type ClientCall, type ServerRoute } from './httpRoutes'
 import { ARCH_VERSION, LAYER_ORDER, moduleOf, type ArchEdge, type ArchLink, type ArchLayer, type ArchModule, type ArchRole, type Architecture } from '../shared/architecture'
+import { architectureFile } from './projectData'
 
 /**
  * The architecture engine behind the architect map: turns a project folder into modules
  * (folders that hang together) grouped into layers, plus a module-level import graph.
- * Heuristic and dependency-free; .glassbox/architecture.json overrides the module list.
+ * Heuristic and dependency-free; an architecture.json in Glassbox's data for the project (see projectData) overrides the module list.
  */
 
-// Big monorepos (one has ~13k source files) must fit whole: a cut taken alphabetically would
+// Big monorepos (some have ~13k source files) must fit whole: a cut taken alphabetically would
 // drop everything after api/ (the whole UI). Import scanning is time-boxed separately.
 const MAX_FILES = 60000
 const MAX_READ_BYTES = 200 * 1024
@@ -120,7 +121,7 @@ function tokens(s: string): string[] {
     .filter(Boolean)
 }
 
-/** `session-ui` → `Session UI`, `Acme.Migration.ClinicalProjects` → `Clinical Projects`. */
+/** `session-ui` → `Session UI`, `Acme.Billing.InvoiceRuns` → `Invoice Runs`. */
 function humanName(folder: string): string {
   let s = folder.replace(/\.[a-z0-9]+$/i, (m) => (SOURCE_EXTS.has(m.slice(1).toLowerCase()) ? '' : m))
   if (s.includes('.')) s = s.split('.').filter((seg) => !/^tests?$/i.test(seg)).pop() ?? s
@@ -247,7 +248,7 @@ function findNode(root: Node, path: string): Node | undefined {
 
 /** Walks down single-child folders with no files of their own (`cli/Foo.Cli` → the inner one). */
 // Folders with their own project file (set per build): a module stops there rather than walking on
-// into its only subfolder, so api/src/ShopApp.WebAPI stays "Web API", not "Web API/Things".
+// into its only subfolder, so api/src/AcmeApp.WebAPI stays "Web API", not "Web API/Things".
 let projectStops = new Set<string>()
 
 function collapse(node: Node): Node {
@@ -272,7 +273,7 @@ function nodeName(node: Node, root: Node): string {
     // MigrationProvenance/MigrationProvenance.Infrastructure is the Migration Provenance feature.
     const parent = segs[i - 1]
     if (parent && segs[i].toLowerCase().startsWith(parent.toLowerCase() + '.')) return humanName(parent)
-    // ShopApp.Shared.Infrastructure: drop the solution prefix and keep the rest (Shared Infrastructure).
+    // AcmeApp.Shared.Infrastructure: drop the solution prefix and keep the rest (Shared Infrastructure).
     const dotted = segs[i].split('.').filter(Boolean)
     if (dotted.length >= 3) return dotted.slice(1).map(humanName).join(' ')
     return humanName(segs[i])
@@ -496,7 +497,7 @@ function manifestHas(def: ExternalDef, m: Manifest): boolean {
 type Candidate = { path: string; name?: string }
 
 function detectModules(tree: Node, projectName: string, externalsPlanned: number, projectDirs: Set<string> = new Set()): { candidates: Candidate[]; scope: string[] } {
-  // A folder whose children (or their only child) are separate projects: api/src/ShopApp.Shared/…, packages/*.
+  // A folder whose children (or their only child) are separate projects: api/src/AcmeApp.Shared/…, packages/*.
   const holdsProjects = (n: Node) => {
     const kids = [...n.children.values()].filter((k) => k.total > 0)
     return kids.length >= 2 && kids.filter((k) => projectDirs.has(k.path) || [...k.children.values()].some((g) => projectDirs.has(g.path))).length >= 2
@@ -507,8 +508,8 @@ function detectModules(tree: Node, projectName: string, externalsPlanned: number
     const kids = [...n.children.values()].filter((k) => k.total > 0)
     if (kids.length < 2) return false
     const own = n.name.toLowerCase()
-    // Controls.API under Controls, or plain domain/, application/ folders; not ShopApp.Shared.Infrastructure
-    // next to ShopApp.WebAPI (separate projects that merely end in a layer word).
+    // Controls.API under Controls, or plain domain/, application/ folders; not AcmeApp.Shared.Infrastructure
+    // next to AcmeApp.WebAPI (separate projects that merely end in a layer word).
     const layerish = kids.filter((k) => {
       const name = k.name.toLowerCase()
       return (name.startsWith(own + '.') && name.length > own.length + 1) || (!name.includes('.') && INNER_LAYERS.has(name))
@@ -764,7 +765,7 @@ async function build(root: string): Promise<Architecture> {
   const started = Date.now()
   const listed = ((await gitListFiles(root)) ?? (await listProjectFiles(root))).map((f) => f.replace(/\\/g, '/'))
   // Generated code and tool output (api clients, brag-output/, …) aren't parts of the system.
-  const visible = listed.filter((f) => !f.split('/').slice(0, -1).some((s) => SKIP_DIRS.has(s) || (s.startsWith('.') && s !== '.glassbox') || GENERATED_DIR.test(s)) && !GENERATED_FILE.test(f))
+  const visible = listed.filter((f) => !f.split('/').slice(0, -1).some((s) => SKIP_DIRS.has(s) || s.startsWith('.') || GENERATED_DIR.test(s)) && !GENERATED_FILE.test(f))
   const allSource = visible.filter(isSource).slice(0, MAX_FILES)
   const testFiles = allSource.filter((f) => isTestFile(f) || inTestDir(f))
   const testSet = new Set(testFiles)
@@ -777,7 +778,7 @@ async function build(root: string): Promise<Architecture> {
   let source: Architecture['source'] = 'detected'
   let scope = sourceFiles
 
-  const override = (await readJson(`${root}/.glassbox/architecture.json`)) as OverrideFile | null
+  const override = (await readJson(architectureFile(root))) as OverrideFile | null
   if (override && Array.isArray(override.layers)) {
     source = 'file'
     const seen = new Set<string>()
@@ -885,7 +886,7 @@ async function build(root: string): Promise<Architecture> {
     csProjects: []
   }
   // Path aliases (@/components/…) from every tsconfig/jsconfig in the repo, each applying to the files
-  // under its own folder: a monorepo's apps (ui/webapp-ui) each declare their own.
+  // under its own folder: a monorepo's apps (apps/web) each declare their own.
   const configs = visible.filter((f) => /(^|\/)(tsconfig[\w.-]*|jsconfig)\.json$/i.test(f)).slice(0, 60)
   for (const cfg of configs) {
     const scope = dirOf(cfg)

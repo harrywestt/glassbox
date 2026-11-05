@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { adoptServicesFile } from './services'
-import { worktreePath } from './git'
+import { worktreePath, existingWorktree } from './git'
 import { tr } from '../shared/i18n'
 
 const exec = promisify(execFile)
@@ -50,13 +50,13 @@ export async function listOpenPrs(cwd: string): Promise<{ prs: LaunchPr[]; error
 }
 
 /**
- * Check a PR out into its own worktree next to the repo (<repo>-pr-<n>), so a review session can
- * run it without touching your working copy. Reuses the worktree if it already exists.
+ * Check a PR out into its own worktree (in Glassbox's folder), so a review session can run it
+ * without touching your working copy. Reuses the worktree that already has it, wherever it is.
  */
 export async function createPrWorktree(cwd: string, number: number): Promise<string> {
   const root = (await run('git', ['rev-parse', '--show-toplevel'], cwd)).trim()
-  const target = await worktreePath(root, `pr-${number}`)
   const branch = `glassbox/pr-${number}`
+  const target = (await existingWorktree(root, branch)) ?? (await worktreePath(root, `pr-${number}`))
   await run('git', ['fetch', 'origin', `pull/${number}/head:${branch}`, '--force'], root)
   if (existsSync(target)) {
     await run('git', ['checkout', branch], target)

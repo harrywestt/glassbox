@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
-import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type { DiffFile, DiffMode, DiffResult, GitInfo } from '../shared/events'
 import { adoptServicesFile } from './services'
+import { worktreesDir } from './projectData'
 
 const exec = promisify(execFile)
 
@@ -130,31 +131,40 @@ export async function gitFileAt(cwd: string, ref: string, mode: DiffMode, path: 
 }
 
 /**
- * A separate working copy of the repo (a git worktree) for `branch`, next to the repo: a session
- * there can't see or disturb another session's files or branch. Creates the branch from the current
- * commit when it doesn't exist yet. Returns the folder.
- */
-/**
- * Where a session's worktree goes: inside the repo, under .claude/worktrees/<name> (as Claude Code
- * keeps its own), not as another folder next to the project. That folder is kept out of git by the
- * repo's local exclude file (.git/info/exclude), so nothing is committed and .gitignore is untouched.
+ * Where a session's worktree goes: in Glassbox's own folder, one folder per repo, never inside the
+ * project (git doesn't mind where a worktree lives).
  */
 export async function worktreePath(root: string, name: string): Promise<string> {
   const safe = name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'session'
-  const common = (await git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim()
-  const exclude = join(common, 'info', 'exclude')
-  const rule = '/.claude/worktrees/'
-  try {
-    const now = existsSync(exclude) ? readFileSync(exclude, 'utf8') : ''
-    if (!now.split(/\r?\n/).some((l) => l.trim() === rule)) appendFileSync(exclude, `${now && !now.endsWith('\n') ? '\n' : ''}# Glassbox session worktrees\n${rule}\n`)
-  } catch {
-    /* the worktree still works; git just lists it as untracked */
-  }
-  return join(root, '.claude', 'worktrees', safe)
+  return join(worktreesDir(root), safe)
 }
 
+/**
+ * The worktree that already has `branch` checked out, wherever it is (one made before worktrees
+ * moved out of the repo, under .claude/worktrees, included), or null.
+ */
+export async function existingWorktree(root: string, branch: string): Promise<string | null> {
+  const list = (await tryGit(root, ['worktree', 'list', '--porcelain'])) ?? ''
+  // The first entry is the main checkout itself: not a copy of its own, so never reused.
+  for (const block of list.split(/\r?\n\r?\n/).slice(1)) {
+    const path = /^worktree (.+)$/m.exec(block)?.[1]
+    if (path && new RegExp(`^branch refs/heads/${branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm').test(block) && existsSync(path)) return path
+  }
+  return null
+}
+
+/**
+ * A separate working copy of the repo (a git worktree) for `branch`: a session there can't see or
+ * disturb another session's files or branch. Creates the branch from the default branch when it
+ * doesn't exist yet, and reuses the worktree that already has it. Returns the folder.
+ */
 export async function gitWorktree(cwd: string, branch: string): Promise<string> {
   const root = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim()
+  const already = await existingWorktree(root, branch)
+  if (already) {
+    adoptServicesFile(already)
+    return already
+  }
   const target = await worktreePath(root, branch)
   const exists = (await tryGit(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])) !== null
   // A new branch starts from the default branch (fetched just before, by gitFetchDefault), else HEAD.

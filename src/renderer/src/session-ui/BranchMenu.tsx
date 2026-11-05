@@ -4,6 +4,7 @@ import { useSession } from '../views/SessionView'
 import { Icon } from '../components/ui'
 import type { BranchList } from '../../../main/git'
 import { tr } from '../../../shared/i18n'
+import { confirm } from '../components/ConfirmDialog'
 
 /** The branch chip in the session header; click it to switch to another branch or start a new one. */
 export function BranchMenu() {
@@ -86,7 +87,7 @@ function Popover({ anchor, cwd, tabId, dirty, shared, onClose }: { anchor: HTMLE
 
   const go = async (branch: string, create = false) => {
     // Another session in this same folder would have its files switched too.
-    if (shared && !window.confirm(tr('branchMenu.confirmShared', { branch }))) return
+    if (shared && !(await confirm({ title: tr('branchMenu.confirmShared', { branch }), confirm: tr('branchMenu.confirmSharedButton') }))) return
     setSwitching(branch)
     setError(null)
     try {

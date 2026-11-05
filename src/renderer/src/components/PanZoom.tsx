@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { Icon, IconButton } from './ui'
 import { tr } from '../../../shared/i18n'
 
-type View = { x: number; y: number; k: number }
+export type View = { x: number; y: number; k: number }
 const MIN = 0.1
 const MAX = 8
 
@@ -26,7 +26,9 @@ export function PanZoom({
   onDrag,
   maxFit = MAX,
   className,
-  hint
+  hint,
+  focus,
+  onView
 }: {
   children: ReactNode
   contentKey: string
@@ -38,17 +40,22 @@ export function PanZoom({
   onHover?: (at: { x: number; y: number } | null) => void
   /** The most fitting may zoom in (1: a small picture isn't blown up past its own size). */
   maxFit?: number
-  onDrag?: (phase: 'start' | 'move' | 'end', from: { x: number; y: number }, to: { x: number; y: number }) => void
+  /** A drag's start answering false pans instead (a drag that didn't land on anything to drag). */
+  onDrag?: (phase: 'start' | 'move' | 'end', from: { x: number; y: number }, to: { x: number; y: number }) => void | boolean
   className?: string
   /** What the corner hint says, when it isn't the diagram one. */
   hint?: string
+  /** An area of the content to zoom to (each new key zooms again), e.g. what's selected. */
+  focus?: { x: number; y: number; w: number; h: number; key: number }
+  /** Hears each change of pan and zoom. */
+  onView?: (v: View) => void
 }) {
   const box = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 })
   const viewRef = useRef(view)
   viewRef.current = view
-  const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean; from: { x: number; y: number } } | null>(null)
+  const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean; pan?: boolean; from: { x: number; y: number } } | null>(null)
   const sizeRef = useRef(size)
   sizeRef.current = size
 
@@ -123,6 +130,14 @@ export function PanZoom({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  useEffect(() => onView?.(view), [view])
+  useEffect(() => {
+    const b = box.current?.getBoundingClientRect()
+    if (!focus || !b) return
+    const k = Math.min(4, Math.max(MIN, Math.min((b.width - 96) / Math.max(1, focus.w), (b.height - 96) / Math.max(1, focus.h))))
+    setView({ k, x: b.width / 2 - (focus.x + focus.w / 2) * k, y: b.height / 2 - (focus.y + focus.h / 2) * k })
+  }, [focus?.key])
+
   const set100 = () => {
     const b = box.current!.getBoundingClientRect()
     const n = natural()
@@ -161,10 +176,10 @@ export function PanZoom({
           if (!d) return onHover?.(at(e))
           // A press that wanders a few pixels is still a click.
           if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return
-          if (onDrag) {
-            if (!d.moved) onDrag('start', d.from, d.from)
+          if (onDrag && !d.pan) {
+            if (!d.moved && onDrag('start', d.from, d.from) === false) d.pan = true
             d.moved = true
-            return onDrag('move', d.from, at(e))
+            if (!d.pan) return void onDrag('move', d.from, at(e))
           }
           d.moved = true
           setView((v) => ({ ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y }))
@@ -173,7 +188,7 @@ export function PanZoom({
           const d = drag.current
           drag.current = null
           box.current?.classList.remove('dragging')
-          if (d?.moved && onDrag) onDrag('end', d.from, at(e))
+          if (d?.moved && onDrag && !d.pan) onDrag('end', d.from, at(e))
           if (d && !d.moved && onTap) {
             const p = at(e)
             onTap(p.x, p.y)

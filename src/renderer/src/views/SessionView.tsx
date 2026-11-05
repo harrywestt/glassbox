@@ -1,4 +1,4 @@
-import { Activity, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Activity, createContext, Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActions, type AppActions } from '../App'
 import { blockedOnYou, claudeInBrowser, LiveSessionContext, sameApartFromStreaming, useStableSession, type SessionState } from '../session'
 import { useScrollStrip } from '../components/useScrollStrip'
@@ -736,7 +736,7 @@ function SessionViewInner({ tab, session, active, peers = [] }: SessionViewProps
       case 'diagrams':
         return diagramCount > 0
       case 'sketches':
-        return sketchCount > 0
+        return true
       case 'attachments':
         return attachmentCount > 0
       case 'replay':
@@ -1163,11 +1163,15 @@ function WorkTabs({
             <>
               <div className="menu-scrim" onMouseDown={() => setPicking(false)} />
               <div className="menu view-picker" role="menu">
-                {views.map((v) => {
+                {/* What you can use now first; views with nothing in them yet after a divider (they still open). */}
+                {[...views.filter((v) => v.has), ...views.filter((v) => !v.has)].map((v, i, all) => {
                   const open = tabs.some((t) => t.kind === v.kind)
+                  const firstEmpty = !v.has && (i === 0 || all[i - 1].has)
                   return (
+                    <Fragment key={v.kind}>
+                    {firstEmpty && i > 0 && <div className="menu-sep" role="separator" />}
+                    {firstEmpty && <div className="view-picker-group">{tr('sessionView.viewsEmptyGroup')}</div>}
                     <button
-                      key={v.kind}
                       role="menuitem"
                       // Every view opens, even with nothing in it yet: its empty state is where you start it
                       // (ask for a diagram, trace a flow).
@@ -1179,11 +1183,11 @@ function WorkTabs({
                         <span className="view-picker-label">
                           {v.label}
                           {open && <span className="view-picker-state">{tr('sessionView.viewOpen')}</span>}
-                          {!v.has && <span className="view-picker-state">{tr('sessionView.viewNothingYet')}</span>}
                         </span>
                         <span className="view-picker-note">{v.note}</span>
                       </span>
                     </button>
+                    </Fragment>
                   )
                 })}
               </div>

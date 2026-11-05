@@ -4,6 +4,7 @@ import { CHANGE_TOOLS, isClaudeOwnFile } from '../session'
 import { baseName, relPath } from '../lib'
 import { Icon, IconButton, useFolded } from '../components/ui'
 import { tr } from '../../../shared/i18n'
+import { confirm } from '../components/ConfirmDialog'
 
 type WorkingFile = { path: string; oldPath?: string; staged?: string; unstaged?: string }
 type Entry = { path: string; abs: string; code: string; claude: boolean }
@@ -76,7 +77,7 @@ export function SourceControl() {
   }
   const stage = (paths: string[]) => act('stage', () => window.glassbox.git.stage(tab.cwd, paths))
   const unstage = (paths: string[]) => act('unstage', () => window.glassbox.git.unstage(tab.cwd, paths))
-  const discard = (entries: Entry[]) => {
+  const discard = async (entries: Entry[]) => {
     const fresh = entries.filter((e) => e.code === '?').length
     const ask =
       entries.length === 1
@@ -84,7 +85,7 @@ export function SourceControl() {
           ? tr('sourceControl.confirmDeleteOne', { file: baseName(entries[0].path) })
           : tr('sourceControl.confirmDiscardOne', { file: baseName(entries[0].path) })
         : tr('sourceControl.confirmDiscardMany', { count: entries.length })
-    if (!window.confirm(ask)) return
+    if (!(await confirm({ title: ask, confirm: tr(fresh && entries.length === 1 ? 'sourceControl.confirmDeleteButton' : 'sourceControl.confirmDiscardButton'), danger: true }))) return
     void act('discard', () => window.glassbox.git.discard(tab.cwd, entries.map((e) => e.path)))
   }
   const branch = s.git?.branch ?? ''

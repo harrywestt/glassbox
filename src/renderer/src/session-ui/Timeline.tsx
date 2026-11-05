@@ -271,6 +271,7 @@ export function Timeline() {
         )}
         <Drafts filter={filter} cwd={tab.cwd} />
         <Working />
+        <Stopped />
         </div>
       </div>
       {(jump.latest || jump.sent) && (
@@ -310,6 +311,21 @@ function lastActivity(calls: SessionState['toolCalls']): number {
     lastActivityOf.set(calls, t)
   }
   return t
+}
+
+/** After you stop Claude mid-turn: says so, with a way to let it carry on from there. */
+function Stopped() {
+  const { s, send } = useSession()
+  if (!s.stoppedAt || s.status === 'running' || s.status === 'stopped') return null
+  return (
+    <div className="stopped-row">
+      <Icon name="debug-stop" />
+      <span className="grow">{tr('timeline.stoppedHere')}</span>
+      <button className="btn quiet" onClick={() => void send(tr('timeline.continuePrompt'))}>
+        <Icon name="debug-continue" /> {tr('timeline.continue')}
+      </button>
+    </div>
+  )
 }
 
 function Working() {

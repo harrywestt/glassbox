@@ -31,6 +31,7 @@ import type { Erd, ErdFocus } from '../shared/erd'
 import type { FxRates } from '../main/fx'
 import type { BranchList, CommitEntry } from '../main/git'
 import type { RecordCue, RecordOptions } from '../main/recorder'
+import type { LibraryComponent, LibraryKind, LibraryScreen } from '../shared/library'
 
 type ShowcaseRequest = { name: string; base: string | null; notes: string; previousArtifactUrl?: string; linkIt?: boolean }
 
@@ -169,6 +170,9 @@ const api = {
   },
   voice: {
     prepare: (): Promise<void> => invoke('voice:prepare'),
+    /** The Parakeet speech model: missing, downloading (percent), unpacking, loading, ready or failed. */
+    parakeet: (): Promise<{ state: 'missing' | 'downloading' | 'unpacking' | 'loading' | 'ready' | 'failed'; progress?: number; error?: string }> => invoke('voice:parakeet'),
+    downloadParakeet: (): Promise<void> => invoke('voice:parakeetDownload'),
     /** `live`: a quick pass while you're still talking (skipped if the model is busy). */
     transcribe: (audio: Float32Array, live?: boolean, offset?: number): Promise<string> => invoke('voice:transcribe', audio, live, offset),
     onProgress(callback: (p: { status: 'downloading' | 'loading' | 'ready'; progress?: number }) => void) {
@@ -227,15 +231,33 @@ const api = {
     toPr: (cwd: string, markdown: string): Promise<{ url?: string; error?: string }> => invoke('plan:toPr', cwd, markdown)
   },
   /** The project's own colours, read from its stylesheets (for drawing sketches in them). */
-  projectStyle: (cwd: string, stylesheet?: string): Promise<import('../main/projectStyle').ProjectStyle> => invoke('sketch:projectStyle', cwd, stylesheet),
+  projectStyle: (cwd: string, stylesheet?: string, fresh?: boolean): Promise<import('../main/projectStyle').ProjectStyle> => invoke('sketch:projectStyle', cwd, stylesheet, fresh),
   /** Where a sketch's HTML is served (sketch://, sandboxed). */
   sketch: {
     /** The sketch drawn to a PNG file (in code: a hidden window and a screenshot). Returns its path. */
-    png: (url: string, width: number, title: string, how?: 'copy' | 'save'): Promise<string> => invoke('sketch:png', url, width, title, how),
+    png: (url: string, width: number, title: string, how?: 'copy' | 'save', marks?: Array<Record<string, unknown> & { n: number; kind: string }>, pens?: Record<string, string>): Promise<string> => invoke('sketch:png', url, width, title, how, marks, pens),
     /** `cwd`: where the files the page refers to are looked for. */
     url: (html: string, cwd?: string): Promise<string> => invoke('sketch:url', html, cwd),
     /** A version kept by reference (one Claude sent as edits or a file). */
-    read: (ref: string): Promise<string | null> => invoke('sketch:read', ref)
+    read: (ref: string): Promise<string | null> => invoke('sketch:read', ref),
+    /** The sketch as a page that works anywhere (to copy), or saved as an .html file (its path). */
+    document: (url: string, title: string): Promise<string> => invoke('sketch:document', url, title),
+    saveDocument: (url: string, title: string): Promise<string> => invoke('sketch:saveDocument', url, title),
+    /** An image's size in pixels (null when the file isn't an image), for marking up a screenshot. */
+    imageSize: (path: string): Promise<{ width: number; height: number } | null> => invoke('sketch:imageSize', path)
+  },
+  /** The project's component library and the screens built from it (kept by Glassbox per repo, outside the project). */
+  library: {
+    list: <K extends LibraryKind>(cwd: string, kind: K): Promise<(K extends 'components' ? LibraryComponent : LibraryScreen)[]> => invoke('library:list', cwd, kind),
+    save: <K extends LibraryKind>(cwd: string, kind: K, item: Omit<K extends 'components' ? LibraryComponent : LibraryScreen, 'id' | 'at'> & { id?: string }): Promise<K extends 'components' ? LibraryComponent : LibraryScreen> => invoke('library:save', cwd, kind, item),
+    delete: (cwd: string, kind: LibraryKind, id: string): Promise<void> => invoke('library:delete', cwd, kind, id),
+    /** Components whose source file changed since they were saved. */
+    stale: (cwd: string): Promise<string[]> => invoke('library:stale', cwd),
+    onChanged(callback: (e: { cwd: string; kind: LibraryKind }) => void) {
+      const listener = (_e: IpcRendererEvent, e: { cwd: string; kind: LibraryKind }) => callback(e)
+      ipcRenderer.on('glassbox:library-changed', listener)
+      return () => void ipcRenderer.off('glassbox:library-changed', listener)
+    }
   },
   erd: {
     get: (cwd: string): Promise<Erd> => invoke('erd:get', cwd),
@@ -249,6 +271,12 @@ const api = {
       return () => void ipcRenderer.off('glassbox:browser-request', listener)
     },
     reply: (reqId: string, result: unknown, error?: string) => ipcRenderer.send('browser:reply', reqId, result, error),
+    /** Claude's input in a Browser tab took the window's focus; called so the app can give it back. */
+    onRefocus(callback: () => void) {
+      const listener = () => callback()
+      ipcRenderer.on('glassbox:browser-refocus', listener)
+      return () => void ipcRenderer.off('glassbox:browser-refocus', listener)
+    },
     /** A screenshot of a tab's page (or the whole page), saved as a PNG; resolves with its path. */
     screenshot: (wcId: number, fullPage?: boolean): Promise<string> => invoke('browser:screenshot', wcId, fullPage),
     /** Video of a tab: start, stop (resolves with the saved WebM, or null), or whether one is running. */

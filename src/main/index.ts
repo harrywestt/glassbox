@@ -40,12 +40,14 @@ import { StatusTray, type TrayState } from './tray'
 import { WatchServer } from './watch'
 import { getRates } from './fx'
 import { ServiceRegistry } from './services'
-import { prepareVoice, transcribe } from './voice'
+import { getParakeetStatus, loadParakeet, prepareVoice, transcribe } from './voice'
 import { handoffMessage } from './handoff'
 import { commentOnTicket, getTicket, getTransitions, transitionTicket } from './jira'
 import { checkDependencies } from './radar'
 import { undoEdit } from './undo'
-import { sketchPage, sketchPng, sketchUrl, readSketch } from './sketch'
+import { sketchDocument, sketchPage, sketchPng, sketchSnapshot, sketchUrl, readSketch, type SketchMark, type SnapshotArea } from './sketch'
+import { deleteLibrary, listLibrary, saveLibrary, staleComponents } from './library'
+import type { LibraryKind } from '../shared/library'
 import { spendSummary } from './spend'
 import { addPlanToPr, savePlan } from './planShare'
 import { projectStyle } from './projectStyle'
@@ -162,17 +164,29 @@ const trayStates = new Map<string, { title: string; state: TrayState }>()
  */
 const backgroundAgents = new Map<string, number>()
 const turnOver = new Set<string>()
-function backgroundCount(event: SessionEvent): number | undefined {
+/** Per session: the last list of background agents, and tasks that have said they ended (a stale list can't bring them back). */
+const listedAgents = new Map<string, string[]>()
+const endedTasks = new Map<string, Set<string>>()
+function backgroundCount(tabId: string, event: SessionEvent): number | undefined {
   if (event.kind !== 'sdk' || event.msg.type !== 'system') return undefined
-  const m = event.msg as { subtype?: string; tasks?: { task_type?: string; ambient?: boolean }[] }
+  const m = event.msg as { subtype?: string; task_id?: string; patch?: { status?: string }; tasks?: { task_id: string; task_type?: string; ambient?: boolean }[] }
+  const ended = endedTasks.get(tabId) ?? new Set<string>()
+  endedTasks.set(tabId, ended)
+  const count = () => (listedAgents.get(tabId) ?? []).filter((id) => !ended.has(id)).length
+  // An agent that reports it ended stops counting now, not only when a later list leaves it out.
+  if (m.task_id && (m.subtype === 'task_notification' || (m.subtype === 'task_updated' && ['completed', 'failed', 'killed'].includes(m.patch?.status ?? '')))) {
+    ended.add(m.task_id)
+    return count()
+  }
   if (m.subtype !== 'background_tasks_changed' || !Array.isArray(m.tasks)) return undefined
-  return m.tasks.filter((t) => t.task_type === 'local_agent' && !t.ambient).length
+  listedAgents.set(tabId, m.tasks.filter((t) => t.task_type === 'local_agent' && !t.ambient).map((t) => t.task_id))
+  return count()
 }
 
 function trackTray(tabId: string, cwd: string, event: SessionEvent) {
   const prev = trayStates.get(tabId)?.state ?? 'idle'
   let next: TrayState = prev
-  const bg = backgroundCount(event)
+  const bg = backgroundCount(tabId, event)
   if (bg !== undefined) {
     backgroundAgents.set(tabId, bg)
     // The last background agent finished after Claude's turn ended: now it really is waiting for you.
@@ -216,7 +230,7 @@ function notifyFor(tabId: string, cwd: string, event: SessionEvent) {
   else if (event.kind === 'guard' && event.hit.action === 'block') body = tr('mainIndex.notify.blocked', { label: event.hit.label })
   else if (event.kind === 'sdk' && event.msg.type === 'result') body = event.msg.is_error ? tr('mainIndex.notify.stoppedWithError') : (backgroundAgents.get(tabId) ?? 0) > 0 ? undefined : tr('mainIndex.notify.finished')
   // Runs before trackTray, so the map still holds the count from before this change.
-  else if (backgroundCount(event) === 0 && turnOver.has(tabId) && (backgroundAgents.get(tabId) ?? 0) > 0) body = tr('mainIndex.notify.backgroundFinished')
+  else if (backgroundCount(tabId, event) === 0 && turnOver.has(tabId) && (backgroundAgents.get(tabId) ?? 0) > 0) body = tr('mainIndex.notify.backgroundFinished')
   else if (event.kind === 'error') body = event.message
   if (!body) return
   if (event.kind === 'permission' || event.kind === 'user-questions' || event.kind === 'checkin' || event.kind === 'held') win.flashFrame(true)
@@ -323,7 +337,7 @@ function createWindow() {
  * in the renderer, waits `wait` ms, and saves a PNG to `out`. The app quits after the last step.
  */
 async function captureSnapshots(w: BrowserWindow, file: string) {
-  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; tool?: { tabId: string; name: string; args: Record<string, unknown> }; win?: 'minimize' | 'restore' | 'blur'; click?: string; ux?: { tabId: string; path: string }; profile?: { ms: number; out: string } }[]
+  const steps = JSON.parse(readFileSync(file, 'utf8')) as { wait: number; script?: string; out: string; tool?: { tabId: string; name: string; args: Record<string, unknown> }; win?: 'minimize' | 'restore' | 'blur'; click?: string; ux?: { tabId: string; path: string }; profile?: { ms: number; out: string }; sketch?: { html: string; width: number; area?: SnapshotArea; clicks?: string[] }; frameScript?: string }[]
   await new Promise<void>((r) => w.webContents.once('did-finish-load', () => r()))
   for (const step of steps) {
     if (step.win === 'minimize') w.minimize()
@@ -355,6 +369,19 @@ async function captureSnapshots(w: BrowserWindow, file: string) {
         w.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 })
         w.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 })
       } else console.error('click target not found', step.click)
+    }
+    // Run a script in the sketch pages shown (frames the window's own scripts can't reach).
+    if (step.frameScript)
+      for (const f of w.webContents.mainFrame.framesInSubtree)
+        if (f.url.startsWith('sketch://')) console.log('FRAMESCRIPT', JSON.stringify(await f.executeJavaScript(step.frameScript).catch((e) => String(e))))
+    // Picture a sketch as sketch_snapshot does, saved beside the step's screenshot.
+    if (step.sketch) {
+      const shot = await sketchSnapshot(sketchUrl(step.sketch.html), step.sketch.width, step.sketch.area, step.sketch.clicks).catch((e) => String(e))
+      if (typeof shot === 'string') console.log('SKETCH ERROR', shot)
+      else {
+        writeFileSync(step.out.replace(/\.png$/, '-sketch.png'), shot.png)
+        console.log('SKETCH', JSON.stringify({ ...shot, png: shot.png.length }))
+      }
     }
     // Run one of Claude's browser tools directly, as a session would, and log what it returned.
     if (step.tool) {
@@ -563,10 +590,37 @@ ipcMain.on('tabs:load', (e) => {
 })
 ipcMain.handle('plan:save', (_e, cwd: string, title: string, markdown: string) => savePlan(cwd, title, markdown))
 ipcMain.handle('plan:toPr', (_e, cwd: string, markdown: string) => addPlanToPr(cwd, markdown))
-ipcMain.handle('sketch:png', (_e, url: string, width: number, title: string, how?: 'copy' | 'save') => sketchPng(url, width, title, capturesDir(), how === 'copy' ? 'copy' : 'save'))
-ipcMain.handle('sketch:projectStyle', (_e, cwd: string, stylesheet?: string) => projectStyle(cwd, stylesheet))
+// Saving from the Share menu goes to Downloads; pictures sent to Claude with notes stay in Glassbox's own folder.
+ipcMain.handle('sketch:png', (_e, url: string, width: number, title: string, how?: 'copy' | 'save', marks?: SketchMark[], pens?: Record<string, string>) => {
+  const list = Array.isArray(marks) ? marks : undefined
+  const dir = how === 'save' && !list?.length ? app.getPath('downloads') : capturesDir()
+  return sketchPng(url, width, title, dir, how === 'copy' ? 'copy' : 'save', list, pens && typeof pens === 'object' ? pens : undefined)
+})
+ipcMain.handle('sketch:projectStyle', (_e, cwd: string, stylesheet?: string, fresh?: boolean) => projectStyle(cwd, stylesheet, fresh === true))
 ipcMain.handle('sketch:url', (_e, html: string, cwd?: string) => sketchUrl(String(html), cwd))
 ipcMain.handle('sketch:read', (_e, ref: string) => readSketch(String(ref)))
+// A sketch as a page that works anywhere (colours, styles, click-through behaviour and images built in), to copy or save and share.
+ipcMain.handle('sketch:document', (_e, url: string, title: string) => sketchDocument(String(url), String(title)))
+ipcMain.handle('sketch:saveDocument', (_e, url: string, title: string) => {
+  const base = String(title).replace(/[^\w -]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'sketch'
+  const dir = app.getPath('downloads')
+  mkdirSync(dir, { recursive: true })
+  let file = join(dir, `${base}.html`)
+  for (let n = 2; existsSync(file); n++) file = join(dir, `${base} (${n}).html`)
+  writeFileSync(file, sketchDocument(String(url), String(title)))
+  return file
+})
+// The project's component library and screens (kept in Glassbox's data per repo).
+ipcMain.handle('library:list', (_e, cwd: string, kind: LibraryKind) => listLibrary(String(cwd), kind === 'screens' ? 'screens' : 'components'))
+ipcMain.handle('library:save', (_e, cwd: string, kind: LibraryKind, item: Parameters<typeof saveLibrary>[2]) => saveLibrary(String(cwd), kind === 'screens' ? 'screens' : 'components', item))
+// Components whose source file changed since they were saved (compared by a fingerprint, in code).
+ipcMain.handle('library:stale', (_e, cwd: string) => staleComponents(String(cwd)))
+ipcMain.handle('library:delete', (_e, cwd: string, kind: LibraryKind, id: string) => deleteLibrary(String(cwd), kind === 'screens' ? 'screens' : 'components', String(id)))
+// A screenshot to mark up in Sketches: its size, or null when the file isn't an image.
+ipcMain.handle('sketch:imageSize', (_e, path: string) => {
+  const img = nativeImage.createFromPath(String(path))
+  return img.isEmpty() ? null : img.getSize()
+})
 ipcMain.handle('erd:get', (_e, cwd: string) => getErd(cwd))
 ipcMain.handle('terminal:open', (_e, scope: string, cwd: string, cols: number, rows: number) => openTerminal(scope, cwd, cols, rows, toRenderer))
 ipcMain.on('terminal:write', (_e, id: string, data: string) => writeTerminal(id, data))
@@ -630,6 +684,9 @@ ipcMain.handle('ticket:comment', (_e, cwd: string, key: string, body: string) =>
 // Voice input
 const voiceProgress = (p: unknown) => toRenderer('glassbox:voice', p)
 ipcMain.handle('voice:prepare', async () => void (await prepareVoice(voiceProgress)))
+// Parakeet: how its download is going (Settings), and starting it from there.
+ipcMain.handle('voice:parakeet', () => getParakeetStatus())
+ipcMain.handle('voice:parakeetDownload', () => void loadParakeet().catch(() => undefined))
 ipcMain.handle('voice:transcribe', (_e, audio: Float32Array, live?: boolean, offset?: number) => transcribe(audio, voiceProgress, live, offset))
 ipcMain.handle('github:summary', (_e, dirs: string[], force?: boolean) => getGitHubSummary(dirs, { force }))
 
@@ -663,7 +720,7 @@ ipcMain.handle('git:fetchDefault', (_e, cwd: string) => gitFetchDefault(cwd))
 ipcMain.handle('git:diff', (_e, cwd: string, ref: string, mode: DiffMode, committed?: boolean) => gitDiff(cwd, ref, mode, committed))
 ipcMain.handle('git:fileAt', (_e, cwd: string, ref: string, mode: DiffMode, path: string) => gitFileAt(cwd, ref, mode, path))
 
-// Project services (.glassbox/services.json)
+// Project services (kept in Glassbox's data per project folder; see services.ts)
 // Scoped per session (the tab id), so each session runs its own copy on its own ports.
 ipcMain.handle('services:get', (_e, scope: string, cwd: string) => services.get(scope, cwd).snapshot())
 ipcMain.handle('services:logs', (_e, scope: string, cwd: string, name: string) => services.get(scope, cwd).logs(name))

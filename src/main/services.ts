@@ -1,30 +1,36 @@
 import { spawn, execFile, execFileSync, type ChildProcess } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, unwatchFile, watchFile } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, unwatchFile, watchFile } from 'node:fs'
 import { createServer } from 'node:net'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+import { folderData, fromProject, mainCheckout } from './projectData'
 import type { ServiceConfig, ServicesEvent, ServicesSnapshot, ServiceState } from '../shared/events'
 import { tr } from '../shared/i18n'
 
-export const SERVICES_FILE = join('.glassbox', 'services.json')
+/**
+ * How a folder's services start, kept in Glassbox's data (not in the project). One that was in the
+ * project as .glassbox/services.json is copied over the first time.
+ */
+export function servicesFile(cwd: string): string {
+  const f = join(folderData(cwd), 'services.json')
+  fromProject(cwd, 'services.json', f)
+  return f
+}
 
 /**
- * A worktree starts without the services file (it isn't in git), so it wouldn't know how to start
- * anything. Copy it from the main checkout of the same repo when this folder has none. Each worktree
- * then has its own copy to change; their services run side by side on their own ports.
+ * A worktree starts with no services of its own, so it wouldn't know how to start anything: it
+ * copies its main checkout's. Each worktree then has its own copy to change; their services run
+ * side by side on their own ports.
  */
 export function adoptServicesFile(cwd: string): boolean {
-  const own = join(cwd, SERVICES_FILE)
+  const own = servicesFile(cwd)
   if (existsSync(own)) return false
+  const { root, rel } = mainCheckout(cwd)
+  // The same place inside the main checkout (a session can be in a subfolder of the repo).
+  const main = join(root, rel)
+  if (resolve(main).toLowerCase() === resolve(cwd).toLowerCase()) return false
+  const from = servicesFile(main)
+  if (!existsSync(from)) return false
   try {
-    const git = (args: string[]) => execFileSync('git', args, { cwd, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    const top = git(['rev-parse', '--show-toplevel'])
-    const main = dirname(git(['rev-parse', '--path-format=absolute', '--git-common-dir']))
-    if (resolve(main).toLowerCase() === resolve(top).toLowerCase()) return false // this is the main checkout
-    // The same place inside the main checkout (a session can be in a subfolder of the repo).
-    const rel = resolve(cwd).slice(resolve(top).length)
-    const from = join(main, rel, SERVICES_FILE)
-    if (!existsSync(from)) return false
-    mkdirSync(dirname(own), { recursive: true })
     copyFileSync(from, own)
     return true
   } catch {
@@ -36,7 +42,7 @@ const READY_TIMEOUT_MS = 90_000
 
 type Running = { proc: ChildProcess; state: ServiceState; logs: string[]; ready: Promise<boolean>; markReady: (ok: boolean) => void }
 
-/** Runs the services declared in a project's .glassbox/services.json, for one session. */
+/** Runs the services set up for a project (its services file in Glassbox's data), for one session. */
 export class ProjectServices {
   /** Ports this session's services were given, by service name. */
   private assigned = new Map<string, number>()
@@ -56,7 +62,7 @@ export class ProjectServices {
     private emit: (e: ServicesEvent) => void,
     private ports: PortBook
   ) {
-    this.configPath = join(cwd, SERVICES_FILE)
+    this.configPath = servicesFile(cwd)
     adoptServicesFile(cwd)
     this.load()
     watchFile(this.configPath, { interval: 1500 }, () => {
@@ -80,7 +86,7 @@ export class ProjectServices {
       }
       this.configs = parsed.services
     } catch (err) {
-      this.error = tr('mainServices.couldNotRead', { file: SERVICES_FILE, error: err instanceof Error ? err.message : String(err) })
+      this.error = tr('mainServices.couldNotRead', { file: this.configPath, error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -440,4 +446,4 @@ export class ServiceRegistry {
 }
 
 export const SERVICES_INSTRUCTIONS = `
-Services are declared in ${SERVICES_FILE.replace('\\', '/')}: { "services": [ { "name", "command", "cwd"?, "port"?, "env"?, "url"?, "readyPattern"?, "dependsOn"?, "autostart"? } ] }. Each session runs its own copy on free ports, so write \${port} (its own) and \${port:name} (another service's) instead of fixed ports. Edit it only when the user asks you to set up or change how services start, using the repo's real commands.`
+Glassbox keeps how this project's services start (not in the repo): read it with get_services and change it with save_services, never as a file in the project. Each service: { "name", "command", "cwd"?, "port"?, "env"?, "url"?, "readyPattern"?, "dependsOn"?, "autostart"? }. Each session runs its own copy on free ports, so write \${port} (its own) and \${port:name} (another service's) instead of fixed ports. Change it only when the user asks you to set up or change how services start, using the repo's real commands.`

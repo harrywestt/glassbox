@@ -146,7 +146,7 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
         `QA this for me: ${what}`,
         where ? `Test it on ${where}.` : 'Test it locally: start the app with start_app (it runs the project’s services, as my Run all button does) and use what it opens.',
         f.notes?.trim() ? `Notes (accounts, test data, anything else): ${f.notes.trim()}` : '',
-        'You’re testing, not fixing: don’t change the project’s code. Glassbox only lets you write your report, under .glassbox/qa/.',
+        'You’re testing, not fixing: don’t change the project’s code. Glassbox only lets you write your report, in the QA reports folder named in your instructions (outside the project).',
         [
           '1. Understand what to test. ' +
             (keys.length ? `Read ${keys.join(', ')} with the Atlassian connector: description, acceptance criteria, comments, designs and linked issues. ` : '') +
@@ -165,12 +165,13 @@ export function buildLaunch(kind: SessionKind, f: LaunchFields): { title: string
             : []),
           ...(f.depth === 'deep'
             ? [
+                '4a0. Before reviewing anything new, give the UX reviewer the app’s standard to compare against. For each kind of screen the change touches (a list or table page, a form, a detail page, a dashboard, settings, a dialog), open an established page of that same kind elsewhere in the app, one the change doesn’t touch (the app’s main list page before a new list page, say), and take a browser_screenshot of it with reference set to the kind (e.g. reference: "list page"). The reviewer then compares every new screen with the reference of its kind (badge and status colours, buttons, table rows, spacing, type, icons, wording) and flags where it differs from how the app already looks.',
                 '4a. This is a deep test, so as well as checking each case works, take a browser_screenshot of every distinct screen and state you reach (with a note saying what it is): each step of a flow, empty, loading, error and success states, validation messages, dialogs and menus open. Use full_page for long pages. Each one goes to the UX reviewer, a separate agent that looks for bad UX, inconsistencies between screens and AI slop while you carry on. Don’t stop to review them yourself and don’t wait for it: keep testing.'
               ]
             : []),
           '5. For each bug, call report_finding the moment you find it: severity, steps to reproduce, what should happen and what did, and the screenshot path.',
           '6. Be careful with shared environments: call check_in before anything destructive or irreversible (deleting records, sending emails or notifications, payments, inviting people, changing settings others rely on). On production only look, never change anything. Prefix any test data you create with "QA " and today’s date, so it’s easy to find and clean up.',
-          `7. Finish with a QA report: a table of the cases with pass or fail and the evidence, the bugs found with their severity, ${f.depth === 'deep' ? 'the UX findings (call review_ux with wait first, so every screenshot has been reviewed, and include its findings with their screenshots, grouped by screen), ' : ''}anything you couldn’t test and why, and what you’d test next. Write it to .glassbox/qa/${slug(name) || 'report'}.md and present_file it. Then offer to file the bugs${keys.length ? ' in Jira' : ''} (ask before creating anything) or to fix them in a coding session.`
+          `7. Finish with a QA report: a table of the cases with pass or fail and the evidence, the bugs found with their severity, ${f.depth === 'deep' ? 'the UX findings (call review_ux with wait first, so every screenshot has been reviewed, and include its findings with their screenshots, grouped by screen), ' : ''}anything you couldn’t test and why, and what you’d test next. Write it to the QA reports folder as ${slug(name) || 'report'}.md and present_file it. Then offer to file the bugs${keys.length ? ' in Jira' : ''} (ask before creating anything) or to fix them in a coding session.`
         ].join('\n\n')
       ]
         .filter(Boolean)

@@ -6,6 +6,7 @@ import { useScrollStrip } from '../components/useScrollStrip'
 import { useServices } from '../services'
 import { CHANGE_TOOLS } from '../session'
 import { Icon, IconButton, Toggle } from '../components/ui'
+import { addScreenshot } from '../screenshotSketches'
 import { Select } from '../components/Select'
 import { tr } from '../../../shared/i18n'
 import { BrowserCapture } from './BrowserCapture'
@@ -98,7 +99,19 @@ export function BrowserTab() {
 }
 
 function AddressBar({ t, web, follow, setFollow }: { t: BrowserTabState; web: { name: string; url: string; status: string }[]; follow: boolean; setFollow: (on: boolean) => void }) {
-  const { tab } = useSession()
+  const { tab, showPanel } = useSession()
+  // A picture of what the page shows, opened in Sketches to pin, arrow and draw on.
+  const [marking, setMarking] = useState(false)
+  const markUp = async () => {
+    if (t.wcId === undefined || marking) return
+    setMarking(true)
+    try {
+      const path = await window.glassbox.browser.screenshot(t.wcId)
+      if (await addScreenshot(tab.id, path, t.title || t.url)) showPanel('sketches')
+    } finally {
+      setMarking(false)
+    }
+  }
   const [address, setAddress] = useState(t.url)
   useEffect(() => setAddress(t.url), [t.url])
   const wv = () => document.querySelector<WebviewTag>(`webview[data-browser-tab="${tab.id}:${t.id}"]`)
@@ -132,6 +145,7 @@ function AddressBar({ t, web, follow, setFollow }: { t: BrowserTabState; web: { 
       />
       <BrowserLogs wcId={t.wcId} />
       <BrowserCapture wcId={t.wcId} />
+      <IconButton icon={marking ? 'loading' : 'edit'} title={tr('browserTab.markUp')} disabled={t.wcId === undefined} onClick={() => void markUp()} />
       <IconButton icon="link-external" title={tr('browserTab.openExternal')} onClick={() => void window.glassbox.openExternal(t.url)} />
     </div>
   )

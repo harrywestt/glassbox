@@ -1340,7 +1340,7 @@ function Inspector({
   const row = (c: Connection) => {
     const changed = [...new Set(c.links.flatMap((l) => [l.from, l.to]).filter((f) => f && edited.has(f.toLowerCase())))]
     // One line per thing imported, listing the files that import it (a dozen C# files all using
-    // ShopApp.Shared read as one line, not twelve).
+    // AcmeApp.Shared read as one line, not twelve).
     const byTarget = new Map<string, { to: string; from: string[]; names: Set<string>; http: boolean; weak: boolean }>()
     for (const l of c.links) {
       const k = l.to || l.toModule

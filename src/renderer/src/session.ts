@@ -209,7 +209,7 @@ export type Diagram = { id: string; title: string; mermaid: string; at: number }
 /** scheme: none or 'project' for the project's own colours (when it has them); 'match', 'dark' or 'light' for Glassbox's. */
 export type SketchVersion = { html: string; width: number; note?: string; scheme?: 'project' | 'match' | 'dark' | 'light'; accent?: string; at: number; /** Where it's kept (sent as edits or a file, the HTML is read from there). */ ref?: string; /** The stylesheet its colours come from. */ stylesheet?: string; /** Without Glassbox's sketching styles. */ bare?: boolean; /** The show_sketch call that made it. */ toolId?: string }
 /** A rough page Claude drew (show_sketch); each call with the same id adds a version. */
-export type Sketch = { id: string; title: string; versions: SketchVersion[]; at: number }
+export type Sketch = { id: string; title: string; versions: SketchVersion[]; at: number; /** A screenshot you added to mark up (not one of Claude's pages). */ screenshot?: boolean; /** That screenshot's file. */ image?: string }
 
 /** Adds a version to a sketch (the same page again only renames it). */
 function addSketch(all: Record<string, Sketch>, s: { id: string; title?: unknown; html?: unknown; width?: unknown; note?: unknown; scheme?: unknown; accent?: unknown; ref?: unknown; stylesheet?: unknown; bare?: unknown; toolId?: string }, at: number): Record<string, Sketch> {
@@ -311,6 +311,10 @@ export interface SessionState {
   backgroundAgents?: number
   /** Background work still going (agents, commands), from the same signal; `since` is when it was first seen. */
   backgroundTasks?: { id: string; type: string; description: string; since: number }[]
+  /** Tasks that have reported they ended, so a late or stale list can't bring one back. */
+  endedTasks?: string[]
+  /** When you stopped Claude mid-turn, until it carries on (the conversation offers Continue). */
+  stoppedAt?: number
   /** Loaders Claude shows above the message box (show_progress), by id. */
   loaders?: Record<string, LoaderState>
   /** Commands you ran yourself ("! command"), by id. `sent`: already passed to Claude with a message. */
@@ -490,7 +494,7 @@ function reduce(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
     case 'user-prompt': {
       const turn = state.turn + 1
-      return { ...state, turn, status: 'running', busySince: at, suggestion: undefined, limitHit: state.limitHit?.continueAt ? state.limitHit : undefined, timeline: [...state.timeline, { kind: 'user', text: action.text, uuid: action.uuid, at, turn }] }
+      return { ...state, turn, status: 'running', busySince: at, stoppedAt: undefined, suggestion: undefined, limitHit: state.limitHit?.continueAt ? state.limitHit : undefined, timeline: [...state.timeline, { kind: 'user', text: action.text, uuid: action.uuid, at, turn }] }
     }
     case 'comment': {
       const decisions =
@@ -603,6 +607,8 @@ function applyEvent(state: SessionState, event: SessionEvent): SessionState {
       return { ...state, checkins: [...state.checkins, event.checkin], timeline: [...state.timeline, { kind: 'checkin', id: event.checkin.id, at }] }
     case 'side':
       return { ...state, sideTasks: { ...state.sideTasks, [event.task.id]: event.task } }
+    case 'interrupted':
+      return { ...state, stoppedAt: at }
     case 'checkin-resolved':
       return { ...state, checkins: state.checkins.map((c) => (c.id === event.id ? { ...c, answer: event.answer } : c)) }
     case 'reviewer': {
@@ -770,7 +776,8 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
       }
       if (msg.subtype === 'compact_boundary') return note(state, tr('session.compactionBoundary'), 'warn')
       if (msg.subtype === 'background_tasks_changed' && !fromHistory) {
-        const tasks = ((msg as { tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[] }).tasks ?? []).filter((t) => !t.ambient)
+        const ended = new Set(state.endedTasks ?? [])
+        const tasks = ((msg as { tasks?: { task_id: string; task_type?: string; description?: string; ambient?: boolean }[] }).tasks ?? []).filter((t) => !t.ambient && !ended.has(t.task_id))
         const before = new Map((state.backgroundTasks ?? []).map((t) => [t.id, t.since]))
         const listed = new Set(tasks.map((t) => t.task_id))
         // A background agent Claude no longer lists has ended, whether or not its own notice arrived.
@@ -789,6 +796,13 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
       // background, whose tool call returned straight away.
       if (msg.subtype === 'task_started' || msg.subtype === 'task_progress' || msg.subtype === 'task_updated' || msg.subtype === 'task_notification') {
         const m = msg as { subtype: string; task_id: string; tool_use_id?: string; is_backgrounded?: boolean; summary?: string; last_tool_name?: string; usage?: { tool_uses: number }; status?: string; patch?: { status?: string; is_backgrounded?: boolean } }
+        // A task that has ended is no longer background work, whether it's an agent or a command (a
+        // background shell): it leaves the "waiting on" list now, not only when a later list omits it.
+        const over = m.subtype === 'task_notification' || (m.subtype === 'task_updated' && ['completed', 'failed', 'killed'].includes(m.patch?.status ?? ''))
+        if (over) {
+          const left = (state.backgroundTasks ?? []).filter((t) => t.id !== m.task_id)
+          state = { ...state, endedTasks: [...(state.endedTasks ?? []).slice(-199), m.task_id], backgroundTasks: left, backgroundAgents: left.filter((t) => t.type === 'local_agent').length }
+        }
         // A task reporting on a call that isn't an Agent call (a forked skill): it shows as an agent from now on.
         if (m.tool_use_id && !state.agents[m.tool_use_id] && state.toolCalls[m.tool_use_id]) state = { ...state, agents: asAgent(state.agents, state.toolCalls, m.tool_use_id) }
         const a = (m.tool_use_id && state.agents[m.tool_use_id]) || Object.values(state.agents).find((x) => x.taskId === m.task_id)
@@ -829,6 +843,8 @@ function applySdk(state: SessionState, msg: SDKMessage, fromHistory: boolean, wh
 
     case 'assistant': {
       const agentId = msg.parent_tool_use_id
+      // Claude carrying on (a message sent with Send now, say): no longer stopped.
+      if (state.stoppedAt && !agentId && !fromHistory) state = { ...state, stoppedAt: undefined }
       const drafts = { ...state.drafts }
       delete drafts[agentId ?? 'main']
       const next: SessionState = {
@@ -1082,9 +1098,12 @@ function settleAgents(state: SessionState, at: number, ids: Set<string>): Sessio
 function historyPrompt(state: SessionState, text: string, uuid: string | undefined, when = Date.now()): SessionState {
   const command = text.match(/<command-name>([^<]+)<\/command-name>/)
   let shown: string | undefined
+  // You stopped Claude here (on reopening, the Continue offer comes back if nothing followed).
+  if (text.startsWith('[Request interrupted')) return { ...state, stoppedAt: when }
   if (command) shown = `${command[1]} ${text.match(/<command-args>([^<]*)<\/command-args>/)?.[1] ?? ''}`.trim()
   else if (text.trim() && !text.startsWith('<') && !text.startsWith('Caveat:') && !text.startsWith('[Request interrupted') && !text.startsWith('[Glassbox')) shown = text
   if (!shown) return state
+  if (state.stoppedAt) state = { ...state, stoppedAt: undefined }
   // An answer or comment sent from Glassbox: tie it back to what it was about, so a question you
   // answered stays answered when the session is reopened.
   const review = text.match(/^Review comment from the user \(sent from Glassbox while you work\) on what you logged: "([\s\S]+?)"\n\n([\s\S]*?)\n\nTake this into account now/)

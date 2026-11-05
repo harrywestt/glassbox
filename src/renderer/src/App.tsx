@@ -21,6 +21,7 @@ import { startRecorder } from './recorder'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { Backdrop, backdropStrength } from './components/Backdrop'
 import { useAppearance } from './appearance'
+import { ConfirmHost } from './components/ConfirmDialog'
 
 const ThemeContext = createContext<ThemeTokens>(THEMES['glassbox-dark'])
 export const useThemeTokens = () => useContext(ThemeContext)
@@ -249,6 +250,7 @@ export function App() {
             ))}
           </div>
           <Tooltips />
+          <ConfirmHost />
           <AdminPrompt />
           <ZoomOverlay />
           {launcher && (

@@ -8,7 +8,7 @@ import { useThemeTokens } from '../App'
 import { customFrom, customTokens, THEME_CHOICES, THEMES, themeTokens, type ThemeTokens } from '../theme'
 import { Icon, IconButton, Segmented, Toggle } from '../components/ui'
 import { loadEffort, saveEffort } from '../session-ui/ModelPicker'
-import type { Automation, Effort, HoldPolicy } from '../../../shared/events'
+import type { Automation, Effort, HoldPolicy, VoiceWord } from '../../../shared/events'
 import { tr } from '../../../shared/i18n'
 
 type SectionId = 'appearance' | 'conversation' | 'notifications' | 'models' | 'background' | 'editing' | 'voice'
@@ -531,9 +531,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <Row label={tr('automationCard.voiceAccurate')} note={tr('automationCard.voiceAccurateNote')}>
           <Toggle checked={auto.voiceAccurate} onChange={(voiceAccurate) => set({ voiceAccurate })} />
         </Row>
+        {auto.voiceAccurate && <ParakeetState />}
         <Row label={tr('automationCard.micWarm')} note={tr('automationCard.micWarmNote')}>
           <Toggle checked={auto.micWarm} onChange={(micWarm) => set({ micWarm })} />
         </Row>
+        <VoiceWords words={auto.voiceWords ?? []} onChange={(voiceWords) => set({ voiceWords })} />
       </>
     )
   }
@@ -565,6 +567,86 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </header>
           <div className="settings-body">{body[section]}</div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Where the Parakeet speech model is: downloading (with progress), ready, or not yet, with a button to fetch it now. */
+function ParakeetState() {
+  const [st, setSt] = useState<Awaited<ReturnType<typeof window.glassbox.voice.parakeet>> | null>(null)
+  useEffect(() => {
+    let live = true
+    const read = () => void window.glassbox.voice.parakeet().then((v) => live && setSt(v), () => {})
+    read()
+    const t = setInterval(read, 1000)
+    return () => {
+      live = false
+      clearInterval(t)
+    }
+  }, [])
+  if (!st) return null
+  const text =
+    st.state === 'downloading'
+      ? tr('automationCard.parakeet.downloading', { percent: st.progress ?? 0 })
+      : st.state === 'failed'
+        ? tr('automationCard.parakeet.failed', { error: st.error ?? '' })
+        : tr(`automationCard.parakeet.${st.state}`)
+  return (
+    <div className={`parakeet-state ${st.state}`}>
+      <Icon name={st.state === 'ready' ? 'pass-filled' : st.state === 'failed' ? 'warning' : st.state === 'missing' ? 'cloud-download' : 'loading'} className={st.state === 'downloading' || st.state === 'unpacking' || st.state === 'loading' ? 'codicon-modifier-spin' : undefined} />
+      <span className="grow">{text}</span>
+      {st.state === 'downloading' && <progress max={100} value={st.progress ?? 0} />}
+      {(st.state === 'missing' || st.state === 'failed') && (
+        <button className="btn quiet" onClick={() => void window.glassbox.voice.downloadParakeet().then(() => setSt({ state: 'downloading', progress: 0 }))}>
+          {tr('automationCard.parakeet.download')}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Your words for dictation: each written your way, and what the speech model hears instead. */
+function VoiceWords({ words, onChange }: { words: VoiceWord[]; onChange: (words: VoiceWord[]) => void }) {
+  const [word, setWord] = useState('')
+  const [heard, setHeard] = useState('')
+  const split = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean)
+  const add = () => {
+    const w = word.trim()
+    if (!w) return
+    onChange([...words.filter((x) => x.word.toLowerCase() !== w.toLowerCase()), { word: w, heard: split(heard) }])
+    setWord('')
+    setHeard('')
+  }
+  return (
+    <div className="voice-words">
+      <div className="voice-words-head">
+        <strong>{tr('automationCard.words.title')}</strong>
+        <span className="muted small">{tr('automationCard.words.note')}</span>
+      </div>
+      {words.length > 0 && (
+        <ul className="voice-words-list">
+          {words.map((w, i) => (
+            <li key={w.word}>
+              <span className="voice-word">{w.word}</span>
+              <input
+                className="grow"
+                value={w.heard.join(', ')}
+                onChange={(e) => onChange(words.map((x, j) => (j === i ? { ...x, heard: split(e.target.value) } : x)))}
+                placeholder={tr('automationCard.words.heardPlaceholder')}
+                aria-label={tr('automationCard.words.heardFor', { word: w.word })}
+              />
+              <IconButton icon="close" title={tr('automationCard.words.remove', { word: w.word })} onClick={() => onChange(words.filter((_, j) => j !== i))} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="voice-words-add">
+        <input value={word} onChange={(e) => setWord(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={tr('automationCard.words.wordPlaceholder')} aria-label={tr('automationCard.words.word')} />
+        <input className="grow" value={heard} onChange={(e) => setHeard(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={tr('automationCard.words.heardPlaceholder')} aria-label={tr('automationCard.words.heard')} />
+        <button className="btn" disabled={!word.trim()} onClick={add}>
+          {tr('automationCard.words.add')}
+        </button>
       </div>
     </div>
   )

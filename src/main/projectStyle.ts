@@ -38,11 +38,12 @@ const SAFE = /^[\w#%(),. -]{1,60}$/
 
 const cache = new Map<string, { at: number; style: ProjectStyle }>()
 
-export function projectStyle(cwd: string, stylesheet?: string): ProjectStyle {
+/** `fresh`: read the stylesheet again now (you pressed Refresh styles), not a copy from the last minute. */
+export function projectStyle(cwd: string, stylesheet?: string, fresh = false): ProjectStyle {
   if (stylesheet) return named(cwd, stylesheet)
   const key = cwd.toLowerCase()
   const hit = cache.get(key)
-  if (hit && Date.now() - hit.at < 60_000) return hit.style
+  if (hit && !fresh && Date.now() - hit.at < 60_000) return hit.style
   let style: ProjectStyle = {}
   try {
     style = read(cwd)
@@ -79,7 +80,7 @@ function touched(cwd: string): string[] {
   return [...status, ...recent].map((p) => p.trim().replace(/\\/g, '/')).filter(Boolean)
 }
 
-/** The app a stylesheet belongs to: its path up to the source folder (ui/webapp-ui for ui/webapp-ui/src/styles/globals.css). */
+/** The app a stylesheet belongs to: its path up to the source folder (apps/web for apps/web/src/styles/globals.css). */
 function appOf(rel: string): string {
   const parts = rel.split('/')
   const src = parts.findIndex((p) => /^(src|app|styles|public|assets)$/i.test(p))

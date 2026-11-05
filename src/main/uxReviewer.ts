@@ -7,6 +7,10 @@ import type { Finding, FindingSeverity } from '../shared/events'
 
 /** A screenshot waiting for the UX reviewer: the picture, and where it was taken. */
 export type Shot = { path: string; url?: string; title?: string; note?: string }
+/** An established screen of the app (a long-standing list page, say): what new screens of its kind should match. */
+export type Reference = Shot & { kind: string }
+/** At most this many references go with each batch (the latest of each kind). */
+const REFERENCES = 4
 
 const SEVERITIES = new Set<FindingSeverity>(['blocker', 'major', 'minor', 'nit', 'question'])
 /** Shots are reviewed together (so it can compare them), a handful at a time. */
@@ -17,7 +21,7 @@ const TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg
 
 const PROMPT = `You are a senior product designer reviewing screenshots of a web app that another agent is testing. You only see the pictures; you can't click anything. Look for what a careful designer would send back before launch:
 - Bad UX: unclear labels or actions, missing feedback, confusing hierarchy, cramped or broken layout, text cut off or overflowing, poor contrast, tiny targets, things that look clickable and aren't (or the reverse), empty, loading and error states that leave people stuck.
-- Inconsistencies: across these screens and the ones described in your notes from earlier batches: buttons, spacing, type sizes, colours, icons, capitalisation, wording for the same thing, alignment.
+- Inconsistencies with the rest of the app. When reference screens are given (established pages of this app, each labelled with the kind of screen it is), compare every screenshot with the reference of the same kind, side by side, and report each place it departs from it: badge and status colours and shapes, button styles and sizes, table and list layout, row height, spacing, type sizes and weights, icons, capitalisation, empty states, wording for the same thing. The references are the standard; a difference is a finding even if both look fine on their own. Also compare these screens with each other and with your notes from earlier batches.
 - AI slop: generic template look, meaningless decoration, gradient or glow filler, emoji used as icons, vague filler copy ("Unlock the power of…", "Seamlessly…"), placeholder or lorem text, made-up numbers, cards for everything, everything centred.
 - Broken things: overlapping elements, misaligned grids, unstyled or half-styled parts, images that didn't load, odd scrollbars.
 Report only real, specific problems you can point at in a picture, each once. Don't report what's merely a taste preference, and don't guess at behaviour you can't see. Fewer, sharper findings beat many vague ones.
@@ -37,6 +41,7 @@ export class UxReviewer {
   private reviewed = 0
   private found: Finding[] = []
   private seen = new Set<string>()
+  private references: Reference[] = []
 
   constructor(
     private cwd: string,
@@ -58,6 +63,18 @@ export class UxReviewer {
     clearTimeout(this.timer)
     if (this.queue.length >= BATCH) void this.drain()
     else this.timer = setTimeout(() => void this.drain(), SETTLE_MS)
+    return true
+  }
+
+  /**
+   * Keeps a screenshot as the reference for its kind of screen (it isn't reviewed itself): every
+   * batch after it is compared with it. A new reference of the same kind replaces the old one.
+   */
+  addReference(ref: Reference) {
+    const path = isAbsolute(ref.path) ? ref.path : resolve(this.cwd, ref.path)
+    if (!TYPES[extname(path).toLowerCase()] || !existsSync(path)) return false
+    const kind = ref.kind.trim().toLowerCase()
+    this.references = [...this.references.filter((r) => r.kind.toLowerCase() !== kind), { ...ref, path, kind: ref.kind.trim() }].slice(-REFERENCES)
     return true
   }
 
@@ -107,6 +124,14 @@ export class UxReviewer {
       type: 'text',
       text: `${PROMPT}\n\n${task ? `What's being tested: ${task}\n\n` : ''}${this.notes ? `Your notes on this app from earlier screenshots:\n${this.notes}\n\n` : ''}${batch.length} screenshot${batch.length > 1 ? 's' : ''} follow, numbered in order.`
     })
+    if (this.references.length) {
+      content.push({ type: 'text', text: `Reference screens (established pages of this app, the standard to hold the screenshots to). Not for review themselves:` })
+      this.references.forEach((r, i) => {
+        content.push({ type: 'text', text: `Reference ${String.fromCharCode(65 + i)}: ${r.kind}${r.title ? `, "${r.title}"` : ''}${r.url ? ` (${r.url})` : ''}${r.note ? `. ${r.note}` : ''}` })
+        content.push({ type: 'image', source: { type: 'base64', media_type: TYPES[extname(r.path).toLowerCase()] as 'image/png', data: readFileSync(r.path).toString('base64') } })
+      })
+      content.push({ type: 'text', text: 'The screenshots to review:' })
+    }
     batch.forEach((s, i) => {
       content.push({ type: 'text', text: `Screenshot ${i + 1}${s.title ? `: "${s.title}"` : ''}${s.url ? ` (${s.url})` : ''}${s.note ? `. ${s.note}` : ''}` })
       content.push({ type: 'image', source: { type: 'base64', media_type: TYPES[extname(s.path).toLowerCase()] as 'image/png', data: readFileSync(s.path).toString('base64') } })

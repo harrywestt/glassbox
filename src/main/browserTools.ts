@@ -140,15 +140,6 @@ export const SNAPSHOT = (find: string, limit: number) => `(() => {
   return 'Title: ' + document.title + '\\nURL: ' + location.href + (dialogs ? '\\nA dialog is open.' : '') + '\\n\\n' + text + (rest > 0 ? '(' + rest + ' more lines not shown. Pass find to narrow, or a larger limit.)' : '')
 })()`
 
-/** Where a numbered control is on screen (scrolled into view first), for a real click. */
-const LOCATE = (ref: number) => `(() => {
-  const el = document.querySelector('[data-gb="${ref}"]')
-  if (!el) return null
-  el.scrollIntoView({ block: 'center', inline: 'center' })
-  const r = el.getBoundingClientRect()
-  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), vw: innerWidth, vh: innerHeight, name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim().slice(0, 60) }
-})()`
-
 /** How a step finds a control: by its number from the latest snapshot, or by something that stays valid between pages. */
 export type Locator = { ref?: number; selector?: string; role?: string; name?: string; contains?: string }
 const describe = (l: Locator) => (l.ref ? `[${l.ref}]` : l.selector ? `"${l.selector}"` : l.role ? `${l.role} "${l.name ?? ''}"` : `"${l.contains ?? ''}"`)
@@ -191,6 +182,15 @@ async function findSoon(wc: WC, l: Locator, ms = 5000): Promise<{ x: number; y: 
   }
 }
 
+/**
+ * Claude's clicks and keys go to the page as real input, which moves the window's focus into the
+ * Browser tab: the app is asked to give it back to where the user was (typing a message, say).
+ */
+function giveFocusBack(wc: WC) {
+  const host = wc.hostWebContents
+  if (host && !host.isDestroyed()) host.send('glassbox:browser-refocus')
+}
+
 async function clickAt(wc: WC, l: Locator): Promise<string> {
   const at = await findSoon(wc, l)
   if (!at) throw new Error(`No control ${describe(l)} on the page now.${l.ref ? ' Take a new browser_snapshot.' : ''}`)
@@ -199,6 +199,7 @@ async function clickAt(wc: WC, l: Locator): Promise<string> {
   wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
   wc.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 })
   wc.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 })
+  setTimeout(() => giveFocusBack(wc), 30)
   await settle(wc, 8000)
   return `Clicked ${describe(l)} "${at.name}".`
 }
@@ -215,6 +216,8 @@ async function typeInto(wc: WC, l: Locator, text: string, submit?: boolean, appe
     press(wc, 'Enter')
     await settle(wc, 8000)
   }
+  // Once the typing is done (not between keys, which could take the page's focus mid-word).
+  giveFocusBack(wc)
   return `Typed into ${describe(l)}${submit ? ' and pressed Enter' : ''}.`
 }
 
@@ -348,7 +351,7 @@ async function stitchSlices(wc: WC, nativeImage: typeof Electron.nativeImage): P
 
 /** What else the browser tools hand on: each screenshot (for the UX reviewer), and video recording. */
 export type BrowserHooks = {
-  shot?: (s: { path: string; url: string; title: string; review: boolean; note?: string }) => void
+  shot?: (s: { path: string; url: string; title: string; review: boolean; note?: string; reference?: string }) => void
   record?: { start: (wcId: number, opts?: RecordOptions) => { started: number }; stop: (wcId: number) => Promise<string | null>; cue: (wcId: number, cue: RecordCue) => boolean }
 }
 
@@ -395,6 +398,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
           else if (s.do === 'type') line = await typeInto(c.wc, s, s.value ?? '', s.submit, s.append)
           else if (s.do === 'press') {
             press(c.wc, s.key ?? 'Enter')
+            setTimeout(() => giveFocusBack(c.wc), 30)
             await settle(c.wc, 4000)
             line = `pressed ${s.key ?? 'Enter'}`
           } else if (s.do === 'wait') {
@@ -500,6 +504,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         if (typeof c === 'string') return fail(c)
         markRecording(c.wc.id, { label: `Press ${key}` })
         press(c.wc, key)
+        setTimeout(() => giveFocusBack(c.wc), 30)
         await settle(c.wc, 4000)
         return ok(`Pressed ${key}. ${where(c.wc)}`)
       }
@@ -528,14 +533,15 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
     ),
     tool(
       'browser_screenshot',
-      'A picture of what a Browser tab shows (or the whole page, top to bottom, with full_page). Use it when the look matters (layout, styling, a chart) and as evidence; for content and controls, browser_snapshot is far cheaper. With review, the screenshot also goes to the UX reviewer, a separate agent that checks it for bad UX, inconsistencies and AI slop in the background (its findings arrive on their own; carry on meanwhile).',
+      'A picture of what a Browser tab shows (or the whole page, top to bottom, with full_page). Use it when the look matters (layout, styling, a chart) and as evidence; for content and controls, browser_snapshot is far cheaper. With review, the screenshot also goes to the UX reviewer, a separate agent that checks it for bad UX, inconsistencies and AI slop in the background (its findings arrive on their own; carry on meanwhile). With reference, it becomes the reviewer\'s standard for that kind of screen instead: take one of an established page (the app\'s main list page before reviewing a new list page) so new screens are checked against how the app already looks.',
       {
         tab: TAB,
         full_page: z.boolean().optional().describe('The whole page, not just what fits in the window'),
         review: z.boolean().optional().describe('Also send it to the UX reviewer'),
+        reference: z.string().optional().describe('Keep this as the UX reviewer\'s reference for a kind of screen (e.g. "list page", "form", "detail page"): an established page of the app that new screens of that kind are compared with, for consistency. Not reviewed itself.'),
         note: z.string().optional().describe('For the reviewer: what this screen is or what state it shows, e.g. "checkout, card declined"')
       },
-      async ({ tab, full_page, review, note }) => {
+      async ({ tab, full_page, review, reference, note }) => {
         const c = await contents(bridge, tab)
         if (typeof c === 'string') return fail(c)
         await settle(c.wc, 4000)
@@ -553,7 +559,7 @@ export function browserTools(bridge: BrowserBridge, shotsDir: string, hooks: Bro
         const size = img.getSize()
         const forClaude = size.height > size.width * 2.5 ? img.resize({ width: Math.min(size.width, 900) }) : size.width > 1400 ? img.resize({ width: 1400 }) : img
         const jpeg = forClaude.toJPEG(72)
-        hooks.shot?.({ path: file, url: c.wc.getURL(), title: c.wc.getTitle(), review: !!review, note })
+        hooks.shot?.({ path: file, url: c.wc.getURL(), title: c.wc.getTitle(), review: !!review && !reference, note, reference })
         return { content: [{ type: 'image' as const, data: jpeg.toString('base64'), mimeType: 'image/jpeg' }, { type: 'text' as const, text: `Saved to ${file}. ${where(c.wc)}` }] }
       }
     ),

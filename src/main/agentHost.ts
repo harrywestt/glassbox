@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { getSessionMessages, getSubagentMessages, type SessionMessage, type CanUseTool, type HookCallback, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type PermissionUpdate, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { query } from './claude'
 import { GLASSBOX_INSTRUCTIONS, GLASSBOX_TOOLS, createGlassboxServer } from './glassboxMcp'
+import { qaDir } from './projectData'
 import { gitInfo } from './git'
 import { SERVICES_INSTRUCTIONS, type ProjectServices } from './services'
 import { Reviewer } from './reviewer'
@@ -330,7 +331,8 @@ export class AgentHost {
   reviewUx(shot: { path: string; url?: string; title?: string; note?: string }) {
     return this.ux.add(shot)
   }
-  private onShot = (s: { path: string; url: string; title: string; review: boolean; note?: string }) => {
+  private onShot = (s: { path: string; url: string; title: string; review: boolean; note?: string; reference?: string }) => {
+    if (s.reference) return void this.ux.addReference({ path: s.path, url: s.url, title: s.title, note: s.note, kind: s.reference })
     if (this.uxAuto || s.review) this.ux.add({ path: s.path, url: s.url, title: s.title, note: s.note })
   }
 
@@ -419,7 +421,14 @@ export class AgentHost {
         settingSources: ['user', 'project', 'local'],
         // On Auto, agents Claude starts use Sonnet unless it asks for a model.
         env: this.isAuto() ? { ...SESSION_ENV, CLAUDE_CODE_SUBAGENT_MODEL: process.env.CLAUDE_CODE_SUBAGENT_MODEL ?? 'sonnet' } : SESSION_ENV,
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: GLASSBOX_INSTRUCTIONS + SERVICES_INSTRUCTIONS },
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          // A QA session writes its report in its QA folder, in Glassbox's data (never in the project).
+          append: GLASSBOX_INSTRUCTIONS + SERVICES_INSTRUCTIONS + (this.testOnly ? `
+
+QA reports folder: ${qaDir(this.cwd)}` : '')
+        },
         includePartialMessages: true,
         // Each is an extra model call per turn, so each is a setting (Settings, Automation): the
         // predicted next prompt is on by default, model-written agent summaries off.
@@ -568,7 +577,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
   /** Edits you asked to hold, before Claude finished writing them; and the ones waiting on you now. */
   private holdWanted = new Set<string>()
   private holdWaiting = new Map<string, (d: { allow: boolean; reason?: string }) => void>()
-  /** A QA session: it tests the app and doesn't change the project (only its report, in .glassbox/qa). */
+  /** A QA session: it tests the app and doesn't change the project (only its report, in its QA folder in Glassbox's data). */
   testOnly = false
 
   /** Files the plan's steps say they'll change (set_current_task), for holding edits off the plan. */
@@ -616,6 +625,7 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
 
   async interrupt() {
     await this.q?.interrupt()
+    this.emit({ kind: 'interrupted' })
     // Claude can't move its loaders now; the ones Glassbox watches carry on.
     this.loaders.stopUnwatched(tr('mainLoaders.interrupted'))
   }
@@ -752,7 +762,11 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
             mcpServers: {
               glassbox: createGlassboxServer(
                 (signal) => this.emit({ kind: 'glassbox', signal }),
-                async (q) => `No one is available to answer in a background task. Make the most reasonable choice about "${q.about}" and say which you chose.`
+                async (q) => `No one is available to answer in a background task. Make the most reasonable choice about "${q.about}" and say which you chose.`,
+                undefined,
+                this.app,
+                undefined,
+                this.cwd
               )
             },
             settingSources: ['user', 'project', 'local'],
@@ -1486,18 +1500,21 @@ Reply to the user now, briefly and directly, from what you know so far (glance a
       this.shellStarts.set(input.tool_use_id, Date.now())
       this.shellRuns = [...this.shellRuns.filter((r) => !r.end || Date.now() - r.end < 10 * 60_000), { start: Date.now() }]
     }
-    // QA tests, it doesn't fix: no edits inside the project except its own report.
+    // QA tests, it doesn't fix: no edits inside the project. Its report goes in its QA folder (in Glassbox's data).
     if (this.testOnly && EDIT_TOOLS.has(input.tool_name)) {
       const i = (input.tool_input ?? {}) as Record<string, unknown>
       const target = String(i.file_path ?? i.notebook_path ?? '')
-      const full = (isAbsolute(target) ? target : resolve(this.cwd, target)).replace(/\\/g, '/').toLowerCase()
+      // resolve() also normalises an absolute path, so a path can't start in the QA folder and climb out with '..'.
+      const full = resolve(this.cwd, target).replace(/\\/g, '/').toLowerCase()
       const root = this.cwd.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '') + '/'
-      if (full.startsWith(root) && !full.startsWith(root + '.glassbox/qa/'))
+      const reports = qaDir(this.cwd)
+      if (full.startsWith(reports.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '') + '/')) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
+      if (full.startsWith(root))
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
             permissionDecision: 'deny',
-            permissionDecisionReason: 'This is a QA session: test the app, don’t change the project. Report what you find with report_finding; write your report under .glassbox/qa/. If a fix is wanted, say so and the user can start a coding session for it.'
+            permissionDecisionReason: `This is a QA session: test the app, don’t change the project. Report what you find with report_finding; write your report in ${reports}. If a fix is wanted, say so and the user can start a coding session for it.`
           }
         }
     }
