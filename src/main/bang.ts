@@ -13,7 +13,7 @@ const running = new Map<string, ChildProcess>()
 let found: { file: string; args: (cmd: string) => string[] } | undefined
 function shell() {
   if (found) return found
-  if (process.platform !== 'win32') return (found = { file: process.env.SHELL || '/bin/bash', args: (c) => ['-lc', c] })
+  if (process.platform !== 'win32') return (found = { file: process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'), args: (c) => ['-lc', c] })
   const candidates = [
     process.env.CLAUDE_CODE_GIT_BASH_PATH,
     process.env.ProgramFiles && join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe'),

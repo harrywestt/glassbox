@@ -17,7 +17,7 @@ function shell(): { file: string; args: string[] } {
     const pwsh = [process.env.ProgramFiles && join(process.env.ProgramFiles, 'PowerShell', '7', 'pwsh.exe')].find((p) => p && existsSync(p))
     return { file: pwsh ?? 'powershell.exe', args: ['-NoLogo'] }
   }
-  return { file: process.env.SHELL || '/bin/bash', args: ['-l'] }
+  return { file: process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'), args: ['-l'] }
 }
 
 export async function openTerminal(scope: string, cwd: string, cols: number, rows: number, send: (channel: string, payload: unknown) => void): Promise<string> {

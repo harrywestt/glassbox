@@ -10,6 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "postinstall": "node scripts/fix-pty.mjs",
     "icons": "electron scripts/make-icons.mjs",
     "dist": "electron-vite build && electron-builder --win dir",
     "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1",
@@ -86,6 +87,7 @@
       }
     ],
     "npmRebuild": false,
+    "afterPack": "scripts/after-pack.cjs",
     "win": {
       "icon": "resources/icon.ico",
       "target": [
